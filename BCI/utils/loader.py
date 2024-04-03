@@ -4,12 +4,12 @@ from mne.io import RawArray
 from mne import create_info
 from mne.channels import make_standard_montage
 
-unicorn_channels = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8", "acc_x", "acc_y", "acc_z"]
+
 unicorn_eeg_channels = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
 unicorn_fs = 250
 
 
-def load_data(path, header, fs, names=unicorn_channels, skiprows=5):
+def load_data(path, header, fs, names, skiprows=5):
     if header:
         df = pd.read_csv(path,
                          names=names + ["trigger", "id", "target", "nontarget", "trial", "islast"],
@@ -18,7 +18,7 @@ def load_data(path, header, fs, names=unicorn_channels, skiprows=5):
     else:
         df = pd.read_csv(path, names=names + ["STI"], skiprows=skiprows * fs)
         trigger = np.array(df.STI)
-    eeg = df.iloc[:, 0:(len(unicorn_channels)-3)].to_numpy()
+    eeg = df.iloc[:, 0:len(unicorn_eeg_channels)].to_numpy()
     return eeg, trigger, df
 
 
