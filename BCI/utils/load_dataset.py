@@ -5,6 +5,8 @@ from utils.loader import load_data, unicorn_eeg_channels, unicorn_fs
 
 def load_dataset(path_dataset, labels):
     dataset = {}
+    labels.append('baseline')
+
     for label in labels:
         path_folder = os.path.join(path_dataset, label)
         files = [f for f in os.listdir(path_folder) if f.endswith('.csv')]

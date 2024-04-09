@@ -33,8 +33,6 @@ def apply_filters(eeg):
 
     trigger = np.zeros(len(eeg))
     raw_data = convert_to_mne(eeg, trigger, fs=unicorn_fs, chs=unicorn_eeg_channels, recompute=False) 
-    raw_data.notch_filter(50) 
-    raw_data.notch_filter(60) 
     
     filtered_theta = raw_data.copy() 
     filtered_theta.filter(4, 7)
