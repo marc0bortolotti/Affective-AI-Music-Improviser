@@ -67,7 +67,6 @@ def load_dataset(path_dataset, labels):
     labels_copy.append('baseline')
     for label in labels_copy:
         path_folder = os.path.join(path_dataset, label)
-        path_folder = path_dataset+'/'+label
         files = [f for f in os.listdir(path_folder) if f.endswith('.csv')]
         path_file = os.path.join(path_folder, files[0])
         print(f'Loading file: {path_file}')
@@ -85,6 +84,7 @@ def generate_samples(eeg, window_size, window_overlap):
         sample = eeg[i:i+window_size]
         samples.append(sample)
 
+    print('EEG dimension:', eeg.shape)
     print('Sample dimension:', samples[0].shape)
     print('Number of samples:', len(samples))
     return samples

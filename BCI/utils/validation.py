@@ -121,7 +121,7 @@ def plot_cross_validated_confusion_matrix(X, y, clf, cv, classes=None, normalize
 def plot_points_scatter(X, y, labels, save_data=False, save_path=None, classifier=None):
 
     plt.figure()
-    colors = ["turquoise", "darkorange"]
+    colors = ["turquoise", "darkorange", "red", "green", "blue", "yellow", "purple", "pink", "gray"]
     target_names = labels
     lw = 2
 
@@ -130,10 +130,12 @@ def plot_points_scatter(X, y, labels, save_data=False, save_path=None, classifie
     for i in range(len(labels)):
         idx_classes.append(np.where(y == i))
 
-    for color, target_name, x in zip(colors, target_names, idx_classes):
-        plt.scatter(
-        x, X[x] , color=color, alpha=0.8, lw=lw, label=target_name
-        )
+    for i, x in enumerate(idx_classes):
+        if X.shape[1] < 2:
+            plt.scatter(x, X[x], color=colors[i], alpha=0.8, lw=lw, label=target_names[i])
+        else: 
+            plt.scatter(X[x, 0], X[x, 1], color=colors[i], alpha=0.8, lw=lw, label=target_names[i])
+
     plt.legend(loc="best", shadow=False, scatterpoints=1)
     plt.title(classifier + ' - Scatter Plot')
 

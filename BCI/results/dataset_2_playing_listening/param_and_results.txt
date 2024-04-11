@@ -1,4 +1,4 @@
-Date: 2024-04-11 11:28:33.145120
+Date: 2024-04-11 15:51:41.344082
 
 PARAMETERS
 Dataset: dataset_2
@@ -9,10 +9,10 @@ Window Size: 1000 samples
 Window Overlap: 0.88
 
 RESULTS
-X_train shape: (739, 40)
-X_test shape: (185, 40)
-y_train shape: (739,)
-y_test shape: (185,)
+X_train shape: (1507, 40)
+X_test shape: (377, 40)
+y_train shape: (1507,)
+y_test shape: (377,)
 LDA	Accuracy: 1.00 F1 Score: 1.00
 SVM	Accuracy: 1.00 F1 Score: 1.00
 
