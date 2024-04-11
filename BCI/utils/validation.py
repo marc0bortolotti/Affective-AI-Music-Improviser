@@ -51,7 +51,7 @@ def plot_data_distribution(x_train, x_test):
     plt.show()
 
 
-def plot_confusion_matrix(y_true, y_pred, classes, normalize=False, title='Confusion Matrix', cmap=plt.cm.Blues):
+def plot_confusion_matrix(y_true, y_pred, classes, normalize=False, save_data=False, save_path=None, classifier=None):
     """
     Plot the confusion matrix
     :param y_true: numpy array of shape (n_samples, )
@@ -62,18 +62,30 @@ def plot_confusion_matrix(y_true, y_pred, classes, normalize=False, title='Confu
     :param cmap: matplotlib colormap
     """
 
+    title= ' Confusion Matrix'
+    cmap=plt.cm.Blues
+
     cm = confusion_matrix(y_true, y_pred)
 
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        title = 'Normalized ' + title
+        title = ' - Normalized ' + title
+
+    title = classifier + title
 
     plt.figure(figsize=(8, 8))
     sns.heatmap(cm, annot=True, fmt=".2f", cmap=cmap, xticklabels=classes, yticklabels=classes)
     plt.title(title)
     plt.xlabel('Predicted Label')
     plt.ylabel('True Label')
-    plt.show()
+   
+    if save_data:
+        plt.savefig(save_path + '/' + classifier + '_confusion_matrix.png')
+
+    # plt.show()
+    plt.close()
+    
+  
 
 
 def plot_cross_validated_confusion_matrix(X, y, clf, cv, classes=None, normalize=False, title='Confusion Matrix',
@@ -104,3 +116,29 @@ def plot_cross_validated_confusion_matrix(X, y, clf, cv, classes=None, normalize
     plt.xlabel('Predicted Label')
     plt.ylabel('True Label')
     plt.show()
+
+
+def plot_points_scatter(X, y, labels, save_data=False, save_path=None, classifier=None):
+
+    plt.figure()
+    colors = ["turquoise", "darkorange"]
+    target_names = labels
+    lw = 2
+
+    # extract indexes for each class in y_train
+    idx_classes = []
+    for i in range(len(labels)):
+        idx_classes.append(np.where(y == i))
+
+    for color, target_name, x in zip(colors, target_names, idx_classes):
+        plt.scatter(
+        x, X[x] , color=color, alpha=0.8, lw=lw, label=target_name
+        )
+    plt.legend(loc="best", shadow=False, scatterpoints=1)
+    plt.title(classifier + ' - Scatter Plot')
+
+    if save_data:
+        plt.savefig(save_path + '/' + classifier + '_scatter_plot.png')
+
+    # plt.show()
+    plt.close()

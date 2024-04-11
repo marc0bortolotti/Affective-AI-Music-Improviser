@@ -1,35 +1,28 @@
 import numpy as np
 from utils.loader import convert_to_mne, unicorn_eeg_channels, unicorn_fs
 
-def extract_features(baseline_samples, eeg_samples, baseline = None):
+def extract_features(eeg_samples):
 
-    if baseline is None:
-        baseline_samples = extract_bands(baseline_samples)
-        baseline_features = apply_log_variance(baseline_samples)
-        baseline = np.mean(baseline_features, axis=0)
-        
-    eeg_samples = extract_bands(eeg_samples)
-    eeg_features = apply_log_variance(eeg_samples)
-    eeg_features_cleared = baseline_correction(eeg_features, baseline)
+    eeg_features = []
 
-    return np.array(eeg_features_cleared), np.array(baseline)
+    for i, sample in enumerate(eeg_samples):
+        print(f'Processing sample: {i+1}/{len(eeg_samples)}', end='\r')
+        filtered_sample = apply_filters(sample)
+        log_var_sample = log_var_transform(filtered_sample)
+        eeg_features.append(log_var_sample)
 
+    return np.array(eeg_features)
 
 
-def extract_bands(eeg_samples):
-    filtered_eeg_samples = []
-    for i in range(len(eeg_samples)):
-        print(f'Extracting bands from sample: {i+1}/{len(eeg_samples)}', end='\r')
-        sample = eeg_samples[i]
-        filtered_eeg_samples.append(apply_filters(sample))
-    print()
-    return np.array(filtered_eeg_samples)
+def calculate_baseline(eeg_samples):
+    eeg_features = extract_features(eeg_samples)
+    baseline = np.mean(eeg_features, axis=0)
+    return np.array(baseline)
 
 
 def apply_filters(eeg):
 
     # extract bands from the EEG samples: theta, alpha, low beta, high beta, gamma
-    # apply notch filters to remove 50Hz and 60Hz noise
 
     trigger = np.zeros(len(eeg))
     raw_data = convert_to_mne(eeg, trigger, fs=unicorn_fs, chs=unicorn_eeg_channels, recompute=False) 
@@ -59,25 +52,14 @@ def apply_filters(eeg):
 
 
 def log_var_transform(sample):
-    # reshape to (bands, channels, signal) 
-    sample = np.transpose(sample, (0, 1, 2))
-    # calculate the log-variance
+    # (bands, channel, samples)
     log_var_sample = np.log(np.var(sample, axis=2))
-    # flatten to one dimension
+    # flatten (bands, channel) to one dimension
     log_var_sample = log_var_sample.flatten()
     return np.array(log_var_sample)
 
 
-def apply_log_variance(eeg_samples):
-    log_var_samples = []
-    for i in range(len(eeg_samples)):
-        sample = eeg_samples[i]
-        log_var_sample = log_var_transform(sample)
-        log_var_samples.append(log_var_sample)
-    return np.array(log_var_samples)
-
-
-def baseline_correction(samples, baseline):
-    corrected_samples = samples - baseline
-    return np.array(corrected_samples)
+def baseline_correction(features, baseline):
+    corrected_features = features - baseline
+    return np.array(corrected_features)
 

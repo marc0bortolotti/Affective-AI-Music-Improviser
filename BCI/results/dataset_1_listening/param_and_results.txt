@@ -1,0 +1,18 @@
+Date: 2024-04-11 11:19:21.731646
+
+PARAMETERS
+Dataset: dataset_1
+Dataset Type: listening
+Labels: ['relax', 'excited']
+Window Duration: 4 seconds
+Window Size: 1000 samples
+Window Overlap: 0.88
+
+RESULTS
+X_train shape: (731, 40)
+X_test shape: (183, 40)
+y_train shape: (731,)
+y_test shape: (183,)
+LDA	Accuracy: 0.96 F1 Score: 0.96
+SVM	Accuracy: 0.93 F1 Score: 0.93
+
