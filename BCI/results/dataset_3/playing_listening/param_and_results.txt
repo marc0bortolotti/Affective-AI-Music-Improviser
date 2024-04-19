@@ -1,0 +1,20 @@
+Date: 2024-04-19 14:06:22.405997
+
+PARAMETERS
+Dataset: dataset_3
+Dataset Type: playing_listening
+Labels: ['bpm_60', 'bpm_90', 'bpm_120', 'bpm_150']
+Window Duration: 4 seconds
+Window Size: 1000 samples
+Window Overlap: 0.88
+
+RESULTS
+X_train shape: (710, 40)
+X_test shape: (178, 40)
+y_train shape: (710,)
+y_test shape: (178,)
+LDA	Accuracy: 0.95 F1 Score: 0.95
+LDA	Cross-validated accuracy: 0.95 (+/- 0.02) F1-Score: 0.95
+SVM	Accuracy: 0.95 F1 Score: 0.95
+SVM	Cross-validated accuracy: 0.92 (+/- 0.02) F1-Score: 0.92
+

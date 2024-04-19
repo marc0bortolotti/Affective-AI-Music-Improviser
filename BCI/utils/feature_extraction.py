@@ -11,7 +11,11 @@ def extract_features(eeg_samples):
         log_var_sample = log_var_transform(filtered_sample)
         eeg_features.append(log_var_sample)
 
-    return np.array(eeg_features)
+
+    eeg_features = np.array(eeg_features)
+    print(f'\nFeatures dimension: {eeg_features.shape}')
+
+    return eeg_features
 
 
 def calculate_baseline(eeg_samples):

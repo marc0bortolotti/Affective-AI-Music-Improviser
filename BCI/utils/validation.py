@@ -88,8 +88,8 @@ def plot_confusion_matrix(y_true, y_pred, classes, normalize=False, save_data=Fa
   
 
 
-def plot_cross_validated_confusion_matrix(X, y, clf, cv, classes=None, normalize=False, title='Confusion Matrix',
-                                          cmap=plt.cm.Blues):
+def plot_cross_validated_confusion_matrix(X, y, clf, cv, classes=None, normalize=False, title='Cross-Validated Confusion Matrix',
+                                          cmap=plt.cm.Blues, classifier=None, save_data=False, save_path=None):
     """ Plot the cross-validated confusion matrix
     :param X: numpy array of shape (n_samples, n_features)
     :param y: numpy array of shape (n_samples, )
@@ -110,12 +110,14 @@ def plot_cross_validated_confusion_matrix(X, y, clf, cv, classes=None, normalize
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         title = 'Normalized ' + title
 
+    title = classifier + ' - ' + title
     plt.figure(figsize=(8, 8))
     sns.heatmap(cm, annot=True, fmt=".2f", cmap=cmap, xticklabels=classes, yticklabels=classes)
     plt.title(title)
     plt.xlabel('Predicted Label')
     plt.ylabel('True Label')
-    plt.show()
+    plt.savefig(save_path + '/' + classifier + '_cross_validated_confusion_matrix.png')
+    # plt.show()
 
 
 def plot_points_scatter(X, y, labels, save_data=False, save_path=None, classifier=None):
@@ -131,10 +133,12 @@ def plot_points_scatter(X, y, labels, save_data=False, save_path=None, classifie
         idx_classes.append(np.where(y == i))
 
     for i, x in enumerate(idx_classes):
-        if X.shape[1] < 2:
-            plt.scatter(x, X[x], color=colors[i], alpha=0.8, lw=lw, label=target_names[i])
-        else: 
+        X = np.squeeze(X)
+
+        if len(X.shape) > 1 and classifier != 'SVM':
             plt.scatter(X[x, 0], X[x, 1], color=colors[i], alpha=0.8, lw=lw, label=target_names[i])
+        elif len(X.shape) < 2: 
+            plt.scatter(x, X[x], color=colors[i], alpha=0.8, lw=lw, label=target_names[i])
 
     plt.legend(loc="best", shadow=False, scatterpoints=1)
     plt.title(classifier + ' - Scatter Plot')
