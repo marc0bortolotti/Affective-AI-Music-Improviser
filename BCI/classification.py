@@ -24,7 +24,10 @@ dataset_2 = {'dataset_name': 'dataset_2', 'dataset_type': ['listening', 'playing
 dataset_3 = {'dataset_name': 'dataset_3', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_90', 'bpm_120', 'bpm_150']}
 dataset_4 = {'dataset_name': 'dataset_4', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_90', 'bpm_120', 'bpm_150']}
 dataset_5 = {'dataset_name': 'dataset_5', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['relax', 'excited']}
-
+dataset_6_1 = {'dataset_name': 'dataset_6-1', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['relax', 'excited']}
+dataset_6_2 = {'dataset_name': 'dataset_6-2', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
+dataset_7_1 = {'dataset_name': 'dataset_7-1', 'dataset_type': ['playing_listening'], 'labels': ['relax', 'excited']}
+dataset_7_2 = {'dataset_name': 'dataset_7-2', 'dataset_type': ['playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
 
 
 def classification(dataset):
@@ -43,7 +46,11 @@ def classification(dataset):
     for data_type in dataset_type:
         print(f'\nProcessing {dataset_name} - {data_type} dataset\n')
 
-        path_dataset = os.path.join('BCI/data/dataset', dataset_name, data_type)
+        dataset_path_name = dataset_name
+        if '-' in dataset_name:
+            dataset_path_name = dataset_name.split('-')[0]
+
+        path_dataset = os.path.join('BCI/data/dataset', dataset_path_name, data_type)
         # Read dataset
         dataset = load_dataset(path_dataset, labels)
 
@@ -171,8 +178,7 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 pickle.dump(svm_model, pickle_file)
 
 if __name__ == '__main__':
-    classification(dataset_1)
-    classification(dataset_2)
-    classification(dataset_3)
-    classification(dataset_4)
-    classification(dataset_5)
+    classification(dataset_6_1)
+    classification(dataset_6_2)
+    classification(dataset_7_1)
+    classification(dataset_7_2)
