@@ -28,6 +28,10 @@ dataset_6_1 = {'dataset_name': 'dataset_6-1', 'dataset_type': ['listening', 'pla
 dataset_6_2 = {'dataset_name': 'dataset_6-2', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
 dataset_7_1 = {'dataset_name': 'dataset_7-1', 'dataset_type': ['playing_listening'], 'labels': ['relax', 'excited']}
 dataset_7_2 = {'dataset_name': 'dataset_7-2', 'dataset_type': ['playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
+dataset_8_1 = {'dataset_name': 'dataset_8-1', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['relax', 'excited']}
+dataset_8_2 = {'dataset_name': 'dataset_8-2', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
+dataset_9_1 = {'dataset_name': 'dataset_9-1', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['relax', 'excited']}
+dataset_9_2 = {'dataset_name': 'dataset_9-2', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
 
 
 def classification(dataset):
@@ -61,7 +65,6 @@ def classification(dataset):
         baseline = calculate_baseline(eeg_samples_baseline)
 
         # Extract features and apply baseline correction
-        eeg_raw_list = [eeg_raw_baseline]
         eeg_features_list = []
         for label in labels:
             print(f'\n\n----{label}----')
@@ -178,7 +181,7 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 pickle.dump(svm_model, pickle_file)
 
 if __name__ == '__main__':
-    classification(dataset_6_1)
-    classification(dataset_6_2)
-    classification(dataset_7_1)
-    classification(dataset_7_2)
+    classification(dataset_8_1)
+    classification(dataset_8_2)
+    classification(dataset_9_1)
+    classification(dataset_9_2)
