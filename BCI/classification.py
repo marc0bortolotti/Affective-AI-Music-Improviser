@@ -32,7 +32,7 @@ dataset_8_1 = {'dataset_name': 'dataset_8-1', 'dataset_type': ['listening', 'pla
 dataset_8_2 = {'dataset_name': 'dataset_8-2', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
 dataset_9_1 = {'dataset_name': 'dataset_9-1', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['relax', 'excited']}
 dataset_9_2 = {'dataset_name': 'dataset_9-2', 'dataset_type': ['listening', 'playing_listening'], 'labels': ['bpm_60', 'bpm_120']}
-
+dataset_prova = {'dataset_name': 'dataset_9-prova', 'dataset_type': ['playing_listening'], 'labels': ['relax', 'excited']}
 
 def classification(dataset):
 
@@ -95,6 +95,10 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
         cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
         lda_model = LinearDiscriminantAnalysis()
         svm_model = svm.SVC()
+
+        # # Load pretrained models
+        # lda_model = pickle.load(open('BCI/results/dataset_7-1/playing_listening/LDA_model.pkl', 'rb'))
+        # svm_model = pickle.load(open('BCI/results/dataset_7-1/playing_listening/SVM_model.pkl', 'rb'))
 
         # Normalization
         X_train = scaler.fit_transform(X_train)
@@ -181,7 +185,4 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 pickle.dump(svm_model, pickle_file)
 
 if __name__ == '__main__':
-    classification(dataset_8_1)
-    classification(dataset_8_2)
-    classification(dataset_9_1)
-    classification(dataset_9_2)
+    classification(dataset_prova)
