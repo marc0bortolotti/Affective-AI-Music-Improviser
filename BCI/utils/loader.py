@@ -68,9 +68,13 @@ def load_dataset(path_dataset, labels):
     for label in labels_copy:
         path_folder = os.path.join(path_dataset, label)
         files = [f for f in os.listdir(path_folder) if f.endswith('.csv')]
-        path_file = os.path.join(path_folder, files[0])
-        print(f'Loading file: {path_file}')
-        eeg = load_data(path_file, header=False, fs=unicorn_fs, names = unicorn_eeg_channels) [0]
+        eeg_list = []
+        for file in files:
+            path_file = os.path.join(path_folder, file)
+            print(f'Loading file: {path_file}')
+            eeg = load_data(path_file, header=False, fs=unicorn_fs, names = unicorn_eeg_channels) [0]
+            eeg_list.append(eeg)
+        eeg = np.concatenate(eeg_list, axis=0)
         dataset[label] = eeg
     return dataset
 
