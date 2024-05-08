@@ -1,0 +1,20 @@
+Date: 2024-05-08 11:14:17.168729
+
+PARAMETERS
+Dataset: dataset_prova_2
+Dataset Type: playing
+Labels: ['baseline_1', 'baseline_2', 'baseline_3', 'baseline_4']
+Window Duration: 4 seconds
+Window Size: 1000 samples
+Window Overlap: 0.88
+
+RESULTS
+X_train shape: (326, 40)
+X_test shape: (82, 40)
+y_train shape: (326,)
+y_test shape: (82,)
+LDA	Accuracy: 0.90 F1 Score: 0.90
+LDA	Cross-validated accuracy: 0.96 (+/- 0.04) F1-Score: 0.96
+SVM	Accuracy: 0.88 F1 Score: 0.88
+SVM	Cross-validated accuracy: 0.89 (+/- 0.04) F1-Score: 0.89
+

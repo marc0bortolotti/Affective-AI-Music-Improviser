@@ -1,4 +1,4 @@
-Date: 2024-04-30 12:04:20.090912
+Date: 2024-05-07 18:54:20.089041
 
 PARAMETERS
 Dataset: dataset_6-2
@@ -9,12 +9,12 @@ Window Size: 1000 samples
 Window Overlap: 0.88
 
 RESULTS
-X_train shape: (163, 40)
-X_test shape: (41, 40)
-y_train shape: (163,)
-y_test shape: (41,)
-LDA	Accuracy: 1.00 F1 Score: 1.00
-LDA	Cross-validated accuracy: 1.00 (+/- 0.00) F1-Score: 1.00
+X_train shape: (355, 40)
+X_test shape: (89, 40)
+y_train shape: (355,)
+y_test shape: (89,)
+LDA	Accuracy: 0.90 F1 Score: 0.90
+LDA	Cross-validated accuracy: 0.90 (+/- 0.04) F1-Score: 0.90
 SVM	Accuracy: 1.00 F1 Score: 1.00
-SVM	Cross-validated accuracy: 1.00 (+/- 0.01) F1-Score: 1.00
+SVM	Cross-validated accuracy: 0.97 (+/- 0.02) F1-Score: 0.97
 

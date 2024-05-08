@@ -26,13 +26,14 @@ dataset_4 = {'dataset_name': 'dataset_4', 'dataset_type': ['listening', 'playing
 dataset_5 = {'dataset_name': 'dataset_5', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
 dataset_6_1 = {'dataset_name': 'dataset_6-1', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
 dataset_6_2 = {'dataset_name': 'dataset_6-2', 'dataset_type': ['listening', 'playing'], 'labels': ['bpm_60', 'bpm_120']}
-dataset_7_1 = {'dataset_name': 'dataset_7-1', 'dataset_type': ['playing'], 'labels': ['relax', 'excited']}
-dataset_7_2 = {'dataset_name': 'dataset_7-2', 'dataset_type': ['playing'], 'labels': ['bpm_60', 'bpm_120']}
+dataset_7_1 = {'dataset_name': 'dataset_7-1', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
+dataset_7_2 = {'dataset_name': 'dataset_7-2', 'dataset_type': ['listening', 'playing'], 'labels': ['bpm_60', 'bpm_120']}
 dataset_8_1 = {'dataset_name': 'dataset_8-1', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
 dataset_8_2 = {'dataset_name': 'dataset_8-2', 'dataset_type': ['listening', 'playing'], 'labels': ['bpm_60', 'bpm_120']}
 dataset_9_1 = {'dataset_name': 'dataset_9-1', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
 dataset_9_2 = {'dataset_name': 'dataset_9-2', 'dataset_type': ['listening', 'playing'], 'labels': ['bpm_60', 'bpm_120']}
 dataset_prova = {'dataset_name': 'dataset_prova', 'dataset_type': ['playing'], 'labels': ['relax', 'excited']}
+dataset_prova_2 = {'dataset_name': 'dataset_prova_2', 'dataset_type': ['listening', 'playing'], 'labels': ['baseline_1', 'baseline_2', 'baseline_3', 'baseline_4']}
 
 def classification(dataset):
 
@@ -185,4 +186,4 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 pickle.dump(svm_model, pickle_file)
 
 if __name__ == '__main__':
-    classification(dataset_prova)
+    classification(dataset_prova_2)
