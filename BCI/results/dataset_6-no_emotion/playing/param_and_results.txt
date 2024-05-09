@@ -1,0 +1,20 @@
+Date: 2024-05-08 11:52:50.666674
+
+PARAMETERS
+Dataset: dataset_6-no_emotion
+Dataset Type: playing
+Labels: ['relax', 'excited', 'no_emotion']
+Window Duration: 4 seconds
+Window Size: 1000 samples
+Window Overlap: 0.88
+
+RESULTS
+X_train shape: (716, 40)
+X_test shape: (180, 40)
+y_train shape: (716,)
+y_test shape: (180,)
+LDA	Accuracy: 0.87 F1 Score: 0.86
+LDA	Cross-validated accuracy: 0.85 (+/- 0.04) F1-Score: 0.85
+SVM	Accuracy: 0.82 F1 Score: 0.82
+SVM	Cross-validated accuracy: 0.78 (+/- 0.07) F1-Score: 0.77
+

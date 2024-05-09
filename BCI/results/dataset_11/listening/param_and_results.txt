@@ -1,0 +1,20 @@
+Date: 2024-05-08 16:17:43.603025
+
+PARAMETERS
+Dataset: dataset_11
+Dataset Type: listening
+Labels: ['song_1', 'song_2', 'bpm_90', 'bpm_150']
+Window Duration: 4 seconds
+Window Size: 1000 samples
+Window Overlap: 0.88
+
+RESULTS
+X_train shape: (710, 40)
+X_test shape: (178, 40)
+y_train shape: (710,)
+y_test shape: (178,)
+LDA	Accuracy: 0.69 F1 Score: 0.69
+LDA	Cross-validated accuracy: 0.71 (+/- 0.05) F1-Score: 0.71
+SVM	Accuracy: 0.71 F1 Score: 0.71
+SVM	Cross-validated accuracy: 0.74 (+/- 0.05) F1-Score: 0.74
+

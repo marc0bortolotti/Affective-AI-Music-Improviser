@@ -34,6 +34,13 @@ dataset_9_1 = {'dataset_name': 'dataset_9-1', 'dataset_type': ['listening', 'pla
 dataset_9_2 = {'dataset_name': 'dataset_9-2', 'dataset_type': ['listening', 'playing'], 'labels': ['bpm_60', 'bpm_120']}
 dataset_prova = {'dataset_name': 'dataset_prova', 'dataset_type': ['playing'], 'labels': ['relax', 'excited']}
 dataset_prova_2 = {'dataset_name': 'dataset_prova_2', 'dataset_type': ['listening', 'playing'], 'labels': ['baseline_1', 'baseline_2', 'baseline_3', 'baseline_4']}
+dataset_6_no_emotion = {'dataset_name': 'dataset_6-no_emotion', 'dataset_type': ['playing'], 'labels': ['relax', 'excited', 'no_emotion']}
+dataset_7_no_emotion = {'dataset_name': 'dataset_7-no_emotion', 'dataset_type': ['playing'], 'labels': ['relax', 'excited', 'no_emotion']}
+dataset_6_no_emotion_linear = {'dataset_name': 'dataset_6-no_emotion_linear', 'dataset_type': ['playing'], 'labels': ['relax', 'excited', 'no_emotion']}
+dataset_10 = {'dataset_name': 'dataset_10', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited', 'bpm_60', 'bpm_120']}
+dataset_11 = {'dataset_name': 'dataset_11', 'dataset_type': ['listening', 'playing'], 'labels': ['song_1', 'song_2', 'bpm_90', 'bpm_150']} 
+dataset_12 = {'dataset_name': 'dataset_12', 'dataset_type': ['listening', 'playing'], 'labels': ['low', 'middle', 'high']}
+dataset_13 = {'dataset_name': 'dataset_13', 'dataset_type': ['playing'], 'labels': ['half-high', 'no_half-middle', 'no_half-low']}
 
 def classification(dataset):
 
@@ -95,7 +102,7 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
         scaler = StandardScaler()
         cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
         lda_model = LinearDiscriminantAnalysis()
-        svm_model = svm.SVC()
+        svm_model = svm.SVC(kernel = 'linear')
 
         # # Load pretrained models
         # lda_model = pickle.load(open('BCI/results/dataset_7-1/playing/LDA_model.pkl', 'rb'))
@@ -186,4 +193,5 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 pickle.dump(svm_model, pickle_file)
 
 if __name__ == '__main__':
-    classification(dataset_prova_2)
+    classification(dataset_12)
+    classification(dataset_13)
