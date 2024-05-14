@@ -19,6 +19,8 @@ mne.set_log_level(verbose='ERROR', return_old_level=False, add_frames=None)
 
 # Global variables
 
+LOAD_MODEL = True
+
 dataset_1 = {'dataset_name': 'dataset_1', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
 dataset_2 = {'dataset_name': 'dataset_2', 'dataset_type': ['listening', 'playing'], 'labels': ['relax', 'excited']}
 dataset_3 = {'dataset_name': 'dataset_3', 'dataset_type': ['listening', 'playing'], 'labels': ['bpm_60', 'bpm_90', 'bpm_120', 'bpm_150']}
@@ -41,6 +43,9 @@ dataset_10 = {'dataset_name': 'dataset_10', 'dataset_type': ['listening', 'playi
 dataset_11 = {'dataset_name': 'dataset_11', 'dataset_type': ['listening', 'playing'], 'labels': ['song_1', 'song_2', 'bpm_90', 'bpm_150']} 
 dataset_12 = {'dataset_name': 'dataset_12', 'dataset_type': ['listening', 'playing'], 'labels': ['low', 'middle', 'high']}
 dataset_13 = {'dataset_name': 'dataset_13', 'dataset_type': ['playing'], 'labels': ['half-high', 'no_half-middle', 'no_half-low']}
+dataset_14_1 = {'dataset_name': 'dataset_14-1', 'dataset_type': ['playing'], 'labels': ['relax', 'excited']}
+
+dataset_5_prova = {'dataset_name': 'dataset_prova', 'dataset_type': ['playing'], 'labels': ['relax', 'excited']}
 
 def classification(dataset):
 
@@ -98,24 +103,29 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
         X_shuffled = np.vstack([X_train, X_test])
         y_shuffled = np.concatenate([y_train, y_test])
 
-        # Models
-        scaler = StandardScaler()
-        cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-        lda_model = LinearDiscriminantAnalysis()
-        svm_model = svm.SVC(kernel = 'linear')
-
-        # # Load pretrained models
-        # lda_model = pickle.load(open('BCI/results/dataset_7-1/playing/LDA_model.pkl', 'rb'))
-        # svm_model = pickle.load(open('BCI/results/dataset_7-1/playing/SVM_model.pkl', 'rb'))
-
         # Normalization
-        X_train = scaler.fit_transform(X_train)
+        if LOAD_MODEL:
+            print('Loading scaler')
+            scaler = pickle.load(open('BCI/results/dataset_prova/playing/scaler.pkl', 'rb'))
+            X_train = scaler.transform(X_train) 
+        else:
+            print('Fit scaler')
+            scaler = StandardScaler()
+            X_train = scaler.fit_transform(X_train)
         X_test = scaler.transform(X_test) 
+
+
 
         print()
 
         # LDA
-        lda_model.fit(X_train, y_train)
+        if LOAD_MODEL:
+            print('Loading LDA pretrained model')
+            lda_model = pickle.load(open('BCI/results/dataset_prova/playing/LDA_model.pkl', 'rb'))
+        else:
+            print('Fit LDA model')
+            lda_model = LinearDiscriminantAnalysis()
+            lda_model.fit(X_train, y_train)
         y_lda_pred = lda_model.predict(X_test)
         y_lda_pred_proba = lda_model.predict_proba(X_test)
         # Calculate accuracy
@@ -123,6 +133,7 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
         f1_lda = f1_score(y_test, y_lda_pred, average='macro')
         print(f'LDA\tAccuracy: {accuracy_lda:.2f} F1 Score: {f1_lda:.2f}')
         # Cross-validation
+        cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
         lda_cross_scores = cross_val_score(lda_model, X_shuffled, y_shuffled, cv=cv)
         lda_cross_f1 = cross_val_score(lda_model, X_shuffled, y_shuffled, cv=cv, scoring='f1_macro', error_score=0)
         print(f'LDA\tCross-validated accuracy: {np.mean(lda_cross_scores):.2f} (+/- {np.std(lda_cross_scores):.2f}) F1-Score: {np.mean(lda_cross_f1):.2f}')
@@ -130,7 +141,13 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
 
 
         # SVM
-        svm_model.fit(X_train, y_train)
+        if LOAD_MODEL:
+            print('Loading SVM pretrained model')
+            svm_model = pickle.load(open('BCI/results/dataset_prova/playing/SVM_model.pkl', 'rb'))
+        else: 
+            print('Fit SVM model')
+            svm_model = svm.SVC(kernel = 'linear')
+            svm_model.fit(X_train, y_train) 
         y_svm_pred = svm_model.predict(X_test)
         # Calculate accuracy
         accuracy_svm = accuracy_score(y_test, y_svm_pred)
@@ -182,6 +199,12 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 f.write(f'SVM\tCross-validated accuracy: {np.mean(svm_cross_scores):.2f} (+/- {np.std(svm_cross_scores):.2f}) F1-Score: {np.mean(svm_cross_f1):.2f}\n')
                 f.write(f'\n')
 
+
+            # Save the scaler 
+            outfile = os.path.join(path_save, 'scaler.pkl')
+            with open(outfile, 'wb') as pickle_file:
+                pickle.dump(scaler, pickle_file)
+
             # Save the LDA model
             outfile = os.path.join(path_save, 'LDA_model.pkl')
             with open(outfile, 'wb') as pickle_file:
@@ -193,5 +216,4 @@ X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
                 pickle.dump(svm_model, pickle_file)
 
 if __name__ == '__main__':
-    classification(dataset_12)
-    classification(dataset_13)
+    classification(dataset_14_1)

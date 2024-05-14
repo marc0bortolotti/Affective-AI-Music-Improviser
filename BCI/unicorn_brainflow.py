@@ -33,7 +33,7 @@ def main():
     board.start_stream()
 
     # Get data from the board, 10 seconds in this example, then close the session
-    time.sleep(2)
+    time.sleep(10)
     print('Session stopped')
     data = board.get_board_data()
     board.stop_stream()
