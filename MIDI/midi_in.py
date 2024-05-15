@@ -1,6 +1,12 @@
 import time
 import rtmidi
+import logging
+import UDP.udp_connection as udp
+import threading
 
+
+NOTE_BUFFER_SIZE = 16
+BAR_BUFFER_SIZE = 4
 BPM = 120
 DT_SAME_TIME = 0.02
 DRUM_MIDI_DICT = {    
@@ -16,37 +22,79 @@ DRUM_MIDI_DICT = {
     51: 'Ride'
 }
 
-# initialise midi in class
-midi_in = rtmidi.MidiIn()
 
-# get the number of available ports
-available_ports = midi_in.get_port_count()
-if available_ports == 0:
-    print('No MIDI devices detected. Retrying...')
-while available_ports == 0:
-    available_ports = midi_in.get_port_count()
-    time.sleep(0.001)
+def thread_function_server(name, midi, server_ip, server_port):
+    logging.info("Thread %s: starting", name)
+    server = udp.Server(ip= server_ip, port= server_port)
+    server.start()
+    while not midi.exit:
+        msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
+        if 'CLICK: 1/4' in msg:
+                midi.process_note_buffer()
+                midi.update_bar_buffer()
+                midi.clear_note_buffer()
+    server.close()
+    
 
-# connect to a device
-midi_in.open_port(0)
-print(f'\nConnected to port: {midi_in.get_port_name(0)}\nListening...')
+class MIDI_Input:
 
-midi_buffer = []
-bar_buffer = []
+    def __init__(self, server_ip, server_port, parse_message = False):
+        self.midi_in = rtmidi.MidiIn()
+        self.available_ports = self.midi_in.get_port_count()
+        
+        if self.available_ports == 0:
+            logging.info('MIDI Input: No MIDI devices detected. Retrying...')
+        while self.available_ports == 0:
+            self.available_ports = self.midi_in.get_port_count()
+            time.sleep(0.001)
 
-while True:
+        self.midi_in.open_port(0)
+        logging.info(f'MIDI Input: Connected to port {self.midi_in.get_port_name(0)}')  
 
-    msg_and_dt = midi_in.get_message()
+        self.server_thread = threading.Thread(target= thread_function_server, args= ('MIDI Server', self, server_ip, server_port))
+        self.server_thread.start()
+        self.note_buffer = []
+        self.bar_buffer = []
+        self.exit = False
+        self.parse_message = parse_message
 
-    if msg_and_dt:
-        # unpack the msg and time tuple
-        (msg, dt) = msg_and_dt 
-        command, note, velocity = msg
+    def run(self):
+        logging.info(f"MIDI Input: running")
+        while not self.exit:
+            msg_and_dt = self.midi_in.get_message()
+            if msg_and_dt:
+                (msg, dt) = msg_and_dt
+                command, note, velocity = msg
+                if note in DRUM_MIDI_DICT and velocity > 10:
+                    command = hex(command)
+                    self.note_buffer.append(DRUM_MIDI_DICT[note])
+                    if self.parse_message:
+                        logging.info(f"MIDI Input: received messagge <<{command} [{DRUM_MIDI_DICT[note]}, {velocity}]\t| dt = {dt:.2f}>>")
+            else:
+                time.sleep(0.001)
+        
+        self.midi_in.close_port()
+        logging.info(f'MIDI Input: Disconnected')
 
-        if note in DRUM_MIDI_DICT and velocity > 10:
-            command = hex(command) # convert the command integer to a hex so it's easier to read
-            print(f"{command} [{DRUM_MIDI_DICT[note]}, {velocity}]\t| dt = {dt:.2f}")
+    def get_note_buffer(self):
+        return self.note_buffer
+    
+    def clear_note_buffer(self):
+        self.note_buffer = []
 
-    else:
-        # add a short sleep so the while loop doesn't hammer your cpu
-        time.sleep(0.001)
+    def process_note_buffer(self):
+        if len(self.note_buffer) > 0:
+            logging.info(f'MIDI Input: Bar <<{self.note_buffer}>>')
+        else:
+            logging.info(f'MIDI Input: Bar <<Empty>>')
+
+    def update_bar_buffer(self):
+        self.bar_buffer.append(self.note_buffer)
+        if len(self.bar_buffer) > BAR_BUFFER_SIZE:
+            self.bar_buffer.pop(0)
+
+    def close(self):
+        self.exit = True
+        self.server_thread.join()
+        logging.info(f'Thread MIDI Server: finishing')
+
