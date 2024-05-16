@@ -17,7 +17,12 @@ class Metronome:
         self.server_ip = server_ip
         self.server_port = server_port
 
+    def set_bpm(self, bpm):
+        self.BPM = bpm
+        self.delay = 4 * (60/self.BPM)
+
     def start(self):
+        self.stop_execution = False
         currentTime = perf_counter()
         while not self.stop_execution:
             lastTime = currentTime
@@ -26,7 +31,7 @@ class Metronome:
                 currentTime = perf_counter()
                 if (currentTime - lastTime >= self.delay):
                     self.click.play()
-                    self.client.send("CLICK: 1/4", self.server_ip, self.server_port)
+                    # self.client.send("CLICK: 1/4", self.server_ip, self.server_port)
                     break
         logging.info("Click: stopped")
         self.client.close()

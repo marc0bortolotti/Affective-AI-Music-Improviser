@@ -1,5 +1,5 @@
 import numpy as np
-from utils.loader import convert_to_mne, unicorn_eeg_channels, unicorn_fs
+from BCI.utils.loader import convert_to_mne, unicorn_eeg_channels, unicorn_fs
 
 def extract_features(eeg_samples):
 

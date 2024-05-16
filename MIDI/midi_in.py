@@ -7,7 +7,6 @@ import threading
 
 NOTE_BUFFER_SIZE = 16
 BAR_BUFFER_SIZE = 4
-BPM = 120
 DT_SAME_TIME = 0.02
 DRUM_MIDI_DICT = {    
     36: 'Kick',
