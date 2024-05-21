@@ -66,8 +66,8 @@ if __name__ == "__main__":
     time.sleep(5)
 
     for i in range (20):
-        countdown(4)
-        eeg = unicorn.get_eeg_data(recording_time = 4)
+        time.sleep(1)
+        eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
         print(f"EEG data shape: {eeg.shape}")
         eeg_features = extract_features([eeg])
         eeg_features_corrected = baseline_correction(eeg_features, baseline)

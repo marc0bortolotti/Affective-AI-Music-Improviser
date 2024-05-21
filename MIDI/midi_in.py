@@ -4,7 +4,6 @@ import logging
 import UDP.udp_connection as udp
 import threading
 
-
 NOTE_BUFFER_SIZE = 16
 BAR_BUFFER_SIZE = 4
 DT_SAME_TIME = 0.02
@@ -96,4 +95,5 @@ class MIDI_Input:
         self.exit = True
         self.server_thread.join()
         logging.info(f'Thread MIDI Server: finishing')
+
 
