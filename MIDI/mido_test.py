@@ -56,7 +56,7 @@ last_note = 48
 total_ticks = 0
 for note, ticks in note_time_buffer: 
     if note != SILENCE_TOKEN:   
-        track.append(Message('note_on', note=note, velocity=127, time=0))
+        track.append(Message('note_on', note=note, velocity=127, time=0)) # NB: time from the previous message in ticks per beat
         track.append(Message('note_off', note=note, velocity=127, time=ticks))
         print(f'note {note} for {ticks} ticks, {tick2second(ticks, TICKS_PER_BEAT, TEMPO)} seconds')
         last_note = note
