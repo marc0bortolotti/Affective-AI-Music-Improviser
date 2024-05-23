@@ -1,5 +1,5 @@
 import threading
-import MIDI.metronome as metronome
+import METRONOME.metronome as metronome
 import MIDI.midi_in as midi_input
 import logging
 import threading
