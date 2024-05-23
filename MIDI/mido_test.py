@@ -5,7 +5,7 @@ import time
 
 BPM = 120 
 BEAT_PER_BAR = 4
-TICKS_PER_BEAT = 3
+TICKS_PER_BEAT = 960
 BEAT_DURATION =  60/BPM # seconds
 TEMPO = int(BEAT_DURATION * 1000000) # microseconds per beat
 BAR_DURATION = BEAT_PER_BAR * BEAT_DURATION # seconds
@@ -40,11 +40,13 @@ def get_token_from_midi(mid):
             for i in range(note_size):
                 tokens.append(msg.note)
 
-        bar_duration += msg.time
-        if bar_duration >= BAR_DURATION:
-            bars.append(tokens)
-            bar_duration = 0
-            tokens = []
+        # bar_duration += msg.time
+        # if bar_duration >= BAR_DURATION:
+        #     bars.append(tokens)
+        #     bar_duration = 0
+        #     tokens = []
+
+        bars = [tokens]
     return bars
 
 
@@ -104,13 +106,15 @@ def tokens_processing(tokens):
             tokens_vs_ticks_list.append([last_token, counter])
             last_token = token
             counter = 1
-            if i == len(tokens_vs_ticks_list) - 1:
+            if i == len(tokens) - 1:
                 tokens_vs_ticks_list.append([token, 1])
         else:
             counter += 1
             last_token = token
     print(f'Processing time: {time.time() - start_time}')
     return tokens_vs_ticks_list
+
+
 
 
 
@@ -125,8 +129,9 @@ if __name__ == "__main__":
     #     for msg in inport:
     #         print(msg)
 
-    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'examples/bass_example_2.MID'))
+    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'examples/bass_example.MID'))
     print(f'\nLoaded MIDI file: {mid.filename}')
+    print(f'Number of ticks per beat: {mid.ticks_per_beat}')
 
     print('\nExtracting tokens from MIDI file...')
     bars = get_token_from_midi(mid)
@@ -138,6 +143,7 @@ if __name__ == "__main__":
         tokens_vs_ticks_list = tokens_processing(tokens)
         bars_processed.append(tokens_vs_ticks_list)
     print(f'Done, number of measures processed: {len(bars_processed)}')
+    print(bars_processed)
         
     print('\nSaving decoded MIDI...')
     save_decoded_midi(bars_processed)
