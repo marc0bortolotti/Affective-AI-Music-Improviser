@@ -1,6 +1,7 @@
 import mido
 import os
 from mido import Message, MidiFile, MidiTrack, MetaMessage, tick2second
+import time
 
 # msg = mido.Message('note_on', note=60)
 # print(msg)
@@ -22,7 +23,6 @@ midi_path = 'C:/Users/Gianni/Desktop/MARCO/UNI/Magistrale/TESI/Code/MIDI/example
 mid = mido.MidiFile(os.path.join(midi_path, 'bass_example_2.MID'))
 
 note_buffer = []
-note_time_buffer = []
 measure_duration = 0
 for msg in mid.play():
     
@@ -32,24 +32,41 @@ for msg in mid.play():
         silent_size = round(msg.time/DT)
         for i in range(silent_size):
             note_buffer.append(SILENCE_TOKEN)
-        note_time_buffer.append([SILENCE_TOKEN, silent_size])
 
     if msg.type == 'note_off':
         note_size = round(msg.time/DT)
         for i in range(note_size):
             note_buffer.append(msg.note)
-        note_time_buffer.append([msg.note, note_size])
 
     measure_duration += msg.time
     if measure_duration >= MEASURE_DURATION:
         break
 
-print(note_time_buffer)
 
 mid = MidiFile(ticks_per_beat = TICKS_PER_BEAT)
 track = MidiTrack()
 mid.tracks.append(track)
 track.append(MetaMessage('set_tempo', tempo=TEMPO)) # tempo in microseconds per beat
+
+last_note = None
+counter = 0
+note_time_buffer = []
+start_time = time.time()
+for i, note in enumerate(note_buffer):
+    if note != last_note and last_note is not None:
+        note_time_buffer.append([last_note, counter])
+        last_note = note
+        counter = 1
+        if i == len(note_time_buffer) - 1:
+            note_time_buffer.append([note, 1])
+    else:
+        counter += 1
+        last_note = note
+print(f'Elapsed time: {time.time() - start_time}')
+print(note_buffer)
+print(note_time_buffer)
+
+
 
 
 last_note = 48
