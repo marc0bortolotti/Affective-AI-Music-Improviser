@@ -5,7 +5,8 @@ import time
 
 BPM = 120 
 BEAT_PER_BAR = 4
-TICKS_PER_BEAT = 960
+TICKS_PER_BEAT = 32 # quantization of a beat
+TICKS_PER_BAR = TICKS_PER_BEAT * BEAT_PER_BAR
 BEAT_DURATION =  60/BPM # seconds
 TEMPO = int(BEAT_DURATION * 1000000) # microseconds per beat
 BAR_DURATION = BEAT_PER_BAR * BEAT_DURATION # seconds
@@ -29,8 +30,8 @@ def get_token_from_midi(mid):
     '''
     bars=[]
     tokens = []
-    bar_duration = 0
     for msg in mid.play():
+        print(msg)
         if msg.type == 'note_on':
             silent_size = round(msg.time/DT)
             for i in range(silent_size):
@@ -39,14 +40,9 @@ def get_token_from_midi(mid):
             note_size = round(msg.time/DT)
             for i in range(note_size):
                 tokens.append(msg.note)
-
-        # bar_duration += msg.time
-        # if bar_duration >= BAR_DURATION:
-        #     bars.append(tokens)
-        #     bar_duration = 0
-        #     tokens = []
-
-        bars = [tokens]
+        if len(tokens) >= TICKS_PER_BAR:
+            bars.append(tokens[:TICKS_PER_BAR])
+            tokens = tokens[TICKS_PER_BAR:]
     return bars
 
 
@@ -135,7 +131,7 @@ if __name__ == "__main__":
 
     print('\nExtracting tokens from MIDI file...')
     bars = get_token_from_midi(mid)
-    print(f'Number of measures: {len(bars)}')
+    print(f'Number of bars: {len(bars)}')
 
     bars_processed = []
     print('\nProcessing tokens...')
@@ -143,7 +139,8 @@ if __name__ == "__main__":
         tokens_vs_ticks_list = tokens_processing(tokens)
         bars_processed.append(tokens_vs_ticks_list)
     print(f'Done, number of measures processed: {len(bars_processed)}')
-    print(bars_processed)
+    for i, bar in enumerate(bars_processed):
+        print(f'BAR {i}: {bar}')
         
     print('\nSaving decoded MIDI...')
     save_decoded_midi(bars_processed)

@@ -13,7 +13,7 @@ class Metronome:
         self.stop_execution = False
         self.delay = 4 * (60/self.BPM)
         self.click = simpleaudio.WaveObject.from_wave_file('MIDI/click_samples/click_120.wav')
-        self.client = udp.Client('Click')
+        self.client = udp.Client('Click', parse_message=False)
         self.server_ip = server_ip
         self.server_port = server_port
 
@@ -31,7 +31,7 @@ class Metronome:
                 currentTime = perf_counter()
                 if (currentTime - lastTime >= self.delay):
                     self.click.play()
-                    # self.client.send("CLICK: 1/4", self.server_ip, self.server_port)
+                    self.client.send("CLICK: 1/4", self.server_ip, self.server_port)
                     break
         logging.info("Click: stopped")
         self.client.close()

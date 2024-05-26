@@ -6,9 +6,11 @@ import threading
 import time
 import numpy as np
 import BCI.unicorn_brainflow as unicorn_brainflow
-from pretraining import pretraining
+from BCI.pretraining import pretraining
 from BCI.utils.feature_extraction import extract_features, baseline_correction
 import mne
+import rtmidi
+from UDP.udp_connection import Server as UDP_Server
 
 mne.set_log_level(verbose='ERROR', return_old_level=False, add_frames=None)
 
@@ -50,44 +52,67 @@ def countdown(duration):
         time.sleep(1)
     print('Countdown:  0 seconds left\n')
 
+    
+
 
 if __name__ == "__main__":
 
-    unicorn = unicorn_brainflow.Unicorn()
+    # unicorn = unicorn_brainflow.Unicorn()
     click = metronome.Metronome(SERVER_IP, SERVER_PORT, BPM)
 
     # PRETRAINING
-    scaler, svm_model, lda_model, baseline = pretraining(unicorn, click, WINDOW_SIZE, WINDOW_OVERLAP)
+    # scaler, svm_model, lda_model, baseline = pretraining(unicorn, click, WINDOW_SIZE, WINDOW_OVERLAP)
     
     # REAL TIME CLASSIFICATION
     thread_click = threading.Thread(target=thread_function_metronome, args=('Click', click))
     thread_click.start()   
-    logging.info("Main: REAL TIME CLASSIFICATION")
+    # logging.info("Main: REAL TIME CLASSIFICATION")
     time.sleep(5)
 
-    for i in range (20):
-        time.sleep(1)
-        eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
-        print(f"EEG data shape: {eeg.shape}")
-        eeg_features = extract_features([eeg])
-        eeg_features_corrected = baseline_correction(eeg_features, baseline)
+    # for i in range (20):
+    #     time.sleep(1)
+    #     eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
+    #     print(f"EEG data shape: {eeg.shape}")
+    #     eeg_features = extract_features([eeg])
+    #     eeg_features_corrected = baseline_correction(eeg_features, baseline)
 
-        # Prediction
-        sample = scaler.transform(eeg_features_corrected)
-        prediction = svm_model.predict(sample)
-        logging.info(f'Prediction: {EEG_CLASSES[int(prediction)]}')
-        prediction_lda = lda_model.predict(sample)
-        logging.info(f'Prediction LDA: {EEG_CLASSES[int(prediction_lda)]}')
-        # prediction_lda_proba = lda_model.predict_proba(sample)
-        # logging.info(f'Prediction LDA Probability: {prediction_lda_proba}')
+    #     # Prediction
+    #     sample = scaler.transform(eeg_features_corrected)
+    #     prediction = svm_model.predict(sample)
+    #     logging.info(f'Prediction: {EEG_CLASSES[int(prediction)]}')
+    #     prediction_lda = lda_model.predict(sample)
+    #     logging.info(f'Prediction LDA: {EEG_CLASSES[int(prediction_lda)]}')
+    #     # prediction_lda_proba = lda_model.predict_proba(sample)
+    #     # logging.info(f'Prediction LDA Probability: {prediction_lda_proba}')
+
+    midiout = rtmidi.MidiOut()
+    available_ports = midiout.get_ports()
+
+    print(available_ports)
+
+    note_on = [0x90, 60, 112] # channel 1, middle C, velocity 112
+    note_off = [0x80, 60, 0]
+
+    if available_ports:
+        midiout.open_port(1)
+
+    server = UDP_Server(SERVER_IP, SERVER_PORT)
+    server.start()
+    while True:
+        msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
+        if 'CLICK: 1/4' in msg:
+            time.sleep(0.3)
+            midiout.send_message(note_on)
+            print("Note on")
+            time.sleep(0.2)
+            midiout.send_message(note_off)
+            # print("Note off")
+            # time.sleep(3)
     
-    unicorn.stop_unicorn_recording()
-    click.stop()
-    thread_click.join()
-    logging.info("Thread Click: finishing")
-
-
-
+    # unicorn.stop_unicorn_recording()
+    # click.stop()
+    # thread_click.join()
+    # logging.info("Thread Click: finishing")
 
 
 
