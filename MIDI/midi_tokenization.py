@@ -9,7 +9,7 @@ import logging
 SILENCE_TOKEN = 0
 BPM = 120 
 BEAT_PER_BAR = 4
-TICKS_PER_BEAT = 128 # quantization of a beat
+TICKS_PER_BEAT = 12 # quantization of a beat
 
 
 
@@ -39,6 +39,7 @@ def get_token_from_midi(mid, bpm = BPM, ticks_per_beat = TICKS_PER_BEAT, beat_pe
 
     bars=[]
     tokens = []
+    duration = 0
     for msg in mid.play():
         if msg.type == 'note_on':
             silent_size = second2tick(msg.time, ticks_per_beat, tempo)
@@ -47,6 +48,8 @@ def get_token_from_midi(mid, bpm = BPM, ticks_per_beat = TICKS_PER_BEAT, beat_pe
                 if len(tokens) == ticks_per_bar:
                     bars.append(tokens)
                     tokens = []
+            duration += msg.time
+
         elif msg.type == 'note_off':
             note_size = second2tick(msg.time, ticks_per_beat, tempo)
             for i in range(note_size):
@@ -54,9 +57,11 @@ def get_token_from_midi(mid, bpm = BPM, ticks_per_beat = TICKS_PER_BEAT, beat_pe
                 if len(tokens) == ticks_per_bar:
                     bars.append(tokens)
                     tokens = []
+            duration += msg.time
         else:
             logging.info(msg)
     bars.append(tokens)
+    logging.info(f'Duration: {duration}')
     logging.info(f'Done! Number of bars: {len(bars)} of {len(bars[0])} tokens each')
     return bars
 
@@ -175,7 +180,7 @@ if __name__ == "__main__":
 
     MIDI_FOLDER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 
-    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'examples/bass_example.MID'))
+    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'examples/bass_12_ticks_2.MID'))
     logging.info(f'Loaded MIDI file: {mid.filename}')
     logging.info(f'Number of ticks per beat: {mid.ticks_per_beat}')
 
