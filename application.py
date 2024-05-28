@@ -10,29 +10,48 @@ from BCI.pretraining import pretraining
 from BCI.utils.feature_extraction import extract_features, baseline_correction
 import mne
 import rtmidi
-from UDP.udp_connection import Server as UDP_Server
-
+from UDP.udp_connection import Server_UDP as UDP_Server
+import mido
+import os
 mne.set_log_level(verbose='ERROR', return_old_level=False, add_frames=None)
-
 format = "%(asctime)s: %(message)s"
 logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 
+
+'''--------------- PROJECT PATH ---------------'''
+PROJECT_PATH = os.path.dirname(__file__)
+'''---------------------------------------------''' 
+
+
+'''---------- CONNECTION PARAMETERS ------------'''
+UDP_SERVER_IP = '127.0.0.1'
+UDP_SERVER_PORT = 1001
+OSC_SERVER_IP = "127.0.0.1"
+OSC_SERVER_PORT = 9000
+OSC_REAPER_IP = "127.0.0.1"
+OSC_REAPER_PORT = 8000
+'''---------------------------------------------'''
+
+
+'''--------------- MIDI PARAMETERS --------------'''
 BPM = 120
-SERVER_IP = '127.0.0.1'
-SERVER_PORT = 1001
+BEAT_PER_BAR = 4
+TICKS_PER_BEAT = 32 # quantization of a beat
+MIDI_PATH = os.path.join(PROJECT_PATH, 'MIDI')
+'''---------------------------------------------'''
+
+
+'''--------------- EEG PARAMETERS --------------'''
 UNICORN_FS = 250
 EEG_CLASSES = ['relax', 'excited']
 WINDOW_DURATION = 4 # seconds
 WINDOW_SIZE = WINDOW_DURATION * UNICORN_FS # samples
 WINDOW_OVERLAP = 0.875 # percentage
+'''---------------------------------------------''' 
 
 
 
-def thread_function_metronome(name, click):
-    logging.info("Thread %s: starting", name)
-    click.start()
-
-
+'''--------------- THREAD FUNCTIONS --------------'''
 def thread_function_unicorn(name, unicorn):
     logging.info("Thread %s: starting", name)
     unicorn.start_unicorn_recording()
@@ -40,10 +59,11 @@ def thread_function_unicorn(name, unicorn):
     eeg = unicorn.get_eeg_data()
     logging.info(f"EEG data shape: {eeg.shape}")
 
-
-def thread_function_midi(name, midi):
+def thread_function_midi(name, midi_input):
     logging.info("Thread %s: starting", name)
-    midi.run()
+    midi_input.run()
+'''---------------------------------------------'''
+
 
 
 def countdown(duration):
@@ -57,15 +77,17 @@ def countdown(duration):
 
 if __name__ == "__main__":
 
+    # logging.info(mido.get_output_names())
+    playing_port = mido.open_output('loopMIDI Port Playing 2')
+    recording_port = mido.open_output('loopMIDI Port Recording 3')
+    mid = mido.MidiFile(os.path.join(MIDI_PATH, 'examples/bass_one_bar.MID'))
+
     # unicorn = unicorn_brainflow.Unicorn()
-    click = metronome.Metronome(SERVER_IP, SERVER_PORT, BPM)
 
     # PRETRAINING
     # scaler, svm_model, lda_model, baseline = pretraining(unicorn, click, WINDOW_SIZE, WINDOW_OVERLAP)
     
     # REAL TIME CLASSIFICATION
-    thread_click = threading.Thread(target=thread_function_metronome, args=('Click', click))
-    thread_click.start()   
     # logging.info("Main: REAL TIME CLASSIFICATION")
     time.sleep(5)
 
@@ -85,37 +107,8 @@ if __name__ == "__main__":
     #     # prediction_lda_proba = lda_model.predict_proba(sample)
     #     # logging.info(f'Prediction LDA Probability: {prediction_lda_proba}')
 
-    midiout = rtmidi.MidiOut()
-    available_ports = midiout.get_ports()
-
-    print(available_ports)
-
-    note_on = [0x90, 60, 112] # channel 1, middle C, velocity 112
-    note_off = [0x80, 60, 0]
-
-    if available_ports:
-        midiout.open_port(1)
-
-    server = UDP_Server(SERVER_IP, SERVER_PORT)
-    server.start()
-    while True:
-        msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
-        if 'CLICK: 1/4' in msg:
-            time.sleep(0.3)
-            midiout.send_message(note_on)
-            print("Note on")
-            time.sleep(0.2)
-            midiout.send_message(note_off)
-            # print("Note off")
-            # time.sleep(3)
     
     # unicorn.stop_unicorn_recording()
-    # click.stop()
-    # thread_click.join()
-    # logging.info("Thread Click: finishing")
-
-
-
 
 
     # midi = midi_input.MIDI_Input(server_ip = SERVER_IP, server_port = SERVER_PORT)
