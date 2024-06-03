@@ -4,10 +4,12 @@ import music21 as m21
 import numpy as np
 import tensorflow.keras as keras
 
+PROJECT_DIR = os.path.dirname(__file__)
+
 KERN_DATASET_PATH = "deutschl/erk"
 SAVE_DIR = "dataset"
-SINGLE_FILE_DATASET = "file_dataset"
-MAPPING_PATH = "mapping.json"
+SINGLE_FILE_DATASET = os.path.join(PROJECT_DIR, "file_dataset")
+MAPPING_PATH = os.path.join(PROJECT_DIR, "mapping.json")
 SEQUENCE_LENGTH = 64
 
 # durations are expressed in quarter length

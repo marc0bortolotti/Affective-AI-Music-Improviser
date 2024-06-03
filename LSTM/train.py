@@ -4,6 +4,13 @@ from preprocess import generate_training_sequences, SEQUENCE_LENGTH
 OUTPUT_UNITS = 38
 NUM_UNITS = [256]
 LOSS = "sparse_categorical_crossentropy"
+'''
+Use this crossentropy loss function when there are two or more label classes. 
+We expect labels to be provided as integers. 
+If you want to provide labels using one-hot representation, please use CategoricalCrossentropy loss. 
+There should be # classes floating point values per feature for y_pred 
+and a single floating point value per feature for y_true.
+'''
 LEARNING_RATE = 0.001
 EPOCHS = 90
 BATCH_SIZE = 64
@@ -51,6 +58,8 @@ def train(output_units=OUTPUT_UNITS, num_units=NUM_UNITS, loss=LOSS, learning_ra
 
     # generate the training sequences
     inputs, targets = generate_training_sequences(SEQUENCE_LENGTH)
+
+    print(inputs.shape, targets.shape)
 
     # build the network
     model = build_model(output_units, num_units, loss, learning_rate)
