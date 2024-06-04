@@ -14,11 +14,12 @@ BEATS_PER_BAR = 4
 def midi_to_notes(midi_file_path: str, bpm = BPM, beats_per_bar = BEATS_PER_BAR) -> pd.DataFrame:
 
   pm = pretty_midi.PrettyMIDI(midi_file_path)
-  print(f'Tempo: {pm.estimate_tempo()}')
   instrument = pm.instruments[0]
   notes = collections.defaultdict(list) # Dictionary with values as list
-  bar_duration = (60/BPM) * beats_per_bar
-  print(f'Bar duration: {bar_duration}')
+  bar_duration = (60/bpm) * beats_per_bar
+
+  ticks_per_beat = pm.resolution
+  print(f'Ticks per beat: {ticks_per_beat}')
 
   # Sort the notes by start time
   sorted_notes = sorted(instrument.notes, key=lambda note: note.start)
@@ -27,39 +28,68 @@ def midi_to_notes(midi_file_path: str, bpm = BPM, beats_per_bar = BEATS_PER_BAR)
   for note in sorted_notes:
 
     pitch = note.pitch
+    velocity = note.velocity
     start = note.start
     end = note.end
     step = start - prev_start
     duration = end - start
-    bar = int(start // bar_duration) # integer part of the division
+    bar = int(start // bar_duration) + 1 # integer part of the division
     
     notes['pitch'].append(pitch)
+    notes['velocity'].append(velocity)
     notes['start'].append(start)
-    notes['end'].append(end)
     notes['step'].append(step)
-    notes['duration'].append(duration)
+    notes['step_ticks'].append(pm.time_to_tick(step))
     notes['bar'].append(bar)
 
     # split the note in two if it spans multiple bars
-    if int(start + duration) > bar * bar_duration: 
+    if start + duration > (bar + 1) * bar_duration: 
 
-      print(f'Note {pitch} spans multiple bars')
+      # update the current note to end at the end of the bar and update its duration
+      updated_end = (bar + 1) * bar_duration
+      updted_duration = updated_end - start
 
-      # update the current note (last element in the lists)
-      notes['duration'][-1] = bar * bar_duration - start
-      notes['end'][-1] = bar * bar_duration
+      notes['end'].append(updated_end)
+      notes['duration'].append(updted_duration)
+      notes['duration_ticks'].append(pm.time_to_tick(updted_duration))
 
-      # create new note in the succeeding dataframe position
-      notes['pitch'].append(pitch)
-      notes['start'].append(bar * bar_duration)
+      # create new note in the succeeding bar with the remaining duration
+
+      succ_pitch = pitch  
+      succ_velocity = velocity
+      succ_start = (bar + 1) * bar_duration
+      succ_end = end
+      succ_step = succ_start - start
+      succ_duration = succ_end - succ_start
+      succ_bar = bar + 1
+
+      notes['pitch'].append(succ_pitch)
+      notes['velocity'].append(succ_velocity)
+      notes['start'].append(succ_start)
+      notes['end'].append(succ_end)
+      notes['step'].append(succ_step)
+      notes['step_ticks'].append(pm.time_to_tick(succ_step))
+      notes['duration'].append(succ_duration)
+      notes['duration_ticks'].append(succ_duration)
+      notes['bar'].append(succ_bar)
+
+      prev_start = succ_start
+
+    else:
       notes['end'].append(end)
-      notes['duration'].append(end - (bar * bar_duration))
-      notes['step'].append(0)
-      notes['bar'].append(bar + 1)
+      notes['duration'].append(duration)
+      notes['duration_ticks'].append(pm.time_to_tick(duration))
+      prev_start = start
 
-    prev_start = start
+  # create a dataframe from the notes dictionary
+  notes_df = pd.DataFrame({name: np.array(value) for name, value in notes.items()})
 
-  return pd.DataFrame({name: np.array(value) for name, value in notes.items()})
+  # put bar column at the end of the dataframe
+  notes_df = notes_df[[col for col in notes_df.columns if col != 'bar'] + ['bar']]
+
+  return notes_df, ticks_per_beat
+
+
 
 
 def extract_bars_from_notes(notes: pd.DataFrame) -> list:
@@ -71,8 +101,14 @@ def extract_bars_from_notes(notes: pd.DataFrame) -> list:
 
   for bar in unique_bars:
     bar_notes = notes[notes['bar'] == bar]
-    bars.append(bar_notes)
+    bar = bar_notes.reset_index(drop = True)
+    bar.loc[0, 'step'] = bar.loc[0, 'start'] - bar.loc[0, 'bar']
+    if bar.loc[-1, 'end'] != bar.loc[-1, 'bar'] + 1:
+       bar.loc[len(bar.index)] = bar.loc[len(bar.index)-1] 
+       bar.loc[len(bar.index), 'velocity'] = 0
+    bars.append(bar)
 
+ 
   return bars
 
 
