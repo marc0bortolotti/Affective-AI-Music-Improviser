@@ -9,6 +9,7 @@ class TCN(nn.Module):
 
     def __init__(self, input_size, output_size, num_channels,
                  kernel_size=2, dropout=0.3, emb_dropout=0.1, tied_weights=False):
+        
         super(TCN, self).__init__()
         self.encoder = nn.Embedding(output_size, input_size)
         self.tcn = TemporalConvNet(input_size, num_channels, kernel_size, dropout=dropout)
@@ -19,6 +20,7 @@ class TCN(nn.Module):
                 raise ValueError('When using the tied flag, nhid must be equal to emsize')
             self.decoder.weight = self.encoder.weight
             print("Weight tied")
+            
         self.drop = nn.Dropout(emb_dropout)
         self.emb_dropout = emb_dropout
         self.init_weights()
