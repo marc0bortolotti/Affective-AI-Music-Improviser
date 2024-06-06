@@ -16,7 +16,6 @@ BCI_TOKEN = 'BCI'
 
 
 
-
 class Dictionary(object):
   def __init__(self):
       self.input = input
@@ -31,9 +30,6 @@ class Dictionary(object):
 
   def __len__(self):
       return len(self.idx2word)
-
-
-
 
 
 
@@ -88,16 +84,13 @@ class PrettyMidiTokenizer(object):
       'start': start,
       'end': end,
       'bar': bar
-    }
-    
+    }    
     return new_note
-
 
 
   def append_note_to_notes_dict(self, notes, note):
       for key, value in note.items():
           notes[key].append(value)    
-
 
 
   def midi_to_tokens(self):
@@ -209,5 +202,57 @@ class PrettyMidiTokenizer(object):
     self.sequences = sequences
     self.notes_df = notes_df
     self.num_bars = len(bars_time_series)
+
+  
+
+  def tokens_to_midi(self, sequence, out_file_path = None):
+
+    instrument_name = 'Acoustic Bass'
+    pm = pretty_midi.PrettyMIDI(midi_file=None, resolution=self.TICKS_PER_BEAT, initial_tempo=self.BPM)
+    program = pretty_midi.instrument_name_to_program(instrument_name)
+    instrument = pretty_midi.Instrument(program=program)
+
+    last_token = None
+    counter = 0
+    tokens_vs_time_list = []
+
+    # convert the sequence of tokens into a list of tokens and their duration
+    for i, token in enumerate(sequence):
+        if token != last_token and last_token is not None:
+            tokens_vs_time_list.append([last_token, counter])
+            last_token = token
+            counter = 1
+            if i == len(sequence) - 1:
+                tokens_vs_time_list.append([token, 1])
+        else:
+            counter += 1
+            last_token = token
+
+
+    # create the notes from the tokens and their duration
+    prev_start = 0
+    for i, elem in enumerate(tokens_vs_time_list):
+        elem[0] = self.VOCAB.idx2word[elem[0]]
+        elem[1] = pm.tick_to_time(elem[1]) # convert ticks to time
+
+        if NOTE_START_TOKEN in elem[0]:
+            elem[0] = elem[0].replace(NOTE_START_TOKEN, '')
+
+        if elem[0] != SILENCE_TOKEN:
+            pitch = int(elem[0])
+            velocity = 100
+        else:
+            pitch = 0
+            velocity = 0
+            
+        end = prev_start + elem[1]
+        note = pretty_midi.Note(velocity=velocity, pitch=pitch, start=prev_start, end=end)
+        instrument.notes.append(note)
+        prev_start = end
+
+    pm.instruments.append(instrument)
+    if out_file_path is not None:
+      pm.write(out_file_path)
+
 
 
