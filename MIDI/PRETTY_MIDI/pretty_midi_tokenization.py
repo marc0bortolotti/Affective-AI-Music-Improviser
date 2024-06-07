@@ -203,7 +203,7 @@ class PrettyMidiTokenizer(object):
     self.notes_df = notes_df
     self.num_bars = len(bars_time_series)
 
-  
+
 
   def tokens_to_midi(self, sequence, out_file_path = None):
 
@@ -212,40 +212,45 @@ class PrettyMidiTokenizer(object):
     program = pretty_midi.instrument_name_to_program(instrument_name)
     instrument = pretty_midi.Instrument(program=program)
 
-    last_token = None
-    counter = 0
-    tokens_vs_time_list = []
+    last_pitch = None
+    counter = 1
+    pitch_vs_tick_list = []
 
     # convert the sequence of tokens into a list of tokens and their duration
     for i, token in enumerate(sequence):
-        if token != last_token and last_token is not None:
-            tokens_vs_time_list.append([last_token, counter])
-            last_token = token
-            counter = 1
-            if i == len(sequence) - 1:
-                tokens_vs_time_list.append([token, 1])
-        else:
-            counter += 1
-            last_token = token
 
+        token_string = self.VOCAB.idx2word[token] # convert token id to string
 
-    # create the notes from the tokens and their duration
-    prev_start = 0
-    for i, elem in enumerate(tokens_vs_time_list):
-        elem[0] = self.VOCAB.idx2word[elem[0]]
-        elem[1] = pm.tick_to_time(elem[1]) # convert ticks to time
-
-        if NOTE_START_TOKEN in elem[0]:
-            elem[0] = elem[0].replace(NOTE_START_TOKEN, '')
-
-        if elem[0] != SILENCE_TOKEN:
-            pitch = int(elem[0])
-            velocity = 100
-        else:
+        if token_string == SILENCE_TOKEN:
             pitch = 0
-            velocity = 0
-            
-        end = prev_start + elem[1]
+        elif NOTE_START_TOKEN in token_string:
+            pitch = int(token_string.replace(NOTE_START_TOKEN, ''))
+        else:
+            pitch = int(token_string)
+
+        if last_pitch != None:
+
+            if  pitch != last_pitch or NOTE_START_TOKEN in token_string:
+                pitch_vs_tick_list.append([last_pitch, counter])
+                counter = 1
+                last_pitch = pitch
+                if i == len(sequence) - 1:
+                    pitch_vs_tick_list.append([pitch, 1])
+            else:
+                counter += 1
+        
+        last_pitch = pitch
+
+    # convert ticks to time and generate midi file
+    prev_start = 0
+    for pitch_ticks in pitch_vs_tick_list:
+        pitch, ticks = pitch_ticks[0], pitch_ticks[1]
+        duration = pm.tick_to_time(ticks) # convert ticks to time
+        velocity = 127
+        if pitch == 0: 
+            velocity=0
+        end = prev_start + duration
+
         note = pretty_midi.Note(velocity=velocity, pitch=pitch, start=prev_start, end=end)
         instrument.notes.append(note)
         prev_start = end
@@ -254,5 +259,5 @@ class PrettyMidiTokenizer(object):
     if out_file_path is not None:
       pm.write(out_file_path)
 
-
+    return pm, pitch_vs_tick_list
 
