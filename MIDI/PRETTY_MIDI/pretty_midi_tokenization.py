@@ -52,6 +52,7 @@ class PrettyMidiTokenizer(object):
     self.sequences = []
     self.notes_df = pd.DataFrame()
     self.num_bars = 0
+    self.tokens_weights = [] # used to balance the loss function during training
 
 
     self.pm = pretty_midi.PrettyMIDI(midi_file_path)
@@ -172,14 +173,16 @@ class PrettyMidiTokenizer(object):
       bars_time_series.append(bar_time_serie)
 
 
-    # flat bars and extract the string vocabulary
+    # flat bars and create vocabulary of unique tokens
     flatten_time_series = np.concatenate(bars_time_series)
-    token_list = list(set(flatten_time_series))
+    tokens_vs_frequency = collections.Counter(flatten_time_series)
+    tokens = list(tokens_vs_frequency.keys())
+    self.tokens_weights = [tokens_vs_frequency[token]/len(flatten_time_series)  for token in tokens]
 
     # create the vocabulary
     VOCAB = Dictionary()
-    for i in range(0, len(token_list)):
-        VOCAB.add_word(token_list[i])
+    for i in range(0, len(tokens)):
+        VOCAB.add_word(tokens[i])
 
     # create the sequences of tokens for the model 
     sequences=[]
