@@ -61,13 +61,13 @@ class Server_OSC:
     beat = int(beat)
     if self.last_beat != beat and bar > 1:
       self.last_beat = beat # to avoid multiple messages arriving during the while loop
-      delay = (self.BEAT_DURATION * ticks) / 100
+      delay = (self.BEAT_DURATION * ticks) / 100 # ticks are in percentage of the beat duration
       if self.parse_message:
         logging.info("{0}: {1}".format(args[0], bar_beat_ticks))
         logging.info(f'Delay: {delay} ms')
       if beat == 4:
         while True:
-          if time.time() - start_time >= (self.BEAT_DURATION) - delay:
+          if time.time() - start_time >= (self.BEAT_DURATION/2) - delay:
             self.udp_client.send("One", self.udp_ip, self.udp_port)
             break 
           else:
@@ -104,7 +104,7 @@ def udp_server_thread_function(udp_server):
   # logging.info(mido.get_output_names())
   playing_port = mido.open_output('loopMIDI Port Playing 2')
   recording_port = mido.open_output('loopMIDI Port Recording 3')
-  mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'examples/bass_one_bar.MID'))
+  mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'example/bass_one_bar.MID'))
   udp_server.start()
 
   while True:
@@ -114,9 +114,6 @@ def udp_server_thread_function(udp_server):
     else:
       time.sleep(0.001)
     
-
-
-
 
 
 
