@@ -32,22 +32,31 @@ class Server_OSC:
 
   def __init__(self, self_ip, self_port, udp_ip, udp_port, bpm = 120, parse_message = False):
     self.parse_message = parse_message
-    self.udp_ip = udp_ip
-    self.udp_port = udp_port
+    
     self.BEAT_DURATION = 60/bpm
     self.last_beat = None 
     self.stop = False
     self.record_started = False
-    self.udp_client = Client_UDP('Click', parse_message = True)
+
+    # to send a synchronization msg
+    self.udp_ip = udp_ip 
+    self.udp_port = udp_port
+    self.udp_client = Client_UDP('Click')
+
+    # OSC manager
     self.dispatcher = Dispatcher()
     # self.dispatcher.map("/*", self.print_message)
     self.dispatcher.map("/play", self.play_handler, "Play")
     self.dispatcher.map("/stop", self.stop_handler, "Stop")
     self.dispatcher.map("/record", self.record_handler, "Record")
     self.dispatcher.map("/beat/str", self.beat_handler, "Beat")
+
     self.server = osc_server.ThreadingOSCUDPServer((self_ip, self_port), self.dispatcher)
-    logging.info("OSC Server: serving on {}".format(self.server.server_address))
+  
+
+  def run(self):
     self.server.serve_forever()
+    logging.info("OSC Server: running on {}".format(self.server.server_address))
 
   def print_message(self, unused_addr, args):
     if self.parse_message:
@@ -100,24 +109,29 @@ class Server_OSC:
     logging.info("OSC Server: closed")
 
 
-def udp_server_thread_function(udp_server):
-  # logging.info(mido.get_output_names())
-  playing_port = mido.open_output('loopMIDI Port Playing 2')
-  recording_port = mido.open_output('loopMIDI Port Recording 3')
-  mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'example/bass_one_bar.MID'))
-  udp_server.start()
 
-  while True:
-    if udp_server.get_message():
-      for msg in mid.play():
-          playing_port.send(msg)
-    else:
-      time.sleep(0.001)
-    
+
+
+
+
 
 
 
 if __name__ == "__main__":
+
+  def udp_server_thread_function(udp_server):
+    # logging.info(mido.get_output_names())
+    playing_port = mido.open_output('loopMIDI Port Playing 2')
+    recording_port = mido.open_output('loopMIDI Port Recording 3')
+    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'example/bass_one_bar.MID'))
+    udp_server.start()
+
+    while True:
+      if udp_server.get_message():
+        for msg in mid.play():
+            playing_port.send(msg)
+      else:
+        time.sleep(0.001)
 
   format = "%(asctime)s: %(message)s"
   logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")

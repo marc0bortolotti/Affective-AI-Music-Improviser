@@ -15,7 +15,7 @@ class Server_UDP:
         self.parse_message = parse_message
 
 
-    def start(self):
+    def run(self):
         self.sock.bind((self.ip, self.port))
         logging.info(f"UDP Server {self.ip}:{self.port}: started")
 

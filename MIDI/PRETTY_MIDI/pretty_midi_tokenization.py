@@ -11,7 +11,6 @@ BPM = 120
 TICKS_PER_BEAT = 12 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
-
 VELOCITY_THRESHOLD = 80
 NOTE_START_TOKEN = 'S'
 VELOCITY_PIANO_TOKEN = 'p'
@@ -20,10 +19,23 @@ SILENCE_TOKEN = 'O'
 BCI_TOKEN = 'BCI'
 
 
+DRUM_MIDI_DICT = {    
+    36: 'Kick',
+    38: 'Snare',
+    42: 'Closed Hi-Hat',
+    43: 'Floor Tom',
+    44: 'Pedal Hi-Hat',
+    46: 'Open Hi-Hat',
+    47: 'Tom 2',
+    48: 'Tom 1',
+    49: 'Crash',
+    51: 'Ride'
+}
+
+
 
 class Dictionary(object):
   def __init__(self):
-      self.input = input
       self.word2idx = {}
       self.idx2word = []
 
@@ -32,6 +44,16 @@ class Dictionary(object):
           self.idx2word.append(word)
           self.word2idx[word] = len(self.idx2word) - 1
       return self.word2idx[word]
+  
+  def save(self, path):
+    with open(path, 'w') as f:
+      for word in self.idx2word:
+        f.write(word + '\n')
+
+  def load(self, path):
+    with open(path, 'r') as f:
+      for line in f:
+        self.add_word(line.strip())
   
   def is_in_vocab(self, word):
       return word in self.word2idx
@@ -43,10 +65,7 @@ class Dictionary(object):
 
 class PrettyMidiTokenizer(object):
     
-  def __init__(self, midi_file_path):
-
-
-    self.midi_file_path = midi_file_path
+  def __init__(self, midi_file_path = None):
 
     self.BPM = BPM
     self.BEATS_PER_BAR = BEATS_PER_BAR
@@ -58,21 +77,31 @@ class PrettyMidiTokenizer(object):
     self.BAR_DURATION = self.BEAT_DURATION * self.BEATS_PER_BAR
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
+    self.sequences = None
+    self.num_bars = None
+    self.tokens_weights = None
+    self.notes_df = None
     self.VOCAB = None
 
-    self.source_path = midi_file_path
-    self.source_pm = pretty_midi.PrettyMIDI(self.source_path)
-    self.midi_out_port = mido.open_output('loopMIDI Port 1')
 
-    if self.source_pm.resolution != TICKS_PER_BEAT:
-      raise Exception('The resolution of the MIDI file is {self.pm.resolution} instead of {TICKS_PER_BEAT}.')
+    if midi_file_path is not None:
+      self.source_path = midi_file_path
+      self.source_pm = pretty_midi.PrettyMIDI(self.source_path)
+      # self.midi_out_port = mido.open_output('loopMIDI Port 1')
 
-    elif self.source_pm.get_tempo_changes()[1][0] != BPM:
-      raise Exception('The tempo of the MIDI file is {self.pm.get_tempo_changes[1][0]} instead of {BPM}.')
-  
-    else:
-      self.sequences, self.num_bars, self.tokens_weights, self.notes_df = self.midi_to_tokens(self.source_path)
-      
+      if self.source_pm.resolution != TICKS_PER_BEAT:
+        raise Exception('The resolution of the MIDI file is {self.pm.resolution} instead of {TICKS_PER_BEAT}.')
+
+      elif self.source_pm.get_tempo_changes()[1][0] != BPM:
+        raise Exception('The tempo of the MIDI file is {self.pm.get_tempo_changes[1][0]} instead of {BPM}.')
+    
+      else: 
+        self.sequences, self.num_bars, self.tokens_weights, self.notes_df = self.midi_to_tokens(self.source_path, update_vocab = True)
+
+
+  def load_vocab(self, path):
+    self.VOCAB = Dictionary()
+    self.VOCAB.load(path)
 
 
   def convert_time_to_ticks(self, time, resolution = TICKS_PER_BEAT, bpm = BPM):
@@ -101,7 +130,7 @@ class PrettyMidiTokenizer(object):
       notes[key].append(value)    
 
 
-  def midi_to_tokens(self, midi_path, update_vocab = True):
+  def midi_to_tokens(self, midi_path, update_vocab = False):
 
     pm = pretty_midi.PrettyMIDI(midi_path)
     instrument = pm.instruments[0]
@@ -138,6 +167,7 @@ class PrettyMidiTokenizer(object):
     # create a dataframe from the notes dictionary
     notes_df = pd.DataFrame({name: np.array(value) for name, value in notes.items()})
 
+
     # split notes into bars and convert notes ticks into a time serie of strings
     bars_time_series = []
     bar_ids = notes_df['bar'].unique()
@@ -162,38 +192,38 @@ class PrettyMidiTokenizer(object):
 
       bars_time_series.append(bar_time_serie)
 
-    num_bars = len(bar_ids)
+      num_bars = len(bar_ids)
 
-    # flat bars and create vocabulary of unique tokens
-    flatten_time_series = np.concatenate(bars_time_series)
-    tokens_vs_frequency = collections.Counter(flatten_time_series)
-    tokens = list(tokens_vs_frequency.keys())
-    tokens_weights = [tokens_vs_frequency[token]/len(flatten_time_series)  for token in tokens]
+      # flat bars and create vocabulary of unique tokens
+      flatten_time_series = np.concatenate(bars_time_series)
+      tokens_vs_frequency = collections.Counter(flatten_time_series)
+      tokens = list(tokens_vs_frequency.keys())
+      tokens_weights = [tokens_vs_frequency[token]/len(flatten_time_series)  for token in tokens]
 
-    # create the vocabulary
-    if update_vocab or self.VOCAB is None:
-      self.VOCAB = Dictionary()
-      for i in range(0, len(tokens)):
-          self.VOCAB.add_word(tokens[i])
+      # create the vocabulary
+      if update_vocab or self.VOCAB is None:
+        self.VOCAB = Dictionary()
+        for i in range(0, len(tokens)):
+            self.VOCAB.add_word(tokens[i])
 
-    # create the sequences of tokens for the model 
-    sequences = []
-    num_sequences = len(flatten_time_series) - self.SEQ_LENGTH
-    if num_sequences == 0:
-      num_sequences = 1
-      
-    for i in range(0, num_sequences, self.BAR_LENGTH):
-      seq = flatten_time_series[i:(i+self.SEQ_LENGTH)].copy() # NB: copy is necessary to avoid modifying the original array
+      # create the sequences of tokens for the model 
+      sequences = []
+      num_sequences = len(flatten_time_series) - self.SEQ_LENGTH
+      if num_sequences == 0:
+        num_sequences = 1
+        
+      for i in range(0, num_sequences, self.BAR_LENGTH):
+        seq = flatten_time_series[i:(i+self.SEQ_LENGTH)].copy() # NB: copy is necessary to avoid modifying the original array
 
-      # add the BCI token to the input sequences at each time step
-      if 'input' in midi_path or 'test' in midi_path:
-        seq = np.concatenate(([BCI_TOKEN], seq[:-1]))
-        self.VOCAB.add_word(BCI_TOKEN)
+        # add the BCI token to the input sequences at each time step
+        if 'input' in midi_path or 'test' in midi_path:
+          seq = np.concatenate(([BCI_TOKEN], seq[:-1]))
+          self.VOCAB.add_word(BCI_TOKEN)
 
-      for i in range(len(seq)):
-        seq[i] = self.VOCAB.word2idx[seq[i]] 
+        for i in range(len(seq)):
+          seq[i] = self.VOCAB.word2idx[seq[i]] 
 
-      sequences.append(seq)
+        sequences.append(seq)
 
     return sequences, num_bars, tokens_weights, notes_df
 
@@ -219,23 +249,27 @@ class PrettyMidiTokenizer(object):
         # extract pitch and velocity from the token string
         if VELOCITY_PIANO_TOKEN in token_string:
           velocity = 90
-          token_string = token_string.replace(VELOCITY_PIANO_TOKEN, '')
+          token_string = token_string.replace(VELOCITY_PIANO_TOKEN, '') # remove the velocity token
         elif VELOCITY_FORTE_TOKEN in token_string:
           velocity = 127
-          token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '')
+          token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
 
-        if token_string == SILENCE_TOKEN:
-            pitch = 0
-            velocity = 0
+        if token_string == SILENCE_TOKEN or token_string == BCI_TOKEN:
+          pitch = 0
+          velocity = 0
+          note_start = False
         elif NOTE_START_TOKEN in token_string:
-            pitch = int(token_string.replace(NOTE_START_TOKEN, ''))
+          token_string = token_string.replace(NOTE_START_TOKEN, '') # remove the note start token
+          pitch = int(token_string)
+          note_start = True
         else:
-            pitch = int(token_string)
+          pitch = int(token_string)
+          note_start = False
 
         # update the pitch, duration and velocity lists
         if last_pitch != None and last_velocity != None:
 
-            if  pitch != last_pitch or NOTE_START_TOKEN in token_string:
+            if  pitch != last_pitch or note_start:
                 pitch_ticks_velocity.append([last_pitch, counter, last_velocity])
                 counter = 1
                 last_pitch = pitch
@@ -265,20 +299,68 @@ class PrettyMidiTokenizer(object):
     return pitch_ticks_velocity
   
 
-  def send_midi_to_reaper(self, bar, parse_message = False):
+  def send_midi_to_reaper(self, pitch_ticks_velocity, midi_out_port, parse_message = False):
 
     mid = MidiFile(ticks_per_beat = TICKS_PER_BEAT)
     track = MidiTrack()
     mid.tracks.append(track)
     track.append(MetaMessage('set_tempo', tempo=self.TEMPO))
-    for pitch, ticks, velocity in bar:  
+    for pitch, ticks, velocity in pitch_ticks_velocity:  
       track.append(Message('note_on', note=pitch, velocity=velocity, time=0)) # NB: time from the previous message in ticks per beat
       track.append(Message('note_off', note=pitch, velocity=velocity, time=ticks))
       if parse_message:
-          logging.info(f'note: {pitch}, ticks: {ticks}, velocity: {velocity}')
+        logging.info(f'note: {pitch}, ticks: {ticks}, velocity: {velocity}')
 
     for msg in mid.play():
-      self.midi_out_port.send(msg)
+      midi_out_port.send(msg)
+
+
+
+
+  def real_time_tokenization(self, notes):
+
+    tokens = np.empty((self.BAR_LENGTH), dtype=object)
+    tokens[:] = SILENCE_TOKEN
+    start_time = notes[0]['dt']
+    duration = 0
+    for note in notes:
+      
+      pitch = note['pitch']
+      velocity = note['velocity']
+      dt = note['dt']
+      duration += dt
+
+      if velocity > 40:
+        start = self.convert_time_to_ticks(duration - start_time)
+        end = start + 5 # arbitrary duration for the drum notes
+
+        if end > self.BAR_LENGTH :
+          end = self.BAR_LENGTH
+
+        if start >= self.BAR_LENGTH:
+          start = self.BAR_LENGTH - 5
+        
+        if note['velocity'] < VELOCITY_THRESHOLD:
+          tokens[start] = str(pitch) + NOTE_START_TOKEN + VELOCITY_PIANO_TOKEN
+          tokens[start+1:end] = str(pitch) + VELOCITY_PIANO_TOKEN
+        else:
+          tokens[start] = str(pitch) + NOTE_START_TOKEN + VELOCITY_FORTE_TOKEN
+          tokens[start+1:end] = str(pitch) + VELOCITY_FORTE_TOKEN
+      
+      for i in range(len(tokens)):
+        if i == 0:
+          tokens[i] = BCI_TOKEN
+        
+        if not self.VOCAB.is_in_vocab(tokens[i]):
+          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
+        else: 
+          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
+
+    return tokens
+
+
+  
+  
 
 
 
@@ -286,12 +368,25 @@ class PrettyMidiTokenizer(object):
 
 
 if __name__ == '__main__':
-   
+  import rtmidi
+
+
+  # Tokenization of a MIDI file
   tok = PrettyMidiTokenizer('TCN/dataset/output/bass.mid')
-
   sample = tok.sequences[0]
-
-  note_ticks_velocity = tok.tokens_to_midi(sample, 'MIDI/PRETTY_MIDI/sample.mid')
-  print(note_ticks_velocity)
-
+  note_ticks_velocity = tok.tokens_to_midi(sample, 'MIDI/PRETTY_MIDI/decoded_sample.mid')
   tok.send_midi_to_reaper(note_ticks_velocity, parse_message = True)
+
+
+  # Real-time tokenization
+  midi_in = rtmidi.MidiIn()
+  available_ports = midi_in.get_port_count()
+  print(f'Available MIDI ports: {midi_in.get_ports()}')
+
+  midi_in.open_port(3)
+  while True:
+    msg_and_dt = midi_in.get_message()
+    if msg_and_dt:
+      (msg, dt) = msg_and_dt
+      command, note, velocity = msg
+      command = hex(command)

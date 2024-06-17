@@ -11,7 +11,7 @@ BEAT_DURATION =  60/BPM # seconds
 TEMPO = int(BEAT_DURATION * 1000000) # microseconds per beat
 BAR_DURATION = BEAT_PER_BAR * BEAT_DURATION # seconds
 DT = BEAT_DURATION/TICKS_PER_BEAT # seconds
-MIDI_FOLDER_PATH = 'C:/Users/Gianni/Desktop/MARCO/UNI/Magistrale/TESI/Code/MIDI'
+MIDI_FOLDER_PATH = 'MIDI'
 
 
 msg = mido.Message('note_on', note=60, velocity=64, time=32)
@@ -23,9 +23,19 @@ port = mido.open_output('loopMIDI Port 1')
 port.send(msg)
 
 # Open a MIDI input port and print received messages
-with mido.open_input() as inport:
-    for msg in inport:
+mid = MidiFile(ticks_per_beat = TICKS_PER_BEAT)
+track = MidiTrack()
+mid.tracks.append(track)
+track.append(MetaMessage('set_tempo', tempo=TEMPO)) 
+notes = []
+print(mido.get_input_names())
+with mido.open_input('DTX Drums 3') as inport:
+    while len(track)<20:
+        msg = inport.receive()
         print(msg)
+        track.append(msg)
+    mid.save('MIDI/MIDO/prova_3333.mid')
+
 
 # Read a MIDI file
 mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'examples/bass_example.MID'))
