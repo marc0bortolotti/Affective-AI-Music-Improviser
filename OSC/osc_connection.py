@@ -12,6 +12,8 @@ import threading
 import logging
 
 
+SYNCH_MSG = "Click:1"
+
 
 class Client_OSC:
   def __init__(self, ip, port, parse_message = False):
@@ -68,7 +70,7 @@ class Server_OSC:
     ticks = int(ticks) 
     bar = int(bar)
     beat = int(beat)
-    if self.last_beat != beat and bar > 1:
+    if self.last_beat != beat and bar > 1 and self.record_started:
       self.last_beat = beat # to avoid multiple messages arriving during the while loop
       delay = (self.BEAT_DURATION * ticks) / 100 # ticks are in percentage of the beat duration
       if self.parse_message:
@@ -77,7 +79,7 @@ class Server_OSC:
       if beat == 4:
         while True:
           if time.time() - start_time >= (self.BEAT_DURATION/2) - delay:
-            self.udp_client.send("One", self.udp_ip, self.udp_port)
+            self.udp_client.send(SYNCH_MSG, self.udp_ip, self.udp_port)
             break 
           else:
             time.sleep(0.001)

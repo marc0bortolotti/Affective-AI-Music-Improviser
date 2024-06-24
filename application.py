@@ -10,12 +10,12 @@ import os
 import torch
 
 from UDP.udp_connection import Server_UDP 
-from OSC.osc_connection import Server_OSC
-from MIDI.PRETTY_MIDI.pretty_midi_tokenization import PrettyMidiTokenizer
+from OSC.osc_connection import Server_OSC, SYNCH_MSG
+from MIDI.PRETTY_MIDI.pretty_midi_tokenization import PrettyMidiTokenizer, BCI_TOKENS
 import BCI.unicorn_brainflow as unicorn_brainflow
 from BCI.pretraining import pretraining
 from BCI.utils.feature_extraction import extract_features, baseline_correction
-import MIDI.midi_in as midi_input
+from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from TCN.word_cnn.utils import *
 from TCN.word_cnn.model import *
 from TCN import *
@@ -49,7 +49,7 @@ OSC_REAPER_PORT = 8000
 '''--------------- MIDI PARAMETERS --------------'''
 BPM = 120
 BEAT_PER_BAR = 4
-TICKS_PER_BEAT = 32 # quantization of a beat
+TICKS_PER_BEAT = 12 # quantization of a beat
 '''----------------------------------------------'''
 
 
@@ -91,13 +91,10 @@ def thread_function_osc(name, osc_server):
     osc_server.run()
 
 
-def thread_function_server(name, server, midi_in):
+def thread_function_server(name, server, midi_in, midi_out):
     logging.info("Thread %s: starting", name)
     server.run()
 
-    # logging.info(mido.get_output_names())
-    playing_port = mido.open_output('loopMIDI Port Playing 2')
-    recording_port = mido.open_output('loopMIDI Port Recording 3') 
 
     INPUT_TOK = PrettyMidiTokenizer()
     INPUT_TOK.load_vocab(INPUT_VOCAB_PATH)
@@ -124,13 +121,13 @@ def thread_function_server(name, server, midi_in):
     
         msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
 
-        if 'One' in msg:
+        if SYNCH_MSG in msg:
 
             logging.info(f"Received synchronization message from Reaper")
 
             if predicted_sequence is not None:
                 logging.info(f"Sending MIDI to Reaper")
-                OUTPUT_TOK.send_midi_to_reaper(predicted_sequence, playing_port)
+                midi_out.send_midi_to_reaper(predicted_sequence, TICKS_PER_BEAT)
                 
             # get the notes from the buffer
             notes = midi_in.get_note_buffer()
@@ -140,7 +137,7 @@ def thread_function_server(name, server, midi_in):
 
             # tokenize the notes
             if len(notes) > 0:
-                tokens = INPUT_TOK.real_time_tokenization(notes)
+                tokens = INPUT_TOK.real_time_tokenization(notes, 'BCI_PREDICTION')
                 tokens_buffer.append(tokens)
  
             # if the buffer is full (3 bars), make the prediction
@@ -182,22 +179,10 @@ def thread_function_server(name, server, midi_in):
     
 
 
-def run_application():
+def run_application(midi_in_port, midi_out_port):
 
-    midi_in = rtmidi.MidiIn()
-    available_ports = midi_in.get_port_count()
-        
-    if available_ports == 0:
-        logging.info('MIDI Input: No MIDI devices detected. Retrying...')
-    while available_ports == 0:
-        available_ports = midi_in.get_port_count()
-        time.sleep(0.001)
-
-    print(f'Available ports: {midi_in.get_ports()}')
-    midi_in.open_port(3)
-    logging.info(f'MIDI Input: Connected to port {midi_in.get_port_name(3)}') 
-
-    midi_in = midi_input.MIDI_Input(midi_in)
+    midi_in = MIDI_Input(midi_in_port)
+    midi_out = MIDI_Output(midi_out_port)
 
     # it receives the synchronization msg 
     server = Server_UDP(ip= UDP_SERVER_IP, port= UDP_SERVER_PORT)
@@ -212,7 +197,7 @@ def run_application():
     
     # threads
     thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', midi_in))
-    thread_server = threading.Thread(target=thread_function_server, args=('Server', server, midi_in))
+    thread_server = threading.Thread(target=thread_function_server, args=('Server', server, midi_in, midi_out))
     thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', osc_server))
 
     # start the threads
@@ -236,7 +221,22 @@ def run_application():
 
 
 if __name__ == "__main__":
-    run_application()
+
+    midi_in_port = rtmidi.MidiIn()
+    available_ports = midi_in_port.get_ports()
+
+    inport_idx = input(f'Enter the idx of the MIDI <<INPUT>> port: {available_ports}')
+    midi_in_port.open_port(inport_idx)
+    logging.info(f'MIDI Input: Connected to port {available_ports[inport_idx]}') 
+
+    # logging.info(mido.get_output_names())
+    outport_idx = input(f'Enter the idx of the MIDI <<OUTPUT>> port: {available_ports}')
+    midi_playing_port = mido.open_output(available_ports[outport_idx])
+    midi_recording_port = mido.open_output('loopMIDI Port Recording 3') 
+    logging.info(f'MIDI Input: Connected to port {available_ports[outport_idx]}') 
+
+
+    run_application(midi_in_port, midi_playing_port)
 
 
 

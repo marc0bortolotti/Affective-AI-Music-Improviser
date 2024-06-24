@@ -7,16 +7,16 @@ from TCN.tcn import TemporalConvNet
 
 class TCN(nn.Module):
 
-    def __init__(self, input_size, output_size, num_channels,
+    def __init__(self, input_size, embedding_size, output_size, num_channels,
                  kernel_size=2, dropout=0.3, emb_dropout=0.1, tied_weights=False):
         
         super(TCN, self).__init__()
-        self.encoder = nn.Embedding(output_size, input_size)
-        self.tcn = TemporalConvNet(input_size, num_channels, kernel_size, dropout=dropout)
+        self.encoder = nn.Embedding(input_size, embedding_size)
+        self.tcn = TemporalConvNet(embedding_size, num_channels, kernel_size, dropout=dropout)
 
         self.decoder = nn.Linear(num_channels[-1], output_size)
         if tied_weights:
-            if num_channels[-1] != input_size:
+            if num_channels[-1] != embedding_size:
                 raise ValueError('When using the tied flag, nhid must be equal to emsize')
             self.decoder.weight = self.encoder.weight
             print("Weight tied")
