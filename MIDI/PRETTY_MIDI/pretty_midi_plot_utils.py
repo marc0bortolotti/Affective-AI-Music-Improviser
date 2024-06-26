@@ -30,3 +30,4 @@ def plot_piano_roll(notes: pd.DataFrame, count: Optional[int] = None):
   plt.xlabel('Time [s]')
   plt.ylabel('Pitch')
   _ = plt.title(title)
+

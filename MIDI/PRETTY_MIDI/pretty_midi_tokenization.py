@@ -338,36 +338,36 @@ class PrettyMidiTokenizer(object):
       if duration > self.BAR_DURATION:
         break
 
-      else:
-        if velocity > 40:
-          start = self.convert_time_to_ticks(duration)
+      elif velocity > 40:
+        start = self.convert_time_to_ticks(duration)
+        step = 0
+        for i in range (note_idx+1, len(notes)):
+          step += notes[i]['dt']
+          if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
+            step = self.convert_time_to_ticks(step)
+            break
+        
+        end = int(start + step)
 
-          step = 0
-          for i in range (note_idx+1, len(notes)):
-            step += notes[i]['dt']
-            if notes[i]['velocity'] == 0:
-              end = self.convert_time_to_ticks(step)
-              break
-          
-          end = start + step 
+        print(start, end)
 
-          if end > self.BAR_LENGTH :
-            end = self.BAR_LENGTH
-          
-          if velocity < VELOCITY_THRESHOLD:
-            velocity_token = VELOCITY_PIANO_TOKEN
+        if end > self.BAR_LENGTH :
+          end = self.BAR_LENGTH
+        
+        if velocity < VELOCITY_THRESHOLD:
+          velocity_token = VELOCITY_PIANO_TOKEN
+        else:
+          velocity_token = VELOCITY_FORTE_TOKEN
+
+        for i in range(start, end):
+          if tokens[i] != SILENCE_TOKEN and prev_pitch is not None and prev_pitch != pitch:
+            tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
           else:
-            velocity_token = VELOCITY_FORTE_TOKEN
-
-          for i in range(start, end):
-            if tokens[i] != SILENCE_TOKEN and prev_pitch is not None and prev_pitch != pitch:
-              tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
-            else:
-              tokens[i] = pitch + velocity_token
-            if i == start: 
-              tokens[i] += NOTE_START_TOKEN
-          
-          prev_pitch = pitch
+            tokens[i] = pitch + velocity_token
+          if i == start: 
+            tokens[i] += NOTE_START_TOKEN
+        
+        prev_pitch = pitch
         
     # convert string tokens into integer tokens
     for i in range(len(tokens)):
@@ -398,7 +398,6 @@ if __name__ == '__main__':
   tok = PrettyMidiTokenizer('TCN/dataset/output/bass.mid')
   sample = tok.sequences[0]
   note_ticks_velocity = tok.tokens_to_midi(sample, 'MIDI/PRETTY_MIDI/decoded_sample.mid')
-  tok.send_midi_to_reaper(note_ticks_velocity, parse_message = True)
 
 
   # Real-time tokenization

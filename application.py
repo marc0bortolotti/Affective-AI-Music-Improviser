@@ -30,9 +30,9 @@ logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 '''--------------------PATH---------------------'''
 PROJECT_PATH = os.path.dirname(__file__)
 MIDI_PATH = os.path.join(PROJECT_PATH, 'MIDI')
-MODEL_PATH = os.path.join(PROJECT_PATH, 'TCN/model', 'generated_model_state.pth')
-INPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/vocabularies', 'input_vocab.txt')
-OUTPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/vocabularies', 'output_vocab.txt')
+MODEL_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240624-151336', 'model_state_dict.pth')
+INPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240624-151336', 'input_vocab.txt')
+OUTPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240624-151336', 'output_vocab.txt')
 '''---------------------------------------------''' 
 
 
@@ -83,7 +83,10 @@ def thread_function_unicorn(name, unicorn):
 
 def thread_function_midi(name, midi_input):
     logging.info("Thread %s: starting", name)
-    midi_input.run()
+    MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_excited.mid')
+    while True:
+        time.sleep(10)
+        midi_input.run_simulation(MIDI_FILE_PATH)
 
 
 def thread_function_osc(name, osc_server):
@@ -95,9 +98,9 @@ def thread_function_server(name, server, midi_in, midi_out):
     logging.info("Thread %s: starting", name)
     server.run()
 
-
     INPUT_TOK = PrettyMidiTokenizer()
     INPUT_TOK.load_vocab(INPUT_VOCAB_PATH)
+    INPUT_VOCAB_SIZE = len(INPUT_TOK.VOCAB)
     BAR_LENGTH = INPUT_TOK.BAR_LENGTH
 
     OUTPUT_TOK = PrettyMidiTokenizer()
@@ -105,7 +108,8 @@ def thread_function_server(name, server, midi_in, midi_out):
     OUTPUT_VOCAB_SIZE = len(OUTPUT_TOK.VOCAB)
 
 
-    model = TCN(input_size = EMBEDDING_SIZE, 
+    model = TCN(input_size = INPUT_VOCAB_SIZE,
+                embedding_size = EMBEDDING_SIZE, 
                 output_size = OUTPUT_VOCAB_SIZE, 
                 num_channels = NUM_CHANNELS, 
                 kernel_size = 3) 
@@ -127,17 +131,18 @@ def thread_function_server(name, server, midi_in, midi_out):
 
             if predicted_sequence is not None:
                 logging.info(f"Sending MIDI to Reaper")
-                midi_out.send_midi_to_reaper(predicted_sequence, TICKS_PER_BEAT)
+                midi_out.send_midi_to_reaper(predicted_sequence, TICKS_PER_BEAT, BPM)
                 
             # get the notes from the buffer
             notes = midi_in.get_note_buffer()
+            print(f"Notes: {notes}")
 
             # clear the buffer
             midi_in.clear_note_buffer()
 
             # tokenize the notes
             if len(notes) > 0:
-                tokens = INPUT_TOK.real_time_tokenization(notes, 'BCI_PREDICTION')
+                tokens = INPUT_TOK.real_time_tokenization(notes, 'C')
                 tokens_buffer.append(tokens)
  
             # if the buffer is full (3 bars), make the prediction
@@ -145,6 +150,8 @@ def thread_function_server(name, server, midi_in, midi_out):
 
                 # Flatten the tokens buffer
                 input_data = np.array(tokens_buffer, dtype = np.int32).flatten()
+
+                print(f"Input data: {input_data}")
 
                 # Convert the tokens to tensor
                 input_data = torch.LongTensor(input_data).to(device)
@@ -175,8 +182,7 @@ def thread_function_server(name, server, midi_in, midi_out):
                 tokens_buffer.pop(0)
 
     server.close()  
-
-    
+               
 
 
 def run_application(midi_in_port, midi_out_port):
@@ -225,14 +231,17 @@ if __name__ == "__main__":
     midi_in_port = rtmidi.MidiIn()
     available_ports = midi_in_port.get_ports()
 
-    inport_idx = input(f'Enter the idx of the MIDI <<INPUT>> port: {available_ports}')
+    # inport_idx = int(input(f'\nEnter the idx of the MIDI <<INPUT>> port: {available_ports}\n'))
+    inport_idx = 0
     midi_in_port.open_port(inport_idx)
     logging.info(f'MIDI Input: Connected to port {available_ports[inport_idx]}') 
 
     # logging.info(mido.get_output_names())
-    outport_idx = input(f'Enter the idx of the MIDI <<OUTPUT>> port: {available_ports}')
+    available_ports = mido.get_output_names()
+    outport_idx = 2
+    # outport_idx = int(input(f'\nEnter the idx of the MIDI <<OUTPUT>> port: {available_ports}\n'))
     midi_playing_port = mido.open_output(available_ports[outport_idx])
-    midi_recording_port = mido.open_output('loopMIDI Port Recording 3') 
+    # midi_recording_port = mido.open_output('loopMIDI Port Recording 3') 
     logging.info(f'MIDI Input: Connected to port {available_ports[outport_idx]}') 
 
 

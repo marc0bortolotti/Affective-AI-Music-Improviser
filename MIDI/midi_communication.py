@@ -2,6 +2,7 @@ import time
 import rtmidi
 import logging
 from mido import MidiFile, MidiTrack, Message, MetaMessage
+import mido
     
 
 class MIDI_Input:
@@ -32,6 +33,12 @@ class MIDI_Input:
         self.midi_in_port.close_port()
         logging.info(f'MIDI Input: Disconnected')
 
+    def run_simulation(self, path):
+        mid = mido.MidiFile(path)
+        for msg in mid.play(): 
+            self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
+
+
     def get_note_buffer(self):
         return self.note_buffer
     
@@ -59,12 +66,13 @@ class MIDI_Output:
     def close(self):
         self.midi_out_port.close_port()
 
-    def send_midi_to_reaper(self, pitch_ticks_velocity, resolution, parse_message = False):
-
+    def send_midi_to_reaper(self, pitch_ticks_velocity, resolution, bpm, parse_message = False):
+        
+        tempo = int(60 / bpm * 1000000)
         mid = MidiFile(ticks_per_beat = resolution)
         track = MidiTrack()
         mid.tracks.append(track)
-        track.append(MetaMessage('set_tempo', tempo=self.TEMPO))
+        track.append(MetaMessage('set_tempo', tempo=tempo))
         for pitch, ticks, velocity in pitch_ticks_velocity:  
             track.append(Message('note_on', note=pitch, velocity=velocity, time=0)) # NB: time from the previous message in ticks per beat
             track.append(Message('note_off', note=pitch, velocity=velocity, time=ticks))
