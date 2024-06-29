@@ -230,8 +230,10 @@ def thread_function_server(name):
 
 
 def get_notes_played():
-    if INPUT_TOK is not None:
-        return INPUT_TOK.real_time_notes
+    if len(INPUT_TOK.real_time_notes) > 0:
+        return INPUT_TOK.real_time_notes[-1]
+    else:
+        return {'pitch': 0, 'velocity': 0, 'start': 0, 'end': 0}
     
 def application_status():
     return APPLICATION_STATUS
@@ -322,7 +324,7 @@ if __name__ == "__main__":
 
     run_application(midi_in_port, midi_playing_port)
 
-    time.sleep(4)
+    time.sleep(60)
 
     close_application()
 

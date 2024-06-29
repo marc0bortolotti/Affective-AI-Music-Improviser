@@ -15,6 +15,8 @@ import logging
 SYNCH_MSG = "Click:1"
 REC_MSG = '/action/_SWS_RECTOGGLE'
 
+ESTIMATED_LATENCY = 0.25 # in seconds
+
 
 
 class Client_OSC:
@@ -34,7 +36,7 @@ class Client_OSC:
 
 class Server_OSC:
 
-  def __init__(self, self_ip, self_port, udp_ip, udp_port, bpm = 120, parse_message = False):
+  def __init__(self, self_ip, self_port, udp_ip, udp_port, bpm, parse_message = False):
     self.parse_message = parse_message
     
     self.BEAT_DURATION = 60/bpm
@@ -67,20 +69,20 @@ class Server_OSC:
 
   def beat_handler(self, unused_addr, args, bar_beat_ticks):
     if not self.exit:
-      start_time = time.time()
       bar, beat, ticks = bar_beat_ticks.split('.')
-      ticks = int(ticks) 
-      bar = int(bar)
       beat = int(beat)
+      bar = int(bar)
+      ticks = int(ticks) 
       if self.last_beat != beat and bar > 1 and self.record_started:
         self.last_beat = beat # to avoid multiple messages arriving during the while loop
+        start_time = time.time()
         delay = (self.BEAT_DURATION * ticks) / 100 # ticks are in percentage of the beat duration
         if self.parse_message:
           logging.info("{0}: {1}".format(args[0], bar_beat_ticks))
           logging.info(f'Delay: {delay} ms')
         if beat == 4:
           while True:
-            if time.time() - start_time >= (self.BEAT_DURATION/2) - delay:
+            if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY):
               self.udp_client.send(SYNCH_MSG, self.udp_ip, self.udp_port)
               self.udp_client.send(SYNCH_MSG, self.udp_ip, 1111)
               break 
@@ -114,41 +116,42 @@ class Server_OSC:
 
 if __name__ == "__main__":
 
-  # def udp_server_thread_function(udp_server):
-  #   # logging.info(mido.get_output_names())
-  #   playing_port = mido.open_output('loopMIDI Port Playing 2')
-  #   recording_port = mido.open_output('loopMIDI Port Recording 3')
-  #   mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'example/bass_one_bar.MID'))
-  #   udp_server.start()
+  def udp_server_thread_function(udp_server):
+    # logging.info(mido.get_output_names())
+    playing_port = mido.open_output('loopMIDI Port Playing 2')
+    recording_port = mido.open_output('loopMIDI Port Recording 3')
+    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'example/bass_one_bar.MID'))
+    udp_server.start()
 
-  #   while True:
-  #     if udp_server.get_message():
-  #       for msg in mid.play():
-  #           playing_port.send(msg)
-  #     else:
-  #       time.sleep(0.001)
+    while True:
+      if udp_server.get_message():
+        for msg in mid.play():
+            playing_port.send(msg)
+      else:
+        time.sleep(0.001)
 
-  # format = "%(asctime)s: %(message)s"
-  # logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
+  format = "%(asctime)s: %(message)s"
+  logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 
-  # MIDI_FOLDER_PATH = 'C:/Users/Gianni/Desktop/MARCO/UNI/Magistrale/TESI/Code/MIDI'
+  MIDI_FOLDER_PATH = 'C:/Users/Gianni/Desktop/MARCO/UNI/Magistrale/TESI/Code/MIDI'
 
-  # OSC_SERVER_IP = "127.0.0.1"
-  # OSC_SERVER_PORT = 9000
+  OSC_SERVER_IP = "127.0.0.1"
+  OSC_SERVER_PORT = 9000
 
   REAPER_IP = "127.0.0.1"
   REAPER_PORT = 8000
 
-  # MIDI_IP = "127.0.0.1"
-  # MIDI_PORT = 7000
+  MIDI_IP = "127.0.0.1"
+  MIDI_PORT = 7000
 
   # udp_server = Server_UDP(MIDI_IP, MIDI_PORT, parse_message = True)
   # udp_server_thread = threading.Thread(target = udp_server_thread_function, args = (udp_server,))
   # udp_server_thread.start()
   
-  client = Client_OSC(REAPER_IP, REAPER_PORT, parse_message = True)
-  client.send(REC_MSG)
+  # client = Client_OSC(REAPER_IP, REAPER_PORT, parse_message = True)
+  # client.send(REC_MSG)
 
-  # server_osc = Server_OSC(OSC_SERVER_IP, OSC_SERVER_PORT, MIDI_IP, MIDI_PORT, bpm = 120, parse_message = True)
+  server_osc = Server_OSC(OSC_SERVER_IP, OSC_SERVER_PORT, MIDI_IP, MIDI_PORT, bpm = 60, parse_message = True)
+  server_osc.run()
 
 

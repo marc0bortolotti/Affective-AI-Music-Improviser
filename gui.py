@@ -25,6 +25,9 @@ midi_in_ports = midi_in.get_ports()
 midi_out_ports = mido.get_output_names()
 unicorns = ['UNICORN']
 
+# GLOBAL VARIABLES
+RUN_APPLICATION = False
+midi_in_data = []
 
 
 # DASHBOARD
@@ -66,7 +69,7 @@ output = dbc.Row([dbc.Container(id='output_img_table')],
                  style={'color': 'gray'})  
 
 live_update = dcc.Interval(id='live_update',
-                           interval=50, # in milliseconds
+                           interval=100, # in milliseconds
                            n_intervals=0)   
 
 app.layout = dbc.Container(fluid=True, 
@@ -100,8 +103,8 @@ def output(data):
               Input('live_update', 'n_intervals'))
 
 def update_output(start_clicks, stop_clicks, midi_in_port_name, midi_out_port_name, eeg, n_intervals):
-    
-    global EXIT_APPLICATION
+
+    global RUN_APPLICATION, midi_in_data
 
     if ctx.triggered_id == 'button_start':
         print('START')
@@ -125,43 +128,38 @@ def update_output(start_clicks, stop_clicks, midi_in_port_name, midi_out_port_na
         while not application_status()['READY']:
             time.sleep(0.1)
 
-        EXIT_APPLICATION = False
+        RUN_APPLICATION = True
    
 
     elif ctx.triggered_id == 'button_stop':
         print('STOP')
         close_application()
         thread_app.join()
-        EXIT_APPLICATION = True
+        RUN_APPLICATION = False
         
 
 
-    if not EXIT_APPLICATION:
+    if RUN_APPLICATION:
 
-        notes = get_notes_played()
-        if len(notes) > 0:
-            for note in notes:
-                pitch = int(note['pitch'])
-                velocity = note['velocity']
-                start = note['start']
-                end = note['end']
-                color = f'rgb(0,0,{velocity})'
+        note = get_notes_played()
+        print(note)
+        pitch = int(note['pitch'])
+        velocity = note['velocity']
+        start = note['start']
+        end = note['end']
+        color = f'rgb(0,0,{velocity})'
 
-                print(start, end, color)
+        if pitch != 0:
+            midi_in_data.append(go.Scatter(x=[start, end], y=[pitch, pitch], marker = {'color' : color}, showlegend=False))
+        else:
+            midi_in_data = []   
 
-                data.append(go.Scatter(x=[start, end], y=[pitch, pitch], marker = {'color' : color}, showlegend=False))
-            
-    return output(data)
+    return output(midi_in_data)
     
     
 
 # MAIN
 if __name__ == '__main__':
-    global data, EXIT_APPLICATION
-
-    EXIT_APPLICATION = True
-    data = []
-
     app.run()
 
 

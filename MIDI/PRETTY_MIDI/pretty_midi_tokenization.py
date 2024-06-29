@@ -347,24 +347,24 @@ class PrettyMidiTokenizer(object):
       
       pitch = str(note['pitch'])
       velocity = note['velocity']
-      # dt = note['dt']
-      # duration += dt
+      dt = note['dt']
+      duration += dt
 
-      # if duration > self.BAR_DURATION:
-      #   break
+      if duration > self.BAR_DURATION:
+        break
 
-      # elif velocity > 40:
-      #   start = self.convert_time_to_ticks(duration)
-      #   step = 0
-      #   for i in range (note_idx+1, len(notes)):
-      #     step += notes[i]['dt']
-      #     if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
-      #       step = self.convert_time_to_ticks(step)
-      #       break
+      elif velocity > 40:
+        start = self.convert_time_to_ticks(duration)
+        step = 0
+        for i in range (note_idx+1, len(notes)):
+          step += notes[i]['dt']
+          if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
+            step = self.convert_time_to_ticks(step)
+            break
         
-      #   end = int(start + step)
-      start = int(note['start'])
-      end = int(note['end'])
+        end = int(start + step)
+      # start = note['start']
+      # end = note['end']
 
       if velocity > 40:
         self.real_time_notes.append({'pitch': pitch, 

@@ -35,18 +35,23 @@ class MIDI_Input:
         logging.info(f'MIDI Input: Disconnected')
 
     def run_simulation(self, path):
-        # mid = mido.MidiFile(path)
-        # for msg in mid.play(): 
-        #     if msg.type != 'control_change':
-        #         self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
+        def simulate_midi(path):
+            mid = mido.MidiFile(path)
+            for msg in mid.play(): 
+                if msg.type != 'control_change':
+                    self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
 
-        mid = pm.PrettyMIDI(path)
-        instrument = mid.instruments[0]
-        for note in instrument.notes:
-            self.note_buffer.append({'pitch' : note.pitch, 
-                                     'velocity' : note.velocity, 
-                                     'start': note.start,
-                                     'end': note.end})
+        t = threading.Thread(target=simulate_midi, args=(path,))
+        t.start()
+
+        # mid = pm.PrettyMIDI(path)
+        # instrument = mid.instruments[0]
+        
+        # for note in instrument.notes:
+        #     self.note_buffer.append({'pitch' : note.pitch, 
+        #                              'velocity' : note.velocity, 
+        #                              'start': mid.time_to_tick(note.start),
+        #                              'end': mid.time_to_tick(note.end)})
 
 
     def get_note_buffer(self):
