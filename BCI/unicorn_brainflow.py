@@ -4,8 +4,15 @@ import matplotlib
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 import numpy as np
 import logging
-
-matplotlib.use("Qt5Agg")
+import threading
+from BCI.utils.loader import generate_samples
+from BCI.utils.feature_extraction import calculate_baseline, extract_features, baseline_correction
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn import svm
+import time
 
 
 def retrieve_unicorn_devices():
@@ -28,12 +35,15 @@ class Unicorn:
         self.board = BoardShim(BoardIds.UNICORN_BOARD.value, self.params)
         self.board.prepare_session()
         self.sample_frequency = 250
+
+        self.exit = False
+
+        # recordings raw data
         self.recording_data = None
 
     def stop_unicorn_recording(self):
         self.recording_data = self.board.get_board_data()
         self.board.stop_stream()
-        self.board.release_session()
         logging.info('Unicorn: stop recording')
 
     def start_unicorn_recording(self):
@@ -45,6 +55,17 @@ class Unicorn:
         data = np.array(data).T
         data = data[:, self.eeg_channels]
         data = data[- recording_time * self.sample_frequency : ]
-
         return data
     
+    def close(self):
+        self.board.release_session()
+        self.exit = True
+        logging.info('Unicorn: disconnected')
+    
+
+
+
+
+
+
+

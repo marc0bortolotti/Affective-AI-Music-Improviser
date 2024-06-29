@@ -3,7 +3,8 @@ import rtmidi
 import logging
 from mido import MidiFile, MidiTrack, Message, MetaMessage
 import mido
-    
+import pretty_midi as pm
+import threading
 
 class MIDI_Input:
 
@@ -34,9 +35,18 @@ class MIDI_Input:
         logging.info(f'MIDI Input: Disconnected')
 
     def run_simulation(self, path):
-        mid = mido.MidiFile(path)
-        for msg in mid.play(): 
-            self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
+        # mid = mido.MidiFile(path)
+        # for msg in mid.play(): 
+        #     if msg.type != 'control_change':
+        #         self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
+
+        mid = pm.PrettyMIDI(path)
+        instrument = mid.instruments[0]
+        for note in instrument.notes:
+            self.note_buffer.append({'pitch' : note.pitch, 
+                                     'velocity' : note.velocity, 
+                                     'start': note.start,
+                                     'end': note.end})
 
 
     def get_note_buffer(self):
@@ -66,9 +76,9 @@ class MIDI_Output:
     def close(self):
         self.midi_out_port.close_port()
 
-    def send_midi_to_reaper(self, pitch_ticks_velocity, resolution, bpm, parse_message = False):
-        
-        tempo = int(60 / bpm * 1000000)
+
+    def generate_track(self, pitch_ticks_velocity, resolution, bpm):   
+        tempo = int((60 / bpm) * 1000000)
         mid = MidiFile(ticks_per_beat = resolution)
         track = MidiTrack()
         mid.tracks.append(track)
@@ -76,13 +86,21 @@ class MIDI_Output:
         for pitch, ticks, velocity in pitch_ticks_velocity:  
             track.append(Message('note_on', note=pitch, velocity=velocity, time=0)) # NB: time from the previous message in ticks per beat
             track.append(Message('note_off', note=pitch, velocity=velocity, time=ticks))
-            if parse_message:
-                logging.info(f'note: {pitch}, ticks: {ticks}, velocity: {velocity}')
+    
+        # mid.save('prova_3333.mid')
+        return mid
 
-        for msg in mid.play():
-            self.midi_out_port.send(msg)
+    def send_midi_to_reaper(self, mid, parse_message = False):
+        def thread_reaper(mid, parse_message):
+            start_time = time.time()
+            for msg in mid.play():
+                self.midi_out_port.send(msg)
+                if parse_message:
+                    logging.info(f"MIDI Output: sent message <<{msg}>>")
+            logging.info(f"MIDI Output: finished sending midi to Reaper in {time.time() - start_time:.2f} s")
 
-
+        thread = threading.Thread(target=thread_reaper, args=(mid, parse_message))
+        thread.start()
 
 
 

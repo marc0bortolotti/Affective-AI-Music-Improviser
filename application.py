@@ -10,9 +10,9 @@ import os
 import torch
 
 from UDP.udp_connection import Server_UDP 
-from OSC.osc_connection import Server_OSC, SYNCH_MSG
+from OSC.osc_connection import Server_OSC, Client_OSC, SYNCH_MSG, REC_MSG
 from MIDI.PRETTY_MIDI.pretty_midi_tokenization import PrettyMidiTokenizer, BCI_TOKENS
-import BCI.unicorn_brainflow as unicorn_brainflow
+from BCI.unicorn_brainflow import Unicorn
 from BCI.pretraining import pretraining
 from BCI.utils.feature_extraction import extract_features, baseline_correction
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
@@ -26,19 +26,21 @@ format = "%(asctime)s: %(message)s"
 logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 
 
+APPLICATION_STATUS = {'READY': False, 'STOPPED': False}
+
 
 '''--------------------PATH---------------------'''
 PROJECT_PATH = os.path.dirname(__file__)
 MIDI_PATH = os.path.join(PROJECT_PATH, 'MIDI')
-MODEL_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240624-151336', 'model_state_dict.pth')
-INPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240624-151336', 'input_vocab.txt')
-OUTPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240624-151336', 'output_vocab.txt')
+MODEL_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240628-183038', 'model_state_dict.pth')
+INPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240628-183038', 'input_vocab.txt')
+OUTPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240628-183038', 'output_vocab.txt')
 '''---------------------------------------------''' 
 
 
 '''---------- CONNECTION PARAMETERS ------------'''
 UDP_SERVER_IP = '127.0.0.1'
-UDP_SERVER_PORT = 1001
+UDP_SERVER_PORT = 7000
 OSC_SERVER_IP = "127.0.0.1"
 OSC_SERVER_PORT = 9000
 OSC_REAPER_IP = "127.0.0.1"
@@ -73,31 +75,57 @@ WINDOW_OVERLAP = 0.875 # percentage
 
 
 '''--------------- THREAD FUNCTIONS --------------'''
-def thread_function_unicorn(name, unicorn):
+def thread_function_unicorn(name):
     logging.info("Thread %s: starting", name)
-    unicorn.start_unicorn_recording()
-    unicorn.stop_unicorn_recording()
-    eeg = unicorn.get_eeg_data()
-    logging.info(f"EEG data shape: {eeg.shape}")
 
+    global eeg_classification_buffer 
+    eeg_classification_buffer = [BCI_TOKENS['concentrate']]
 
-def thread_function_midi(name, midi_input):
-    logging.info("Thread %s: starting", name)
-    MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_excited.mid')
+    # unicorn.start_unicorn_recording()
+
     while True:
-        time.sleep(10)
-        midi_input.run_simulation(MIDI_FILE_PATH)
+    #     time.sleep(WINDOW_DURATION)
+    #     eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
+
+        if APPLICATION_STATUS['STOPPED']:
+            logging.info("Thread %s: closing", name)
+            break
+
+    # unicorn.stop_unicorn_recording()
+    # unicorn.close()
 
 
-def thread_function_osc(name, osc_server):
+def thread_function_midi(name):
+    logging.info("Thread %s: starting", name)
+
+    new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
+    new_server.run()
+
+    MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
+    while True:
+        msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
+        if SYNCH_MSG in msg:
+            midi_in.run_simulation(MIDI_FILE_PATH)
+        
+        if APPLICATION_STATUS['STOPPED']:
+            logging.info("Thread %s: closing", name)
+            break
+    
+    midi_in.close()
+    new_server.close()
+
+
+def thread_function_osc(name):
     logging.info("Thread %s: starting", name)
     osc_server.run()
+    logging.info("Thread %s: closing", name)
 
 
-def thread_function_server(name, server, midi_in, midi_out):
+def thread_function_server(name):
     logging.info("Thread %s: starting", name)
     server.run()
 
+    global INPUT_TOK
     INPUT_TOK = PrettyMidiTokenizer()
     INPUT_TOK.load_vocab(INPUT_VOCAB_PATH)
     INPUT_VOCAB_SIZE = len(INPUT_TOK.VOCAB)
@@ -118,32 +146,32 @@ def thread_function_server(name, server, midi_in, midi_out):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-
     tokens_buffer = []
-    predicted_sequence = None
-    while not midi_in.exit:
+    generated_track = None
+    while True:
     
         msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
 
         if SYNCH_MSG in msg:
 
-            logging.info(f"Received synchronization message from Reaper")
+            start_time = time.time()
 
-            if predicted_sequence is not None:
+            if generated_track is not None:
                 logging.info(f"Sending MIDI to Reaper")
-                midi_out.send_midi_to_reaper(predicted_sequence, TICKS_PER_BEAT, BPM)
+                midi_out.send_midi_to_reaper(generated_track)
                 
             # get the notes from the buffer
             notes = midi_in.get_note_buffer()
-            print(f"Notes: {notes}")
 
             # clear the buffer
             midi_in.clear_note_buffer()
 
             # tokenize the notes
             if len(notes) > 0:
-                tokens = INPUT_TOK.real_time_tokenization(notes, 'C')
+                tokens = INPUT_TOK.real_time_tokenization(notes, eeg_classification_buffer[-1])
                 tokens_buffer.append(tokens)
+            else:
+                INPUT_TOK.real_time_tokenization([], eeg_classification_buffer[-1])
  
             # if the buffer is full (3 bars), make the prediction
             if len(tokens_buffer) == 3:
@@ -151,7 +179,11 @@ def thread_function_server(name, server, midi_in, midi_out):
                 # Flatten the tokens buffer
                 input_data = np.array(tokens_buffer, dtype = np.int32).flatten()
 
-                print(f"Input data: {input_data}")
+                # strings = []
+                # for data in input_data:
+                #     strings.append(INPUT_TOK.VOCAB.idx2word[data])
+                # print(strings)
+                    
 
                 # Convert the tokens to tensor
                 input_data = torch.LongTensor(input_data).to(device)
@@ -172,80 +204,127 @@ def thread_function_server(name, server, midi_in, midi_out):
                 # Get the predicted sequence.
                 predicted_sequence = predicted_tokens.cpu().numpy().tolist()
 
-                # Convert the predicted sequence to MIDI.
-                predicted_sequence =  OUTPUT_TOK.tokens_to_midi(predicted_sequence)
-
                 # get only the last predicted bar
                 predicted_sequence = predicted_sequence[-BAR_LENGTH:]
+
+                # Convert the predicted sequence to MIDI.
+                predicted_sequence =  OUTPUT_TOK.tokens_to_midi(predicted_sequence)
+                
+                # Generate the track
+                generated_track = midi_out.generate_track(predicted_sequence, TICKS_PER_BEAT, BPM)
 
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)
 
-    server.close()  
-               
+            logging.info(f"Elapsed time: {time.time() - start_time}")  
+
+        
+        if APPLICATION_STATUS['STOPPED']:
+            logging.info("Thread %s: closing", name)
+            break
+
+    server.close()
+'''---------------------------------------------'''     
+
+
+
+
+def get_notes_played():
+    if INPUT_TOK is not None:
+        return INPUT_TOK.real_time_notes
+    
+def application_status():
+    return APPLICATION_STATUS
+
+def close_application():
+
+    APPLICATION_STATUS['STOPPED'] = True
+
+    logging.info('Thread Main: Closing application...')
+
+    # close the threads
+    thread_midi_input.join()
+    thread_server.join()
+    osc_server.close()  # serve_forever() must be closed outside the thread
+    thread_osc.join()
+    thread_unicorn.join()
+
+    # stop recording in Reaper
+    osc_client.send(REC_MSG)
+
+    logging.info('All done')
 
 
 def run_application(midi_in_port, midi_out_port):
+
+    logging.info('Thread Main: Starting application...')
+
+    global thread_midi_input, thread_server, thread_osc, thread_unicorn
+    global midi_in, midi_out, server, osc_server, unicorn
 
     midi_in = MIDI_Input(midi_in_port)
     midi_out = MIDI_Output(midi_out_port)
 
     # it receives the synchronization msg 
-    server = Server_UDP(ip= UDP_SERVER_IP, port= UDP_SERVER_PORT)
+    server = Server_UDP(ip= UDP_SERVER_IP, port= UDP_SERVER_PORT, parse_message=False)
     
     # send the synchronization msg when receives the beat=1 from Reaper
     osc_server = Server_OSC(self_ip = OSC_SERVER_IP, 
                             self_port = OSC_SERVER_PORT, 
                             udp_ip = UDP_SERVER_IP, 
                             udp_port = UDP_SERVER_PORT, 
-                            bpm = BPM)
-
+                            bpm = BPM,
+                            parse_message=False)
+    
+    # unicorn = Unicorn()
+    unicorn = None
     
     # threads
-    thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', midi_in))
-    thread_server = threading.Thread(target=thread_function_server, args=('Server', server, midi_in, midi_out))
-    thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', osc_server))
+    thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI',))
+    thread_server = threading.Thread(target=thread_function_server, args=('Server',))
+    thread_osc = threading.Thread(target=thread_function_osc, args=('OSC',))
+    thread_unicorn = threading.Thread(target=thread_function_unicorn, args=('Unicorn',))
 
     # start the threads
-    thread_midi_input.start()
     thread_server.start()
+    thread_midi_input.start()
     thread_osc.start()
-
-    time.sleep(120)
-
-    # close the threads
-    midi_in.close()
-    server.close()
-    osc_server.close()
-
-    thread_midi_input.join()
-    thread_server.join()
-    thread_osc.join()
-
-    logging.info('All done')
+    thread_unicorn.start()
     
+    APPLICATION_STATUS['READY'] = True
+
+    # start recording in Reaper
+    global osc_client
+    osc_client = Client_OSC(OSC_REAPER_IP, OSC_REAPER_PORT, parse_message = False)
+    osc_client.send(REC_MSG)
+
+
 
 
 if __name__ == "__main__":
 
     midi_in_port = rtmidi.MidiIn()
-    available_ports = midi_in_port.get_ports()
+    available_in_ports = midi_in_port.get_ports()
 
     # inport_idx = int(input(f'\nEnter the idx of the MIDI <<INPUT>> port: {available_ports}\n'))
     inport_idx = 0
     midi_in_port.open_port(inport_idx)
-    logging.info(f'MIDI Input: Connected to port {available_ports[inport_idx]}') 
+    logging.info(f'MIDI Input: Connected to port {available_in_ports[inport_idx]}') 
 
     # logging.info(mido.get_output_names())
-    available_ports = mido.get_output_names()
+    available_out_ports = mido.get_output_names()
     outport_idx = 2
     # outport_idx = int(input(f'\nEnter the idx of the MIDI <<OUTPUT>> port: {available_ports}\n'))
-    midi_playing_port = mido.open_output(available_ports[outport_idx])
+    midi_playing_port = mido.open_output(available_out_ports[outport_idx])
     # midi_recording_port = mido.open_output('loopMIDI Port Recording 3') 
-    logging.info(f'MIDI Input: Connected to port {available_ports[outport_idx]}') 
+    logging.info(f'MIDI Input: Connected to port {available_out_ports[outport_idx]}') 
 
 
     run_application(midi_in_port, midi_playing_port)
+
+    time.sleep(4)
+
+    close_application()
 
 
 
@@ -285,29 +364,5 @@ if __name__ == "__main__":
     # unicorn.stop_unicorn_recording()
 
 
-    # midi = midi_input.MIDI_Input(server_ip = SERVER_IP, server_port = SERVER_PORT)
-    # thread_midi = threading.Thread(target=thread_function_midi, args=('MIDI Input', midi))
-    # thread_unicorn = threading.Thread(target=thread_function_unicorn, args=('Unicorn', unicorn))
-    # # thread_midi.start()
-    # thread_unicorn.start()
-    # logging.info("Main: wait for the thread to finish")
-
-    # # time.sleep(60)
-    # # click.stop()
-    # # midi.close()
-
-    # # thread_click.join()
-    # # thread_midi.join()
-    # thread_unicorn.join()
-    # logging.info("Thread MIDI Input: finishing")
-    # logging.info("Thread Click: finishing")
-    # logging.info("Thread unicorn: finishing")
-    # logging.info("Main: all done")
-
-    # def countdown(duration):
-    # for i in range(0, duration):
-    #     print('Countdown: {:2d} seconds left'.format(duration - i), end='\r')
-    #     time.sleep(1)
-    # print('Countdown:  0 seconds left\n')
 
 

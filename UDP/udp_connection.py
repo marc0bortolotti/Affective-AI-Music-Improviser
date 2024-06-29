@@ -1,6 +1,6 @@
 import socket
 import logging
-
+import time
 
 
 class Server_UDP:
@@ -13,7 +13,7 @@ class Server_UDP:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.buffer = []
         self.parse_message = parse_message
-
+        self.exit = False
 
     def run(self):
         self.sock.bind((self.ip, self.port))
@@ -39,6 +39,7 @@ class Server_UDP:
         return self.buffer
 
     def close(self):
+        self.exit = True
         self.sock.close()
         logging.info(f"UDP Server {self.ip}:{self.port}: closed")
 

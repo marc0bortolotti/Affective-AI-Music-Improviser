@@ -83,6 +83,8 @@ class PrettyMidiTokenizer(object):
     self.BAR_DURATION = self.BEAT_DURATION * self.BEATS_PER_BAR
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
+    self.real_time_notes = []
+
     self.sequences = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
@@ -186,10 +188,12 @@ class PrettyMidiTokenizer(object):
         end = bar_df.loc[idx, 'end']
         velocity = bar_df.loc[idx, 'velocity']
 
-        if velocity < VELOCITY_THRESHOLD:
-          velocity_token = VELOCITY_PIANO_TOKEN
-        else:
+        if velocity < 40:
+          continue
+        elif velocity > VELOCITY_THRESHOLD:
           velocity_token = VELOCITY_FORTE_TOKEN
+        else:
+          velocity_token = VELOCITY_PIANO_TOKEN
 
         for i in range(start, end):
           if bar_time_serie[i] != SILENCE_TOKEN and prev_pitch is not None and prev_pitch != pitch:
@@ -214,12 +218,14 @@ class PrettyMidiTokenizer(object):
     # create the sequences of tokens for the model 
     sequences = []
     stop_index = len(tokens) - self.SEQ_LENGTH
+    seq_len = self.SEQ_LENGTH
  
-    if stop_index == 0:
+    if stop_index <= 0:
       stop_index = 1
+      seq_len = len(tokens)
       
-    for i in range(0, stop_index, self.BAR_LENGTH):
-      seq = tokens[i:(i+self.SEQ_LENGTH)].copy() # NB: copy is necessary to avoid modifying the original array
+    for idx in range(0, stop_index, self.BAR_LENGTH):
+      seq = tokens[idx:(idx+seq_len)].copy() # NB: copy is necessary to avoid modifying the original array
 
       # remove the last token and add the BCI token at the beginning
       if emotion_token is not None:
@@ -266,6 +272,8 @@ class PrettyMidiTokenizer(object):
       elif VELOCITY_FORTE_TOKEN in token_string:
         velocity = 127
         token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
+      else:
+        velocity = 0
 
       # extract pitch from the token string
       note_start = False
@@ -282,7 +290,13 @@ class PrettyMidiTokenizer(object):
       if last_pitch != None and last_velocity != None:
         # if new note is started, add the previous pitch, duration and velocity to the list
         if  pitch != last_pitch or note_start:
-          pitch_ticks_velocity.append([last_pitch, counter, last_velocity])
+
+          # filter notes with a duration of less than # ticks
+          if counter > 3:
+            pitch_ticks_velocity.append([last_pitch, counter, last_velocity])
+          else:
+            pitch_ticks_velocity.append([0, counter, 0])
+          
           counter = 1
           last_pitch = pitch
           if i == len(sequence) - 1:
@@ -321,35 +335,42 @@ class PrettyMidiTokenizer(object):
 
   def real_time_tokenization(self, notes, emotion_token):
 
+    self.real_time_notes = []
     tokens = np.empty((self.BAR_LENGTH), dtype=object)
     tokens[:] = SILENCE_TOKEN
-    notes[0]['dt'] = 0
+    if len(notes) > 0:
+      notes[0]['dt'] = 0
     duration = 0
-    prev_pitch = None
 
     # convert notes into tokens time serie
     for note_idx, note in enumerate(notes):
       
       pitch = str(note['pitch'])
       velocity = note['velocity']
-      dt = note['dt']
-      duration += dt
+      # dt = note['dt']
+      # duration += dt
 
-      if duration > self.BAR_DURATION:
-        break
+      # if duration > self.BAR_DURATION:
+      #   break
 
-      elif velocity > 40:
-        start = self.convert_time_to_ticks(duration)
-        step = 0
-        for i in range (note_idx+1, len(notes)):
-          step += notes[i]['dt']
-          if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
-            step = self.convert_time_to_ticks(step)
-            break
+      # elif velocity > 40:
+      #   start = self.convert_time_to_ticks(duration)
+      #   step = 0
+      #   for i in range (note_idx+1, len(notes)):
+      #     step += notes[i]['dt']
+      #     if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
+      #       step = self.convert_time_to_ticks(step)
+      #       break
         
-        end = int(start + step)
+      #   end = int(start + step)
+      start = int(note['start'])
+      end = int(note['end'])
 
-        print(start, end)
+      if velocity > 40:
+        self.real_time_notes.append({'pitch': pitch, 
+                                     'velocity': velocity, 
+                                     'start': start,
+                                     'end': end})
 
         if end > self.BAR_LENGTH :
           end = self.BAR_LENGTH
@@ -378,6 +399,7 @@ class PrettyMidiTokenizer(object):
         tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
       else: 
         tokens[i] = self.VOCAB.word2idx[tokens[i]] 
+
 
     return tokens
 
