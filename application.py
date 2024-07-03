@@ -10,7 +10,7 @@ import os
 import torch
 
 from UDP.udp_connection import Server_UDP 
-from OSC.osc_connection import Server_OSC, Client_OSC, SYNCH_MSG, REC_MSG
+from OSC.osc_connection import Server_OSC, Client_OSC, SYNCH_MSG, REC_MSG, SEND_MSG
 from MIDI.PRETTY_MIDI.pretty_midi_tokenization import PrettyMidiTokenizer, BCI_TOKENS
 from BCI.unicorn_brainflow import Unicorn
 from BCI.pretraining import pretraining
@@ -84,8 +84,17 @@ def thread_function_unicorn(name):
     # unicorn.start_unicorn_recording()
 
     while True:
+
     #     time.sleep(WINDOW_DURATION)
     #     eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
+    #     eeg_features = extract_features([eeg])
+    #     eeg_features_corrected = baseline_correction(eeg_features, baseline)
+
+    #     # Prediction
+    #     sample = scaler.transform(eeg_features_corrected)
+    #     prediction = svm_model.predict(sample)
+    #     eeg_classification_buffer.append(BCI_TOKENS[prediction])
+
 
         if APPLICATION_STATUS['STOPPED']:
             logging.info("Thread %s: closing", name)
@@ -97,22 +106,27 @@ def thread_function_unicorn(name):
 
 def thread_function_midi(name):
     logging.info("Thread %s: starting", name)
+    midi_in.run()
+    logging.info("Thread %s: closing", name)
 
-    new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
-    new_server.run()
+    # new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
+    # new_server.run()
 
-    MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
-    while True:
-        msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
-        if SYNCH_MSG in msg:
-            midi_in.run_simulation(MIDI_FILE_PATH)
+    # port = mido.open_output('Simulation Out Port 4')
+
+    # MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
+    # while True:
+    #     msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
+    #     if SYNCH_MSG in msg:
+    #         midi_in.run_simulation(MIDI_FILE_PATH)
         
-        if APPLICATION_STATUS['STOPPED']:
-            logging.info("Thread %s: closing", name)
-            break
+    #     if APPLICATION_STATUS['STOPPED']:
+    #         logging.info("Thread %s: closing", name)
+    #         break
+
+    # new_server.close()
     
-    midi_in.close()
-    new_server.close()
+
 
 
 def thread_function_osc(name):
@@ -152,13 +166,16 @@ def thread_function_server(name):
     
         msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
 
-        if SYNCH_MSG in msg:
+        if SEND_MSG in msg:
+            if generated_track is not None:
+                midi_out_play.send_midi_to_reaper(generated_track)
 
-            start_time = time.time()
+        elif SYNCH_MSG in msg:
 
             if generated_track is not None:
-                logging.info(f"Sending MIDI to Reaper")
-                midi_out.send_midi_to_reaper(generated_track)
+                midi_out_rec.send_midi_to_reaper(generated_track)
+
+            start_time = time.time()
                 
             # get the notes from the buffer
             notes = midi_in.get_note_buffer()
@@ -178,12 +195,6 @@ def thread_function_server(name):
 
                 # Flatten the tokens buffer
                 input_data = np.array(tokens_buffer, dtype = np.int32).flatten()
-
-                # strings = []
-                # for data in input_data:
-                #     strings.append(INPUT_TOK.VOCAB.idx2word[data])
-                # print(strings)
-                    
 
                 # Convert the tokens to tensor
                 input_data = torch.LongTensor(input_data).to(device)
@@ -208,35 +219,37 @@ def thread_function_server(name):
                 predicted_sequence = predicted_sequence[-BAR_LENGTH:]
 
                 # Convert the predicted sequence to MIDI.
-                predicted_sequence =  OUTPUT_TOK.tokens_to_midi(predicted_sequence)
+                predicted_sequence =  OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=3)
                 
                 # Generate the track
-                generated_track = midi_out.generate_track(predicted_sequence, TICKS_PER_BEAT, BPM)
+                generated_track = midi_out_rec.generate_track(predicted_sequence, TICKS_PER_BEAT, BPM)
 
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)
 
             logging.info(f"Elapsed time: {time.time() - start_time}")  
 
+        else:
+            time.sleep(0.001)
+
         
         if APPLICATION_STATUS['STOPPED']:
             logging.info("Thread %s: closing", name)
             break
 
+
+
     server.close()
 '''---------------------------------------------'''     
 
 
+def get_last_eeg_classification():
+    return eeg_classification_buffer[-1]
 
-
-def get_notes_played():
-    if len(INPUT_TOK.real_time_notes) > 0:
-        return INPUT_TOK.real_time_notes[-1]
-    else:
-        return {'pitch': 0, 'velocity': 0, 'start': 0, 'end': 0}
     
 def application_status():
     return APPLICATION_STATUS
+
 
 def close_application():
 
@@ -245,10 +258,14 @@ def close_application():
     logging.info('Thread Main: Closing application...')
 
     # close the threads
+    midi_in.close()
     thread_midi_input.join()
+
     thread_server.join()
+
     osc_server.close()  # serve_forever() must be closed outside the thread
     thread_osc.join()
+
     thread_unicorn.join()
 
     # stop recording in Reaper
@@ -257,15 +274,19 @@ def close_application():
     logging.info('All done')
 
 
-def run_application(midi_in_port, midi_out_port):
+def run_application(drum_in_port, drum_out_port, bass_play_port, bass_record_port):
+
+    # PRETRAINING
+    # scaler, svm_model, lda_model, baseline = pretraining(unicorn, click, WINDOW_SIZE, WINDOW_OVERLAP)
 
     logging.info('Thread Main: Starting application...')
 
     global thread_midi_input, thread_server, thread_osc, thread_unicorn
-    global midi_in, midi_out, server, osc_server, unicorn
+    global midi_in, midi_out_rec, midi_out_play, server, osc_server, unicorn
 
-    midi_in = MIDI_Input(midi_in_port)
-    midi_out = MIDI_Output(midi_out_port)
+    midi_in = MIDI_Input(drum_in_port, drum_out_port)
+    midi_out_rec = MIDI_Output(bass_record_port)
+    midi_out_play = MIDI_Output(bass_play_port)
 
     # it receives the synchronization msg 
     server = Server_UDP(ip= UDP_SERVER_IP, port= UDP_SERVER_PORT, parse_message=False)
@@ -305,65 +326,46 @@ def run_application(midi_in_port, midi_out_port):
 
 if __name__ == "__main__":
 
-    midi_in_port = rtmidi.MidiIn()
-    available_in_ports = midi_in_port.get_ports()
 
+    ''' MIDI DRUM'''
+    drum_in_port = rtmidi.MidiIn()
+    available_in_ports = drum_in_port.get_ports()  
     # inport_idx = int(input(f'\nEnter the idx of the MIDI <<INPUT>> port: {available_ports}\n'))
-    inport_idx = 0
-    midi_in_port.open_port(inport_idx)
-    logging.info(f'MIDI Input: Connected to port {available_in_ports[inport_idx]}') 
+    idx = 3
+    drum_in_port.open_port(idx)
+    logging.info(f'MIDI DRUM IN: Connected to port {available_in_ports[idx]}') 
+
+    drum_out_port = rtmidi.MidiOut()
+    available_out_ports = drum_out_port.get_ports()
+    # outport_idx = int(input(f'\nEnter the idx of the MIDI <<INPUT>> port: {available_ports}\n'))
+    idx = 1
+    drum_out_port.open_port(idx)
+    logging.info(f'MIDI DRUM OUT: Connected to port {available_out_ports[idx]}')
+    '''---------------------------------------------'''
+
+    ''' MIDI BASS'''
+    # logging.info(mido.get_output_names())
+    available_out_port_ = mido.get_output_names()
+    idx = 3
+    # outport_idx = int(input(f'\nEnter the idx of the MIDI <<OUTPUT>> port: {available_ports}\n'))
+    bass_play_port = mido.open_output(available_out_ports[idx])
+    logging.info(f'MIDI BASS OUT Playing: Connected to port {available_out_ports[idx]}') 
 
     # logging.info(mido.get_output_names())
-    available_out_ports = mido.get_output_names()
-    outport_idx = 2
+    idx = 2
     # outport_idx = int(input(f'\nEnter the idx of the MIDI <<OUTPUT>> port: {available_ports}\n'))
-    midi_playing_port = mido.open_output(available_out_ports[outport_idx])
-    # midi_recording_port = mido.open_output('loopMIDI Port Recording 3') 
-    logging.info(f'MIDI Input: Connected to port {available_out_ports[outport_idx]}') 
+    bass_record_port = mido.open_output(available_out_ports[idx])
+    logging.info(f'MIDI BASS OUT Recording: Connected to port {available_out_ports[idx]}') 
+    '''---------------------------------------------'''
 
+    run_application(drum_in_port, drum_out_port, bass_play_port, bass_record_port)
 
-    run_application(midi_in_port, midi_playing_port)
+    # time.sleep(60)
 
-    time.sleep(60)
-
-    close_application()
-
-
-
-
-
-
-
-
-
-
-
-
-    # PRETRAINING
-    # scaler, svm_model, lda_model, baseline = pretraining(unicorn, click, WINDOW_SIZE, WINDOW_OVERLAP)
-    
-    # REAL TIME CLASSIFICATION
-    # logging.info("Main: REAL TIME CLASSIFICATION")
-    # time.sleep(5)
-
-    # for i in range (20):
-    #     time.sleep(1)
-    #     eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
-    #     print(f"EEG data shape: {eeg.shape}")
-    #     eeg_features = extract_features([eeg])
-    #     eeg_features_corrected = baseline_correction(eeg_features, baseline)
-
-    #     # Prediction
-    #     sample = scaler.transform(eeg_features_corrected)
-    #     prediction = svm_model.predict(sample)
-    #     logging.info(f'Prediction: {EEG_CLASSES[int(prediction)]}')
-    #     prediction_lda = lda_model.predict(sample)
-    #     logging.info(f'Prediction LDA: {EEG_CLASSES[int(prediction_lda)]}')
-    #     # prediction_lda_proba = lda_model.predict_proba(sample)
-    #     # logging.info(f'Prediction LDA Probability: {prediction_lda_proba}')
+    # close_application()
 
     
-    # unicorn.stop_unicorn_recording()
+  
 
 
 

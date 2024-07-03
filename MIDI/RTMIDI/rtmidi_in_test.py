@@ -17,15 +17,12 @@ DRUM_MIDI_DICT = {
 
 
 midi_in = rtmidi.MidiIn()
-available_ports = midi_in.get_port_count()
+available_ports = midi_in.get_ports()
 
-if available_ports == 0:
-    logging.info('MIDI Input: No MIDI devices detected. Retrying...')
-while available_ports == 0:
-    available_ports = midi_in.get_port_count()
-    time.sleep(0.001)
-
-midi_in.open_port(0)
+print(available_ports)
+idx = 4
+midi_in.open_port(idx)
+print(f'MIDI Input: Connected to port {midi_in.get_port_name(idx)}')
 
 logging.info(f"MIDI Input: running")
 while True:

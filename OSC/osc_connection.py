@@ -13,9 +13,11 @@ import logging
 
 
 SYNCH_MSG = "Click:1"
+SEND_MSG = "Action:sendToReaper"
 REC_MSG = '/action/_SWS_RECTOGGLE'
 
-ESTIMATED_LATENCY = 0.25 # in seconds
+ESTIMATED_LATENCY_FOR_RX = 0.25 # in seconds
+ESTIMATED_LATENCY_FOR_TX = 0.1 # in seconds
 
 
 
@@ -82,7 +84,15 @@ class Server_OSC:
           logging.info(f'Delay: {delay} ms')
         if beat == 4:
           while True:
-            if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY):
+            if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX - ESTIMATED_LATENCY_FOR_TX):
+              self.udp_client.send(SEND_MSG, self.udp_ip, self.udp_port)
+              self.udp_client.send(SEND_MSG, self.udp_ip, 1111)
+              break 
+            else:
+              time.sleep(0.001)
+
+          while True:
+            if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX):
               self.udp_client.send(SYNCH_MSG, self.udp_ip, self.udp_port)
               self.udp_client.send(SYNCH_MSG, self.udp_ip, 1111)
               break 

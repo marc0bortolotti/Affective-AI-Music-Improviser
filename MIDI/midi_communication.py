@@ -8,13 +8,13 @@ import threading
 
 class MIDI_Input:
 
-    def __init__(self, midi_in_port, parse_message = False):
+    def __init__(self, midi_in_port: rtmidi, midi_out_port: rtmidi = None, parse_message = False):
         
         self.midi_in_port = midi_in_port
         self.note_buffer = []
         self.exit = False
         self.parse_message = parse_message
-
+        self.midi_out_port = midi_out_port
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -23,6 +23,8 @@ class MIDI_Input:
     
             if msg_and_dt:
                 (msg, dt) = msg_and_dt
+                if self.midi_out_port is not None:
+                    self.midi_out_port.send_message(msg)
                 command, note, velocity = msg
                 command = hex(command)
                 self.note_buffer.append({'pitch' : note, 'velocity' : velocity, 'dt': dt})
@@ -34,12 +36,13 @@ class MIDI_Input:
         self.midi_in_port.close_port()
         logging.info(f'MIDI Input: Disconnected')
 
-    def run_simulation(self, path):
+    def run_simulation(self, path, midi_port: mido.open_output):
         def simulate_midi(path):
             mid = mido.MidiFile(path)
             for msg in mid.play(): 
-                if msg.type != 'control_change':
+                if not msg.is_meta:
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
+                    midi_port.send(msg)
 
         t = threading.Thread(target=simulate_midi, args=(path,))
         t.start()

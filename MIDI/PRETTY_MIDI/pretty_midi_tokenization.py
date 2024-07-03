@@ -245,7 +245,7 @@ class PrettyMidiTokenizer(object):
 
 
 
-  def tokens_to_midi(self, sequence, out_file_path = None, instrument_name = 'Acoustic Bass'):
+  def tokens_to_midi(self, sequence, ticks_filter = 0, out_file_path = None, instrument_name = 'Acoustic Bass'):
 
     '''
     NB: works only for monophonic sequences of tokens. 
@@ -292,7 +292,7 @@ class PrettyMidiTokenizer(object):
         if  pitch != last_pitch or note_start:
 
           # filter notes with a duration of less than # ticks
-          if counter > 3:
+          if counter > ticks_filter:
             pitch_ticks_velocity.append([last_pitch, counter, last_velocity])
           else:
             pitch_ticks_velocity.append([0, counter, 0])

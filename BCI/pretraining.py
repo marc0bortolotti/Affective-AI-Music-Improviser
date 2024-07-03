@@ -11,8 +11,7 @@ from sklearn import svm
 import time
 
 
-def eeg_classification(eeg_samples_baseline, eeg_samples_list):
-
+def preprocessing(eeg_samples_baseline, eeg_samples_list):
     # Calculate baseline
     baseline = calculate_baseline(eeg_samples_baseline)
 
@@ -22,6 +21,14 @@ def eeg_classification(eeg_samples_baseline, eeg_samples_list):
         # Apply baseline correction
         eeg_features_corrected = baseline_correction(eeg_features, baseline)
         eeg_features_list.append(eeg_features_corrected)
+
+    return eeg_features_list, baseline
+    
+
+def eeg_classification(eeg_samples_baseline, eeg_samples_list):
+
+    # Preprocessing (Feature extraction and Baseline correction)
+    eeg_features_list, baseline = preprocessing(eeg_samples_baseline, eeg_samples_list)
 
     # Prepare the data for classification
     X = np.concatenate(eeg_features_list)
