@@ -95,7 +95,6 @@ class MIDI_Output:
             track.append(Message('note_on', note=pitch, velocity=velocity, time=0)) # NB: time from the previous message in ticks per beat
             track.append(Message('note_off', note=pitch, velocity=velocity, time=ticks))
     
-        # mid.save('prova_3333.mid')
         return mid
 
     def send_midi_to_reaper(self, mid, parse_message = False):

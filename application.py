@@ -13,7 +13,7 @@ from UDP.udp_connection import Server_UDP
 from OSC.osc_connection import Server_OSC, Client_OSC, SYNCH_MSG, REC_MSG, SEND_MSG
 from MIDI.PRETTY_MIDI.pretty_midi_tokenization import PrettyMidiTokenizer, BCI_TOKENS
 from BCI.unicorn_brainflow import Unicorn
-from BCI.pretraining import pretraining
+from BCI.utils.loader import generate_samples
 from BCI.utils.feature_extraction import extract_features, baseline_correction
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from TCN.word_cnn.utils import *
@@ -32,9 +32,10 @@ APPLICATION_STATUS = {'READY': False, 'STOPPED': False}
 '''--------------------PATH---------------------'''
 PROJECT_PATH = os.path.dirname(__file__)
 MIDI_PATH = os.path.join(PROJECT_PATH, 'MIDI')
-MODEL_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240628-183038', 'model_state_dict.pth')
-INPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240628-183038', 'input_vocab.txt')
-OUTPUT_VOCAB_PATH = os.path.join(PROJECT_PATH, 'TCN/results/20240628-183038', 'output_vocab.txt')
+MODEL_DICT = os.path.join(PROJECT_PATH, 'TCN/results/model_short')
+MODEL_PATH = os.path.join(MODEL_DICT, 'model_state_dict.pth')
+INPUT_VOCAB_PATH = os.path.join(MODEL_DICT, 'input_vocab.txt')
+OUTPUT_VOCAB_PATH = os.path.join(MODEL_DICT, 'output_vocab.txt')
 '''---------------------------------------------''' 
 
 
@@ -81,27 +82,28 @@ def thread_function_unicorn(name):
     global eeg_classification_buffer 
     eeg_classification_buffer = [BCI_TOKENS['concentrate']]
 
-    # unicorn.start_unicorn_recording()
+    if unicorn is not None:
+        unicorn.start_unicorn_recording()
 
-    while True:
+        while True:
 
-    #     time.sleep(WINDOW_DURATION)
-    #     eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
-    #     eeg_features = extract_features([eeg])
-    #     eeg_features_corrected = baseline_correction(eeg_features, baseline)
+            time.sleep(WINDOW_DURATION)
+            eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
+            # eeg_features = extract_features([eeg])
+            # eeg_features_corrected = baseline_correction(eeg_features, baseline)
 
-    #     # Prediction
-    #     sample = scaler.transform(eeg_features_corrected)
-    #     prediction = svm_model.predict(sample)
-    #     eeg_classification_buffer.append(BCI_TOKENS[prediction])
+            # # Prediction
+            # sample = scaler.transform(eeg_features_corrected)
+            # prediction = svm_model.predict(sample)
+            # eeg_classification_buffer.append(BCI_TOKENS[prediction])
 
 
-        if APPLICATION_STATUS['STOPPED']:
-            logging.info("Thread %s: closing", name)
-            break
+            if APPLICATION_STATUS['STOPPED']:
+                logging.info("Thread %s: closing", name)
+                break
 
-    # unicorn.stop_unicorn_recording()
-    # unicorn.close()
+        unicorn.stop_unicorn_recording()
+        unicorn.close()
 
 
 def thread_function_midi(name):
@@ -111,9 +113,6 @@ def thread_function_midi(name):
 
     # new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
     # new_server.run()
-
-    # port = mido.open_output('Simulation Out Port 4')
-
     # MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
     # while True:
     #     msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
@@ -123,7 +122,6 @@ def thread_function_midi(name):
     #     if APPLICATION_STATUS['STOPPED']:
     #         logging.info("Thread %s: closing", name)
     #         break
-
     # new_server.close()
     
 
@@ -149,15 +147,14 @@ def thread_function_server(name):
     OUTPUT_TOK.load_vocab(OUTPUT_VOCAB_PATH)
     OUTPUT_VOCAB_SIZE = len(OUTPUT_TOK.VOCAB)
 
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = TCN(input_size = INPUT_VOCAB_SIZE,
                 embedding_size = EMBEDDING_SIZE, 
                 output_size = OUTPUT_VOCAB_SIZE, 
                 num_channels = NUM_CHANNELS, 
                 kernel_size = 3) 
-    model.load_state_dict(torch.load(MODEL_PATH))
+    model.load_state_dict(torch.load(MODEL_PATH, map_location = device))
     model.eval()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     tokens_buffer = []
@@ -197,7 +194,7 @@ def thread_function_server(name):
                 input_data = np.array(tokens_buffer, dtype = np.int32).flatten()
 
                 # Convert the tokens to tensor
-                input_data = torch.LongTensor(input_data).to(device)
+                input_data = torch.LongTensor(input_data)
 
                 # Add the batch dimension.
                 input_data = input_data.unsqueeze(0)
@@ -206,7 +203,7 @@ def thread_function_server(name):
                 input_data = torch.cat((input_data[:, :BAR_LENGTH*3], torch.ones([1, BAR_LENGTH], dtype=torch.long)), dim = 1)
 
                 # Make the prediction.
-                prediction = model(input_data)
+                prediction = model(input_data.to(device))
                 prediction = prediction.contiguous().view(-1, OUTPUT_VOCAB_SIZE)
 
                 # Get the predicted tokens.
@@ -322,6 +319,55 @@ def run_application(drum_in_port, drum_out_port, bass_play_port, bass_record_por
     osc_client.send(REC_MSG)
 
 
+def countdown(duration):
+    for i in range(0, duration):
+        print('Countdown: {:2d} seconds left'.format(duration - i), end='\r')
+        time.sleep(1)
+    print('Countdown:  0 seconds left\n')
+
+
+def pretraining():
+    logging.info("Pretraining: Start Training")
+
+    # start recording eeg
+    unicorn.start_unicorn_recording()
+
+    # Baseline
+    logging.info("Pretraining: Pause for 20 seconds. Please, do not move or think about anything. Just relax.")
+    countdown(20+5) # Wait 5 seconds for the unicorn signal to stabilize
+    eeg = unicorn.get_eeg_data(recording_time = 20)
+    eeg_samples_baseline_1 = generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP)
+
+    # Relax 
+    logging.info("Pretraining: Play a relaxed rythm on the metronome for 30 seconds")
+    countdown(30)
+    eeg = unicorn.get_eeg_data(recording_time = 30)
+    eeg_samples_relax = generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP)
+
+    # Baseline
+    logging.info("Pretraining: Pause for 20 seconds. Please, do not move or think about anything. Just relax.")
+    countdown(20)
+    eeg = unicorn.get_eeg_data(recording_time = 20)
+    eeg_samples_baseline_2 = generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP)
+
+    # Excited
+    logging.info("Pretraining: Play an excited rythm on the metronome")
+    countdown(30)
+    eeg = unicorn.get_eeg_data(recording_time = 30)
+    eeg_samples_excited = generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP)
+
+
+    logging.info("Pretraining: Training Finished")
+    eeg_samples_baseline = np.concatenate((eeg_samples_baseline_1, eeg_samples_baseline_2))
+
+    # stop recording eeg
+    unicorn.stop_unicorn_recording()
+
+    #------------CLASSIFICATION----------------
+    scaler, svm_model, lda_model, baseline = unicorn.eeg_classification(eeg_samples_baseline, [eeg_samples_relax, eeg_samples_excited])
+
+    return scaler, svm_model, lda_model, baseline
+
 
 
 if __name__ == "__main__":
@@ -331,7 +377,7 @@ if __name__ == "__main__":
     drum_in_port = rtmidi.MidiIn()
     available_in_ports = drum_in_port.get_ports()  
     # inport_idx = int(input(f'\nEnter the idx of the MIDI <<INPUT>> port: {available_ports}\n'))
-    idx = 3
+    idx = 4
     drum_in_port.open_port(idx)
     logging.info(f'MIDI DRUM IN: Connected to port {available_in_ports[idx]}') 
 

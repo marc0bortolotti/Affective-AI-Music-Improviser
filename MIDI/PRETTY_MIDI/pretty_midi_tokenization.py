@@ -10,8 +10,8 @@ BEATS_PER_BAR = 4
 VELOCITY_THRESHOLD = 80
 MIN_VELOCITY = 40
 NOTE_START_TOKEN = 'S'
-VELOCITY_PIANO_TOKEN = 'p'
-VELOCITY_FORTE_TOKEN = 'f'
+VELOCITY_PIANO_TOKEN = ''
+VELOCITY_FORTE_TOKEN = ''
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {'relax': 'R', 'concentrate': 'C'}
 NOTE_SEPARATOR_TOKEN = '_'
@@ -105,7 +105,7 @@ class PrettyMidiTokenizer(object):
     
       else: 
         self.sequences, self.notes_df = self.midi_to_tokens(self.source_path, update_vocab = True)
-    
+
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
     self.VOCAB.load(path)
@@ -272,7 +272,7 @@ class PrettyMidiTokenizer(object):
       token_string = self.VOCAB.idx2word[token] # convert token id to string
 
       if NOTE_SEPARATOR_TOKEN in token_string:
-        token_string = token_string.split(NOTE_SEPARATOR_TOKEN)[1]
+        token_string = token_string.split(NOTE_SEPARATOR_TOKEN)[0]
 
       # extract pitch and velocity from the token string
       if VELOCITY_PIANO_TOKEN in token_string:
@@ -281,8 +281,10 @@ class PrettyMidiTokenizer(object):
       elif VELOCITY_FORTE_TOKEN in token_string:
         velocity = 127
         token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
-      else:
+      elif SILENCE_TOKEN in token_string:
         velocity = 0
+      else: 
+        velocity = 100
 
       # extract pitch from the token string
       note_start = False

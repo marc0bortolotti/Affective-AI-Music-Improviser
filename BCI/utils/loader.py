@@ -9,6 +9,8 @@ import os
 unicorn_eeg_channels = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
 unicorn_fs = 250
 
+enophone_eeg_channels = ["A1", "A2", "C1", "C2"]
+enophone_fs = 250
 
 def load_data(path, header, fs, names, skiprows=5):
     if header:

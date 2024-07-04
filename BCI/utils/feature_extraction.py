@@ -1,13 +1,13 @@
 import numpy as np
-from BCI.utils.loader import convert_to_mne, unicorn_eeg_channels, unicorn_fs
+from BCI.utils.loader import convert_to_mne, unicorn_eeg_channels, unicorn_fs, enophone_eeg_channels, enophone_fs
 
-def extract_features(eeg_samples):
 
+def extract_features(eeg_samples, fs = unicorn_fs, chs = unicorn_eeg_channels):
     eeg_features = []
 
     for i, sample in enumerate(eeg_samples):
         print(f'Processing sample: {i+1}/{len(eeg_samples)}', end='\r')
-        filtered_sample = apply_filters(sample)
+        filtered_sample = apply_filters(sample, fs, chs)
         log_var_sample = log_var_transform(filtered_sample)
         eeg_features.append(log_var_sample)
 
@@ -18,18 +18,18 @@ def extract_features(eeg_samples):
     return eeg_features
 
 
-def calculate_baseline(eeg_samples):
-    eeg_features = extract_features(eeg_samples)
+def calculate_baseline(eeg_samples, fs = unicorn_fs, chs = unicorn_eeg_channels):
+    eeg_features = extract_features(eeg_samples, fs, chs)
     baseline = np.mean(eeg_features, axis=0)
     return np.array(baseline)
 
 
-def apply_filters(eeg):
+def apply_filters(eeg, fs, chs):
 
     # extract bands from the EEG samples: theta, alpha, low beta, high beta, gamma
 
     trigger = np.zeros(len(eeg))
-    raw_data = convert_to_mne(eeg, trigger, fs=unicorn_fs, chs=unicorn_eeg_channels, recompute=False) 
+    raw_data = convert_to_mne(eeg, trigger, fs=fs, chs=chs, recompute=False) 
     
     filtered_theta = raw_data.copy() 
     filtered_theta.filter(4, 7)
@@ -46,11 +46,11 @@ def apply_filters(eeg):
     filtered_gamma = raw_data.copy()
     filtered_gamma.filter(30, 47)
 
-    filtered_sample = [filtered_theta.get_data()[0:8,:]*1e6, # without the STI channel and rescaled to microvolts
-                       filtered_alpha.get_data()[0:8,:]*1e6, 
-                       filtered_low_beta.get_data()[0:8,:]*1e6, 
-                       filtered_high_beta.get_data()[0:8,:]*1e6, 
-                       filtered_gamma.get_data()[0:8,:]*1e6]
+    filtered_sample = [filtered_theta.get_data()[0:-1,:]*1e6, # without the STI channel and rescaled to microvolts
+                       filtered_alpha.get_data()[0:-1,:]*1e6, 
+                       filtered_low_beta.get_data()[0:-1,:]*1e6, 
+                       filtered_high_beta.get_data()[0:-1,:]*1e6, 
+                       filtered_gamma.get_data()[0:-1,:]*1e6]
     
     return np.array(filtered_sample)
 

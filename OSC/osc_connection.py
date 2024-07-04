@@ -83,13 +83,13 @@ class Server_OSC:
           logging.info("{0}: {1}".format(args[0], bar_beat_ticks))
           logging.info(f'Delay: {delay} ms')
         if beat == 4:
-          while True:
-            if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX - ESTIMATED_LATENCY_FOR_TX):
-              self.udp_client.send(SEND_MSG, self.udp_ip, self.udp_port)
-              self.udp_client.send(SEND_MSG, self.udp_ip, 1111)
-              break 
-            else:
-              time.sleep(0.001)
+          # while True:
+          #   if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX - ESTIMATED_LATENCY_FOR_TX):
+          #     self.udp_client.send(SEND_MSG, self.udp_ip, self.udp_port)
+          #     self.udp_client.send(SEND_MSG, self.udp_ip, 1111)
+          #     break 
+          #   else:
+          #     time.sleep(0.001)
 
           while True:
             if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX):
