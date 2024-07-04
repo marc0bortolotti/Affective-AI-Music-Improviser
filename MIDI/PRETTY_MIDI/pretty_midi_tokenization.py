@@ -8,6 +8,7 @@ TICKS_PER_BEAT = 12 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
 VELOCITY_THRESHOLD = 80
+MIN_VELOCITY = 40
 NOTE_START_TOKEN = 'S'
 VELOCITY_PIANO_TOKEN = 'p'
 VELOCITY_FORTE_TOKEN = 'f'
@@ -188,7 +189,7 @@ class PrettyMidiTokenizer(object):
         end = bar_df.loc[idx, 'end']
         velocity = bar_df.loc[idx, 'velocity']
 
-        if velocity < 40:
+        if velocity < MIN_VELOCITY:
           continue
         elif velocity > VELOCITY_THRESHOLD:
           velocity_token = VELOCITY_FORTE_TOKEN
@@ -241,7 +242,12 @@ class PrettyMidiTokenizer(object):
       sequences.append(seq)
 
     # concatenate the sequences if necessary
-    if update_sequences:
+    if update_sequences: 
+      if len(self.sequences) > 0:
+        for i in range(1, self.BEATS_PER_BAR):
+          prev = self.sequences[-1][self.BAR_LENGTH*i:]
+          next = sequences[0][:self.BAR_LENGTH*i]
+          self.sequences.append(np.concatenate((prev, next)))
       self.sequences += sequences        
 
     return sequences, notes_df
@@ -369,7 +375,7 @@ class PrettyMidiTokenizer(object):
       # start = note['start']
       # end = note['end']
 
-      if velocity > 40:
+      if velocity > MIN_VELOCITY:
         self.real_time_notes.append({'pitch': pitch, 
                                      'velocity': velocity, 
                                      'start': start,
