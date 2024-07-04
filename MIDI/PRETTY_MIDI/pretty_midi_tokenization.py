@@ -281,8 +281,6 @@ class PrettyMidiTokenizer(object):
       elif VELOCITY_FORTE_TOKEN in token_string:
         velocity = 127
         token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
-      elif SILENCE_TOKEN in token_string:
-        velocity = 0
       else: 
         velocity = 100
 
@@ -296,6 +294,7 @@ class PrettyMidiTokenizer(object):
         note_start = True
       else: # silence token or BCI token
         pitch = 0
+        velocity = 0
 
       # update the pitch, duration and velocity lists
       if last_pitch != None and last_velocity != None:
