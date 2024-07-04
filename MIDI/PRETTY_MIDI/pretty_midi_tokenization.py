@@ -233,7 +233,10 @@ class PrettyMidiTokenizer(object):
         self.VOCAB.add_word(emotion_token)
 
       for i in range(len(seq)):
-        seq[i] = self.VOCAB.word2idx[seq[i]] 
+        if self.VOCAB.is_in_vocab(seq[i]):
+          seq[i] = self.VOCAB.word2idx[seq[i]] 
+        else:
+          seq[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
 
       sequences.append(seq)
 
@@ -245,7 +248,7 @@ class PrettyMidiTokenizer(object):
 
 
 
-  def tokens_to_midi(self, sequence, ticks_filter = 0, out_file_path = None, instrument_name = 'Acoustic Bass'):
+  def tokens_to_midi(self, sequence, ticks_filter = 0, out_file_path = None, instrument_name = 'Electric Bass (finger)'):
 
     '''
     NB: works only for monophonic sequences of tokens. 
