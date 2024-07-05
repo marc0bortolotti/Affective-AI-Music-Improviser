@@ -90,21 +90,13 @@ class PrettyMidiTokenizer(object):
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
+    self.source_paths = []
 
 
     if midi_file_path is not None:
+      self.source_paths.append(midi_file_path)
+      self.sequences, self.notes_df = self.midi_to_tokens(self.source_paths[-1], update_vocab = True)
 
-      self.source_path = midi_file_path
-      self.source_pm = pretty_midi.PrettyMIDI(self.source_path)
-
-      if self.source_pm.resolution != TICKS_PER_BEAT:
-        raise Exception('The resolution of the MIDI file is {self.pm.resolution} instead of {TICKS_PER_BEAT}.')
-
-      elif self.source_pm.get_tempo_changes()[1][0] != BPM:
-        raise Exception('The tempo of the MIDI file is {self.pm.get_tempo_changes[1][0]} instead of {BPM}.')
-    
-      else: 
-        self.sequences, self.notes_df = self.midi_to_tokens(self.source_path, update_vocab = True)
 
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
@@ -128,19 +120,44 @@ class PrettyMidiTokenizer(object):
       'start': start,
       'end': end,
       'bar': bar
-    }    
-    return new_note
+    }   
+
+    return pd.DataFrame([new_note])  
 
 
-  def append_note_to_notes_dict(self, notes, note):
-    for key, value in note.items():
-      notes[key].append(value)    
+  def data_augmentation_shift(self, shifts):
+    '''
+    Shifts the sequences by a number of ticks to create new sequences.
+    '''
+    seq_len = len(self.sequences)
+    
+    for ticks in shifts:
+      for i in range(seq_len):
+        seq = np.roll(self.sequences[i], ticks)
+        self.sequences.append(seq)
+
+
+
+  def data_augmentation_transposition(self, transpositions):
+    '''
+    Transpose the sequences by a number of semitones to create new sequences.
+    '''
+    pass
+
+
 
 
   def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None):
 
     pm = pretty_midi.PrettyMIDI(midi_path)
     instrument = pm.instruments[0]
+
+    if pm.resolution != TICKS_PER_BEAT:
+      raise Exception(f'The resolution of the MIDI file is {pm.resolution} instead of {self.TICKS_PER_BEAT}.')
+
+    elif pm.get_tempo_changes()[1][0] != BPM:
+      raise Exception(f'The tempo of the MIDI file is {pm.get_tempo_changes[1][0]} instead of {self.BPM}.')
+    
 
     # Sort the notes by start time
     sorted_notes = sorted(instrument.notes, key=lambda note: note.start)
@@ -163,15 +180,15 @@ class PrettyMidiTokenizer(object):
 
         # update the current note to end at the end of the bar and update its duration
         note = self.new_note(pitch, velocity, start, (bar + 1) * self.BAR_DURATION, bar)
-        notes_df = notes_df.append(note, ignore_index=True)
+        notes_df = pd.concat([notes_df, note], ignore_index=True)
 
         # create new note in the succeeding bar with the remaining duration
         note = self.new_note(pitch, velocity, (bar + 1) * self.BAR_DURATION, end, bar + 1)
-        notes_df = notes_df.append(note, ignore_index=True)
+        notes_df = pd.concat([notes_df, note], ignore_index=True)
 
       else:
         note = self.new_note(pitch, velocity, start, end, bar)
-        notes_df = notes_df.append(note, ignore_index=True)
+        notes_df = pd.concat([notes_df, note], ignore_index=True)
 
     # split notes into bars and convert notes ticks into a time serie of tokens 
     bars_time_series = []
@@ -228,7 +245,7 @@ class PrettyMidiTokenizer(object):
     for idx in range(0, stop_index, self.BAR_LENGTH):
       seq = tokens[idx:(idx+seq_len)].copy() # NB: copy is necessary to avoid modifying the original array
 
-      # remove the last token and add the BCI token at the beginning
+      # remove the last token add the BCI token at the beginning
       if emotion_token is not None:
         seq = np.concatenate(([emotion_token], seq[:-1])) 
         self.VOCAB.add_word(emotion_token)
@@ -266,7 +283,7 @@ class PrettyMidiTokenizer(object):
     counter = 1
     pitch_ticks_velocity = []
 
-    # convert the sequence of tokens into a list of tokens and their duration
+    # convert the sequence of tokens into a list of tokens and their duration and velocity
     for i, token in enumerate(sequence):
 
       token_string = self.VOCAB.idx2word[token] # convert token id to string
@@ -282,7 +299,7 @@ class PrettyMidiTokenizer(object):
         velocity = 127
         token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
       else: 
-        velocity = 100
+        velocity = 127
 
       # extract pitch from the token string
       note_start = False
@@ -319,7 +336,8 @@ class PrettyMidiTokenizer(object):
       last_velocity = velocity  
       last_pitch = pitch
 
-    # if necessary, generate midi file
+
+    # generate midi file
     if out_file_path is not None:
       pm = pretty_midi.PrettyMIDI(midi_file=None, resolution=self.TICKS_PER_BEAT, initial_tempo=self.BPM)
       program = pretty_midi.instrument_name_to_program(instrument_name)
@@ -343,7 +361,7 @@ class PrettyMidiTokenizer(object):
   
 
 
-  def real_time_tokenization(self, notes, emotion_token):
+  def real_time_tokenization(self, notes, emotion_token = None):
 
     self.real_time_notes = []
     tokens = np.empty((self.BAR_LENGTH), dtype=object)
@@ -399,12 +417,13 @@ class PrettyMidiTokenizer(object):
             tokens[i] += NOTE_START_TOKEN
         
         prev_pitch = pitch
+
+    # add the BCI token at the beginning
+    if emotion_token is not None:
+      tokens = np.concatenate(([emotion_token], tokens[:-1]))
         
     # convert string tokens into integer tokens
-    for i in range(len(tokens)):
-      if i == 0:
-        tokens[i] = emotion_token
-      
+    for i in range(len(tokens)):      
       if not self.VOCAB.is_in_vocab(tokens[i]):
         tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
       else: 
@@ -437,7 +456,7 @@ if __name__ == '__main__':
   available_ports = midi_in.get_port_count()
   print(f'Available MIDI ports: {midi_in.get_ports()}')
 
-  midi_in.open_port(3)
+  midi_in.open_port(-1)
   while True:
     msg_and_dt = midi_in.get_message()
     if msg_and_dt:
