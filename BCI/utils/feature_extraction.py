@@ -1,7 +1,6 @@
 import numpy as np
 from BCI.utils.loader import convert_to_mne, unicorn_eeg_channels, unicorn_fs, enophone_eeg_channels, enophone_fs
 
-
 def extract_features(eeg_samples, fs = unicorn_fs, chs = unicorn_eeg_channels):
     eeg_features = []
 

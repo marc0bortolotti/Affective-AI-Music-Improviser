@@ -24,14 +24,13 @@ idx = 4
 midi_in.open_port(idx)
 print(f'MIDI Input: Connected to port {midi_in.get_port_name(idx)}')
 
-logging.info(f"MIDI Input: running")
 while True:
     msg_and_dt = midi_in.get_message()
-    if msg_and_dt:
+    if msg_and_dt != None:
         (msg, dt) = msg_and_dt
         command, note, velocity = msg
         command = hex(command)
-        logging.info(f"MIDI Input: received messagge <<{command} [{DRUM_MIDI_DICT[note]}, {velocity}]\t| dt = {dt:.2f}>>")
+        print(f"MIDI Input: received messagge <<{command} [{note}, {velocity}]\t| dt = {dt:.2f}>>")
     else:
         time.sleep(0.001)
         
