@@ -39,9 +39,7 @@ class Dictionary(object):
     self.counter = [] # to keep track of the frequency of each token
     self.weights = [] # to keep track of the probability of each token
 
-  def add_word(self, word, swap):
-    if swap and self.is_in_vocab(self.swap_notes(word)):
-      word = self.swap_notes(word)
+  def add_word(self, word):
     if not self.is_in_vocab(word):
       self.idx2word.append(word)
       self.word2idx[word] = len(self.idx2word) - 1
@@ -99,10 +97,10 @@ class PrettyMidiTokenizer(object):
     self.sequences = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
-    self.VOCAB.add_word(SILENCE_TOKEN, swap = False)
+    self.VOCAB.add_word(SILENCE_TOKEN)
     if eeg:
-      self.VOCAB.add_word(BCI_TOKENS['relax'], swap = False)
-      self.VOCAB.add_word(BCI_TOKENS['concentrate'], swap = False)
+      self.VOCAB.add_word(BCI_TOKENS['relax'])
+      self.VOCAB.add_word(BCI_TOKENS['concentrate'])
     self.source_paths = []
 
 
@@ -250,10 +248,9 @@ class PrettyMidiTokenizer(object):
     if update_vocab:
       for i in range(0, len(tokens)):
         if NOTE_SEPARATOR_TOKEN in tokens[i]:
-          swap = True
-        else:
-          swap = False
-        self.VOCAB.add_word(tokens[i], swap = swap)
+          if self.VOCAB.is_in_vocab(self.VOCAB.swap_notes(tokens[i])):
+            tokens[i] = self.VOCAB.swap_notes(tokens[i])
+        self.VOCAB.add_word(tokens[i])
 
     # create the sequences of tokens for the model 
     sequences = []
@@ -430,10 +427,11 @@ class PrettyMidiTokenizer(object):
         
     # convert string tokens into integer tokens
     for i in range(len(tokens)):      
-      if tokens[i] in self.VOCAB.is_in_vocab(tokens[i], swap = False):
+      if self.VOCAB.is_in_vocab(tokens[i]):
         tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-      elif self.VOCAB.is_in_vocab(tokens[i], swap = True):
-        tokens[i] = self.VOCAB.word2idx[self.VOCAB.swap_notes(tokens[i])] 
+      elif NOTE_SEPARATOR_TOKEN in tokens[i]:
+        if self.VOCAB.is_in_vocab(self.VOCAB.swap_notes(tokens[i])):
+          tokens[i] = self.VOCAB.word2idx[self.VOCAB.swap_notes(tokens[i])] 
       else: 
         tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
 
