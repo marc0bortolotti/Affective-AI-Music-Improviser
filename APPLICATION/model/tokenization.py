@@ -40,13 +40,14 @@ class Dictionary(object):
     self.weights = [] # to keep track of the probability of each token
 
   def add_word(self, word, swap):
-    if not self.is_in_vocab(word, swap):
+    if swap and self.is_in_vocab(self.swap_notes(word)):
+      word = self.swap_notes(word)
+    if not self.is_in_vocab(word):
       self.idx2word.append(word)
       self.word2idx[word] = len(self.idx2word) - 1
       self.counter.append(1)
     else:
       self.counter[self.word2idx[word]] += 1
-    return self.word2idx[word]
 
   def compute_weights(self):
     total = sum(self.counter)
@@ -63,19 +64,16 @@ class Dictionary(object):
         self.add_word(line.strip())
 
   def swap_notes(self, word):
-    word = word.split(NOTE_SEPARATOR_TOKEN)
-    if len(word) > 2:
-      word = word[:2]
-    return word[1] + NOTE_SEPARATOR_TOKEN + word[0]
-  
-  def is_in_vocab(self, word, swap):
-    if word in self.word2idx:
-      return True
-    elif swap and NOTE_SEPARATOR_TOKEN in word:
-      word = self.swap_notes(word)
-      return word in self.word2idx
+    if NOTE_SEPARATOR_TOKEN in word:
+      word = word.split(NOTE_SEPARATOR_TOKEN)
+      if len(word) > 2:
+        word = word[:2]
+      return word[1] + NOTE_SEPARATOR_TOKEN + word[0]
     else:
-      return False
+      return word
+  
+  def is_in_vocab(self, word):
+    return word in self.word2idx
 
   def __len__(self):
       return len(self.idx2word)
@@ -84,7 +82,7 @@ class Dictionary(object):
 
 class PrettyMidiTokenizer(object):
     
-  def __init__(self, midi_file_path = None):
+  def __init__(self, midi_file_path = None, eeg = False):
 
     self.BPM = BPM
     self.BEATS_PER_BAR = BEATS_PER_BAR
@@ -101,7 +99,10 @@ class PrettyMidiTokenizer(object):
     self.sequences = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
-    self.VOCAB.add_word(SILENCE_TOKEN)
+    self.VOCAB.add_word(SILENCE_TOKEN, swap = False)
+    if eeg:
+      self.VOCAB.add_word(BCI_TOKENS['relax'], swap = False)
+      self.VOCAB.add_word(BCI_TOKENS['concentrate'], swap = False)
     self.source_paths = []
 
 
@@ -199,8 +200,10 @@ class PrettyMidiTokenizer(object):
         note = self.new_note(pitch, velocity, start, end, bar)
         notes_df = pd.concat([notes_df, note], ignore_index=True)
 
+    return notes_df
 
-  def note_to_string(tokens, pitch, velocity, start, end):
+
+  def note_to_string(self, tokens, pitch, velocity, start, end):
     if velocity < MIN_VELOCITY:
       return tokens
     elif velocity > VELOCITY_THRESHOLD:
@@ -246,7 +249,11 @@ class PrettyMidiTokenizer(object):
     # update the vocabulary if necessary
     if update_vocab:
       for i in range(0, len(tokens)):
-        self.VOCAB.add_word(tokens[i], swap = True)
+        if NOTE_SEPARATOR_TOKEN in tokens[i]:
+          swap = True
+        else:
+          swap = False
+        self.VOCAB.add_word(tokens[i], swap = swap)
 
     # create the sequences of tokens for the model 
     sequences = []
@@ -263,7 +270,6 @@ class PrettyMidiTokenizer(object):
       # remove the last token add the BCI token at the beginning
       if emotion_token is not None:
         seq = np.concatenate(([emotion_token], seq[:-1])) 
-        self.VOCAB.add_word(emotion_token)
 
       for i in range(len(seq)):
         if self.VOCAB.is_in_vocab(seq[i]):
