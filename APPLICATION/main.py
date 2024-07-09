@@ -4,8 +4,8 @@ import mne
 import rtmidi
 import mido
 import os
-from utils.application import run_application, close_application, initialize_application, set_application_status
-from utils.pretraining import pretraining
+from app.application import run_application, close_application, initialize_application, set_application_status
+from eeg.pretraining import pretraining
 import threading
 
 
@@ -15,7 +15,7 @@ logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_DICT = os.path.join(PROJECT_PATH, 'model/trained_models/model_feedback')
+MODEL_DICT = os.path.join(PROJECT_PATH, 'model/trained_models/model')
 
 # EEG PARAMETERS
 UNICORN_FS = 250
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     drum_in_port = rtmidi.MidiIn()
     available_in_ports = drum_in_port.get_ports()  
     # inport_idx = int(input(f'\nEnter the idx of the MIDI <<INPUT>> port: {available_ports}\n'))
-    idx = 0
+    idx = 4
     drum_in_port.open_port(idx)
     logging.info(f'MIDI DRUM IN: Connected to port {available_in_ports[idx]}') 
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     thread_app = threading.Thread(target=run_application, args=())
     thread_app.start()
 
-    time.sleep(1)
+    time.sleep(5*60)
     set_application_status('STOPPED', True)
     thread_app.join()
 

@@ -86,21 +86,19 @@ def thread_function_midi(name):
     # new_server.close()
     
 
-
-
 def thread_function_osc(name):
     logging.info("Thread %s: starting", name)
     osc_server.run()
     logging.info("Thread %s: closing", name)
 
 
-
 def get_last_eeg_classification(eeg_classification_buffer):
     return eeg_classification_buffer[-1]
 
-    
+
 def get_application_status():
     return APPLICATION_STATUS
+
 
 def set_application_status(key, value):
     APPLICATION_STATUS[key] = value
@@ -134,25 +132,6 @@ def load_model(model_dict):
     model.to(device)
 
     return model, device, INPUT_TOK, OUTPUT_TOK
-
-
-def close_application():
-    
-    logging.info('Thread Main: Closing application...')
-
-    # close the threads
-    midi_in.close()
-    thread_midi_input.join()
-
-    osc_server.close()  # serve_forever() must be closed outside the thread
-    thread_osc.join()
-
-    thread_unicorn.join()
-
-    # stop recording in Reaper
-    osc_client.send(REC_MSG)
-
-    logging.info('All done')
 
 
 def initialize_application( drum_in_port, 
@@ -214,8 +193,6 @@ def initialize_application( drum_in_port,
     return unicorn
 
 
-
-
 def run_application():
     
     # start recording in Reaper
@@ -257,6 +234,8 @@ def run_application():
             if len(notes) > 0:
                 tokens = INPUT_TOK.real_time_tokenization(notes, eeg_classification_buffer[-1])
                 tokens_buffer.append(tokens)
+                with open('tokens_buffer.txt', 'a') as f:
+                    f.write(str(tokens) + '\n')
             else:
                 INPUT_TOK.real_time_tokenization([], eeg_classification_buffer[-1])
  
@@ -302,9 +281,26 @@ def run_application():
         else:
             time.sleep(0.001)
 
-        
         if APPLICATION_STATUS['STOPPED']:
             break
 
-
     server.close()
+
+
+def close_application():
+    
+    logging.info('Thread Main: Closing application...')
+
+    # close the threads
+    midi_in.close()
+    thread_midi_input.join()
+
+    osc_server.close()  # serve_forever() must be closed outside the thread
+    thread_osc.join()
+
+    thread_unicorn.join()
+
+    # stop recording in Reaper
+    osc_client.send(REC_MSG)
+
+    logging.info('All done')

@@ -39,8 +39,8 @@ class Dictionary(object):
     self.counter = [] # to keep track of the frequency of each token
     self.weights = [] # to keep track of the probability of each token
 
-  def add_word(self, word):
-    if word not in self.word2idx:
+  def add_word(self, word, swap):
+    if not self.is_in_vocab(word, swap):
       self.idx2word.append(word)
       self.word2idx[word] = len(self.idx2word) - 1
       self.counter.append(1)
@@ -61,8 +61,18 @@ class Dictionary(object):
     with open(path, 'r') as f:
       for line in f:
         self.add_word(line.strip())
+
+  def swap_notes(self, word):
+    word = word.split(NOTE_SEPARATOR_TOKEN)
+    if len(word) > 2:
+      word = word[:2]
+    return word[1] + NOTE_SEPARATOR_TOKEN + word[0]
   
-  def is_in_vocab(self, word):
+  def is_in_vocab(self, word, swap):
+    if swap and NOTE_SEPARATOR_TOKEN in word:
+      word = self.swap_notes(word)
+      return word in self.word2idx
+    else:
       return word in self.word2idx
 
   def __len__(self):
@@ -145,10 +155,7 @@ class PrettyMidiTokenizer(object):
     pass
 
 
-
-
-  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None):
-
+  def midi_to_df(self, midi_path):
     pm = pretty_midi.PrettyMIDI(midi_path)
     instrument = pm.instruments[0]
 
@@ -190,6 +197,29 @@ class PrettyMidiTokenizer(object):
         note = self.new_note(pitch, velocity, start, end, bar)
         notes_df = pd.concat([notes_df, note], ignore_index=True)
 
+
+  def note_to_string(tokens, pitch, velocity, start, end):
+    if velocity < MIN_VELOCITY:
+      return tokens
+    elif velocity > VELOCITY_THRESHOLD:
+      velocity_token = VELOCITY_FORTE_TOKEN
+    else:
+      velocity_token = VELOCITY_PIANO_TOKEN
+
+    for i in range(start, end):
+      if tokens[i] != SILENCE_TOKEN:
+        tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
+      else:
+        tokens[i] = pitch + velocity_token
+      if i == start: 
+        tokens[i] += NOTE_START_TOKEN
+    return tokens
+
+
+  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None):
+
+    notes_df = self.midi_to_df(midi_path)
+    
     # split notes into bars and convert notes ticks into a time serie of tokens 
     bars_time_series = []
     bar_ids = notes_df['bar'].unique()
@@ -200,29 +230,12 @@ class PrettyMidiTokenizer(object):
       # convert note ticks into a time serie of strings 
       bar_time_serie = np.empty((self.BAR_LENGTH), dtype=object)
       bar_time_serie[:] = SILENCE_TOKEN
-      for idx in range(len(bar_df)):
-        pitch = str(bar_df.loc[idx, 'pitch'])
-        start = bar_df.loc[idx, 'start']
-        end = bar_df.loc[idx, 'end']
-        velocity = bar_df.loc[idx, 'velocity']
-
-        if velocity < MIN_VELOCITY:
-          continue
-        elif velocity > VELOCITY_THRESHOLD:
-          velocity_token = VELOCITY_FORTE_TOKEN
-        else:
-          velocity_token = VELOCITY_PIANO_TOKEN
-
-        for i in range(start, end):
-          if bar_time_serie[i] != SILENCE_TOKEN and prev_pitch is not None and prev_pitch != pitch:
-            bar_time_serie[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
-          else:
-            bar_time_serie[i] = pitch + velocity_token
-          if i == start: 
-            bar_time_serie[i] += NOTE_START_TOKEN
-
-        prev_pitch = pitch
-
+      for note_id in range(len(bar_df)):
+        pitch = str(bar_df.loc[note_id, 'pitch'])
+        start = bar_df.loc[note_id, 'start']
+        end = bar_df.loc[note_id, 'end']
+        velocity = bar_df.loc[note_id, 'velocity']
+        bar_time_serie = self.note_to_string(bar_time_serie, pitch, velocity, start, end)
       bars_time_series.append(bar_time_serie)
 
     # flat bars and create vocabulary of unique tokens
@@ -231,7 +244,7 @@ class PrettyMidiTokenizer(object):
     # update the vocabulary if necessary
     if update_vocab:
       for i in range(0, len(tokens)):
-        self.VOCAB.add_word(tokens[i])
+        self.VOCAB.add_word(tokens[i], swap = True)
 
     # create the sequences of tokens for the model 
     sequences = []
@@ -299,7 +312,7 @@ class PrettyMidiTokenizer(object):
         velocity = 127
         token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
       else: 
-        velocity = 127
+        velocity = 0
 
       # extract pitch from the token string
       note_start = False
@@ -311,7 +324,6 @@ class PrettyMidiTokenizer(object):
         note_start = True
       else: # silence token or BCI token
         pitch = 0
-        velocity = 0
 
       # update the pitch, duration and velocity lists
       if last_pitch != None and last_velocity != None:
@@ -336,29 +348,29 @@ class PrettyMidiTokenizer(object):
       last_velocity = velocity  
       last_pitch = pitch
 
-
     # generate midi file
     if out_file_path is not None:
-      pm = pretty_midi.PrettyMIDI(midi_file=None, resolution=self.TICKS_PER_BEAT, initial_tempo=self.BPM)
-      program = pretty_midi.instrument_name_to_program(instrument_name)
-      instrument = pretty_midi.Instrument(program=program)
-      prev_end = 0
-      for note in pitch_ticks_velocity:
-        (pitch, ticks, velocity) = note
-        duration = pm.tick_to_time(ticks) # convert ticks to time
-        start = prev_end
-        end = start + duration
-        instrument.notes.append(pretty_midi.Note(velocity=velocity, pitch=pitch, start=start, end=end))
-        
-        prev_end = end
-
-      pm.instruments.append(instrument)
-      if out_file_path is not None:
-        pm.write(out_file_path)
-        print(f'MIDI file saved at {out_file_path}')
-
+      self.save_midi(pitch_ticks_velocity, out_file_path, instrument_name)
+      
     return pitch_ticks_velocity
   
+
+  def save_midi(self, pitch_ticks_velocity, out_file_path, instrument_name = 'Electric Bass (finger)'):
+    pm = pretty_midi.PrettyMIDI(midi_file=None, resolution=self.TICKS_PER_BEAT, initial_tempo=self.BPM)
+    program = pretty_midi.instrument_name_to_program(instrument_name)
+    instrument = pretty_midi.Instrument(program=program)
+    prev_end = 0
+    for note in pitch_ticks_velocity:
+      (pitch, ticks, velocity) = note
+      duration = pm.tick_to_time(ticks) # convert ticks to time
+      start = prev_end
+      end = start + duration
+      instrument.notes.append(pretty_midi.Note(velocity=velocity, pitch=pitch, start=start, end=end))
+      prev_end = end
+    pm.instruments.append(instrument)
+    if out_file_path is not None:
+      pm.write(out_file_path)
+      print(f'MIDI file saved at {out_file_path}')
 
 
   def real_time_tokenization(self, notes, emotion_token = None):
@@ -366,12 +378,11 @@ class PrettyMidiTokenizer(object):
     self.real_time_notes = []
     tokens = np.empty((self.BAR_LENGTH), dtype=object)
     tokens[:] = SILENCE_TOKEN
-    if len(notes) > 0:
-      notes[0]['dt'] = 0
+    notes[0]['dt'] = 0
     duration = 0
 
     # convert notes into tokens time serie
-    for note_idx, note in enumerate(notes):
+    for note_id, note in enumerate(notes):
       
       pitch = str(note['pitch'])
       velocity = note['velocity']
@@ -381,44 +392,29 @@ class PrettyMidiTokenizer(object):
       if duration > self.BAR_DURATION:
         break
 
-      elif velocity > 40:
+      elif velocity > MIN_VELOCITY:
         start = self.convert_time_to_ticks(duration)
         step = 0
-        for i in range (note_idx+1, len(notes)):
+        for i in range (note_id+1, len(notes)):
           step += notes[i]['dt']
           if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
             step = self.convert_time_to_ticks(step)
             break
         
-        if step <= 2:
-          step = 5
         end = int(start + step)
-      # start = note['start']
-      # end = note['end']
 
-      if velocity > MIN_VELOCITY:
+        # start = note['start']
+        # end = note['end']
+
         self.real_time_notes.append({'pitch': pitch, 
                                      'velocity': velocity, 
                                      'start': start,
                                      'end': end})
-
         if end > self.BAR_LENGTH :
           end = self.BAR_LENGTH
-        
-        if velocity < VELOCITY_THRESHOLD:
-          velocity_token = VELOCITY_PIANO_TOKEN
-        else:
-          velocity_token = VELOCITY_FORTE_TOKEN
 
-        for i in range(start, end):
-          if tokens[i] != SILENCE_TOKEN and prev_pitch is not None and prev_pitch != pitch:
-            tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
-          else:
-            tokens[i] = pitch + velocity_token
-          if i == start: 
-            tokens[i] += NOTE_START_TOKEN
-        
-        prev_pitch = pitch
+        tokens = self.note_to_string(tokens, pitch, velocity, start, end)
+    
 
     # add the BCI token at the beginning
     if emotion_token is not None:
@@ -426,17 +422,19 @@ class PrettyMidiTokenizer(object):
         
     # convert string tokens into integer tokens
     for i in range(len(tokens)):      
-      if not self.VOCAB.is_in_vocab(tokens[i]):
-        tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
-      else: 
+      if tokens[i] in self.VOCAB.is_in_vocab(tokens[i], swap = False):
         tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-
+      elif self.VOCAB.is_in_vocab(tokens[i], swap = True):
+        tokens[i] = self.VOCAB.word2idx[self.VOCAB.swap_notes(tokens[i])] 
+      else: 
+        tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
 
     return tokens
 
 
   
-  
+
+
 
 
 
