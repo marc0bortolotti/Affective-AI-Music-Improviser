@@ -69,11 +69,13 @@ class Dictionary(object):
     return word[1] + NOTE_SEPARATOR_TOKEN + word[0]
   
   def is_in_vocab(self, word, swap):
-    if swap and NOTE_SEPARATOR_TOKEN in word:
+    if word in self.word2idx:
+      return True
+    elif swap and NOTE_SEPARATOR_TOKEN in word:
       word = self.swap_notes(word)
       return word in self.word2idx
     else:
-      return word in self.word2idx
+      return False
 
   def __len__(self):
       return len(self.idx2word)
