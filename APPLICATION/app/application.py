@@ -11,6 +11,8 @@ import time
 import os
 import logging
 import time
+import yaml
+
 
 APPLICATION_STATUS = {'READY': False, 'STOPPED': False}
 
@@ -116,10 +118,13 @@ def load_model(model_dict):
     OUTPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK.load_vocab(output_vocab_path)
 
-    EMBEDDING_SIZE = 20 
-    LEVELS = 7
-    HIDDEN_UNITS = 192
-    NUM_CHANNELS = [HIDDEN_UNITS] * (LEVELS - 1) + [EMBEDDING_SIZE]
+    with open('config.yaml', 'r') as file:
+        param = yaml.safe_load(file)
+        EMBEDDING_SIZE = param['EMBEDDING_SIZE'] 
+        LEVELS = param['LEVELS']
+        HIDDEN_UNITS = param['HIDDEN_UNITS']
+        NUM_CHANNELS = param['NUM_CHANNELS']
+
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = TCN(input_size = len(INPUT_TOK.VOCAB),
