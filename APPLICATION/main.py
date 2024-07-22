@@ -4,7 +4,7 @@ import mne
 import rtmidi
 import mido
 import os
-from app.application import run_application, close_application, initialize_application, set_application_status
+from app.application import run_application, close_application, initialize_application, set_application_status, get_eeg_device
 from eeg.pretraining import pretraining
 import threading
 
@@ -58,14 +58,10 @@ if __name__ == "__main__":
     logging.info(f'MIDI BASS OUT Recording: Connected to port {available_out_ports[idx]}') 
     '''---------------------------------------------'''
 
-    unicorn = initialize_application(drum_in_port, 
-                                     drum_out_port, 
-                                     bass_play_port, 
-                                     bass_record_port,
-                                     WINDOW_DURATION,
-                                     MODEL_DICT)
+    initialize_application(drum_in_port, drum_out_port, bass_play_port, bass_record_port, WINDOW_DURATION, MODEL_DICT)
 
     # train the EEG classification model
+    # unicorn = get_eeg_device()
     # scaler, svm_model, lda_model, baseline = pretraining(unicorn, WINDOW_SIZE, WINDOW_OVERLAP)
 
     thread_app = threading.Thread(target=run_application, args=())

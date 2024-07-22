@@ -121,17 +121,19 @@ def load_model(model_dict):
     with open('config.yaml', 'r') as file:
         param = yaml.safe_load(file)
         EMBEDDING_SIZE = param['EMBEDDING_SIZE'] 
-        LEVELS = param['LEVELS']
-        HIDDEN_UNITS = param['HIDDEN_UNITS']
         NUM_CHANNELS = param['NUM_CHANNELS']
+        INPUT_SIZE = param['INPUT_SIZE']
+        OUTPUT_SIZE = param['OUTPUT_SIZE']
+        KERNEL_SIZE = param['KERNEL_SIZE']
 
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = TCN(input_size = len(INPUT_TOK.VOCAB),
+    model = TCN(input_size = INPUT_SIZE,
                 embedding_size = EMBEDDING_SIZE, 
-                output_size = len(OUTPUT_TOK.VOCAB), 
+                output_size = OUTPUT_SIZE, 
                 num_channels = NUM_CHANNELS, 
-                kernel_size = 3) 
+                kernel_size = KERNEL_SIZE) 
+    
     model.load_state_dict(torch.load(model_path, map_location = device))
     model.eval()
     model.to(device)
@@ -175,9 +177,9 @@ def initialize_application( drum_in_port,
                             bpm = BPM,
                             parse_message=False)
     
-    # unicorn = Unicorn()
     global unicorn
     unicorn = None
+    # unicorn = Unicorn()
     
     # threads
     global thread_midi_input, thread_osc, thread_unicorn
@@ -195,6 +197,8 @@ def initialize_application( drum_in_port,
     model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_dict)
     BAR_LENGTH = INPUT_TOK.BAR_LENGTH
 
+
+def get_eeg_device():
     return unicorn
 
 

@@ -60,15 +60,6 @@ class Dictionary(object):
     with open(path, 'r') as f:
       for line in f:
         self.add_word(line.strip())
-
-  def swap_notes(self, word):
-    if NOTE_SEPARATOR_TOKEN in word:
-      word = word.split(NOTE_SEPARATOR_TOKEN)
-      if len(word) > 2:
-        word = word[:2]
-      return word[1] + NOTE_SEPARATOR_TOKEN + word[0]
-    else:
-      return word
   
   def is_in_vocab(self, word):
     return word in self.word2idx
@@ -202,6 +193,18 @@ class PrettyMidiTokenizer(object):
 
 
   def note_to_string(self, tokens, pitch, velocity, start, end):
+    '''
+    Converts a note into a string token and adds it to the time serie of tokens.
+
+    Parameters:
+    - tokens: the time serie of tokens (np.array(dtype=object))
+    - pitch: the pitch of the note (int)
+    - velocity: the velocity of the note (int)
+    - start: the start time of the note (int)
+    - end: the end time of the note (int)
+    '''
+
+
     if velocity < MIN_VELOCITY:
       return tokens
     elif velocity > VELOCITY_THRESHOLD:
@@ -216,6 +219,11 @@ class PrettyMidiTokenizer(object):
         tokens[i] = pitch + velocity_token
       if i == start: 
         tokens[i] += NOTE_START_TOKEN
+
+      if NOTE_SEPARATOR_TOKEN in tokens[i]:
+        sorted_tokens = sorted(tokens[i].split(NOTE_SEPARATOR_TOKEN)) # sort the tokens by pitch
+        tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
+
     return tokens
 
 
@@ -247,9 +255,6 @@ class PrettyMidiTokenizer(object):
     # update the vocabulary if necessary
     if update_vocab:
       for i in range(0, len(tokens)):
-        if NOTE_SEPARATOR_TOKEN in tokens[i]:
-          if self.VOCAB.is_in_vocab(self.VOCAB.swap_notes(tokens[i])):
-            tokens[i] = self.VOCAB.swap_notes(tokens[i])
         self.VOCAB.add_word(tokens[i])
 
     # create the sequences of tokens for the model 
@@ -408,9 +413,6 @@ class PrettyMidiTokenizer(object):
         
         end = int(start + step)
 
-        # start = note['start']
-        # end = note['end']
-
         self.real_time_notes.append({'pitch': pitch, 
                                      'velocity': velocity, 
                                      'start': start,
@@ -419,7 +421,6 @@ class PrettyMidiTokenizer(object):
           end = self.BAR_LENGTH
 
         tokens = self.note_to_string(tokens, pitch, velocity, start, end)
-    
 
     # add the BCI token at the beginning
     if emotion_token is not None:
@@ -429,9 +430,6 @@ class PrettyMidiTokenizer(object):
     for i in range(len(tokens)):      
       if self.VOCAB.is_in_vocab(tokens[i]):
         tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-      elif NOTE_SEPARATOR_TOKEN in tokens[i]:
-        if self.VOCAB.is_in_vocab(self.VOCAB.swap_notes(tokens[i])):
-          tokens[i] = self.VOCAB.word2idx[self.VOCAB.swap_notes(tokens[i])] 
       else: 
         tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
 
@@ -439,7 +437,6 @@ class PrettyMidiTokenizer(object):
 
 
   
-
 
 
 
