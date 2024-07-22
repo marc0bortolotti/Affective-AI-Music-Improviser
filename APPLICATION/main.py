@@ -5,7 +5,7 @@ import rtmidi
 import mido
 import os
 from app.application import run_application, close_application, initialize_application, set_application_status, get_eeg_device
-from eeg.pretraining import pretraining
+from app.pretraining import pretraining, validation
 import threading
 
 
@@ -60,18 +60,28 @@ if __name__ == "__main__":
 
     initialize_application(drum_in_port, drum_out_port, bass_play_port, bass_record_port, WINDOW_DURATION, MODEL_DICT)
 
-    # train the EEG classification model
+    # # train the EEG classification model
     # unicorn = get_eeg_device()
     # scaler, svm_model, lda_model, baseline = pretraining(unicorn, WINDOW_SIZE, WINDOW_OVERLAP)
+    # command = input('Set EEG model (lda/svm): ')
+    # if command == 'lda':
+    #     classifier = lda_model
+    # else:
+    #     classifier = svm_model
+    # unicorn.set_classifier(scaler = scaler, classifier = classifier, baseline = baseline)
+    # validation(unicorn, WINDOW_DURATION)
+    
+    command = input('Do you want to start the application? (y/n): ')
 
-    thread_app = threading.Thread(target=run_application, args=())
-    thread_app.start()
+    if command == 'y':
+        thread_app = threading.Thread(target=run_application, args=())
+        thread_app.start()
 
-    time.sleep(5*60)
-    set_application_status('STOPPED', True)
-    thread_app.join()
+        time.sleep(5*60)
+        set_application_status('STOPPED', True)
+        thread_app.join()
 
-    close_application()
+        close_application()
 
     
   

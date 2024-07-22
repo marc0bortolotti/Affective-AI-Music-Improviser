@@ -47,19 +47,14 @@ def thread_function_unicorn(name):
 
     if unicorn is not None:
         unicorn.start_unicorn_recording()
+        time.sleep(5) # wait for signal to stabilize
 
         while True:
 
             time.sleep(WINDOW_DURATION)
             eeg = unicorn.get_eeg_data(recording_time = WINDOW_DURATION)
-            # eeg_features = extract_features([eeg])
-            # eeg_features_corrected = baseline_correction(eeg_features, baseline)
-
-            # # Prediction
-            # sample = scaler.transform(eeg_features_corrected)
-            # prediction = svm_model.predict(sample)
+            prediction = unicorn.get_prediction(eeg)
             # eeg_classification_buffer.append(BCI_TOKENS[prediction])
-
 
             if APPLICATION_STATUS['STOPPED']:
                 logging.info("Thread %s: closing", name)
@@ -94,7 +89,7 @@ def thread_function_osc(name):
     logging.info("Thread %s: closing", name)
 
 
-def get_last_eeg_classification(eeg_classification_buffer):
+def get_last_eeg_classification():
     return eeg_classification_buffer[-1]
 
 
@@ -241,12 +236,8 @@ def run_application():
 
             # tokenize the notes
             if len(notes) > 0:
-                tokens = INPUT_TOK.real_time_tokenization(notes, eeg_classification_buffer[-1])
+                tokens = INPUT_TOK.real_time_tokenization(notes, get_last_eeg_classification())
                 tokens_buffer.append(tokens)
-                with open('tokens_buffer.txt', 'a') as f:
-                    f.write(str(tokens) + '\n')
-            else:
-                INPUT_TOK.real_time_tokenization([], eeg_classification_buffer[-1])
  
             # if the buffer is full (3 bars), make the prediction
             if len(tokens_buffer) == 3:
