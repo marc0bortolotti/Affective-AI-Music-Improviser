@@ -1,7 +1,8 @@
-import collections
+import re
 import numpy as np
 import pandas as pd
 import pretty_midi
+
 
 BPM = 120
 TICKS_PER_BEAT = 12 # resolution of the MIDI file
@@ -143,11 +144,56 @@ class PrettyMidiTokenizer(object):
   def data_augmentation_transposition(self, transpositions):
     '''
     Transpose the sequences by a number of semitones to create new sequences.
-    '''
-    pass
 
+    Parameters:
+    - transpositions: a list of integers representing the number of semitones to transpose the sequences.
+
+    NB: The transposition is done by adding the number of semitones to the pitch of each note in the sequence.
+    '''
+
+    for transposition in transpositions:
+      for seq in self.sequences:
+
+        new_seq = np.copy(seq)
+
+        for i in range(len(new_seq)):
+
+          token = new_seq[i]
+          word = self.VOCAB.idx2word[token]
+
+          # check if the token is a note
+          if word != SILENCE_TOKEN and word != BCI_TOKENS['relax'] and word != BCI_TOKENS['concentrate']:
+
+            # extract all the pitches from the token 
+            pitches = re.findall('\d+', word) # NB: pitches is a string list
+
+            # transpose each pitch in the token 
+            for pitch in pitches:
+              new_pitch = str(int(pitch) + transposition)
+              word = word.replace(pitch, new_pitch)
+
+            # add the new token to the vocabulary
+            self.VOCAB.add_word(word) 
+
+            # update the sequence with the new token
+            new_seq[i] = self.VOCAB.word2idx[word]
+        
+        # update sequence with the new tokens
+        self.sequences.append(new_seq)
 
   def midi_to_df(self, midi_path):
+    '''
+    Converts a MIDI file into a pandas dataframe.
+
+    Parameters:
+    - midi_path: the path to the MIDI file (str)
+
+    Returns:
+    - notes_df: a pandas dataframe containing the notes of the MIDI file
+
+    NB: The MIDI file should contain only one instrument.
+    '''
+
     pm = pretty_midi.PrettyMIDI(midi_path)
     instrument = pm.instruments[0]
 
