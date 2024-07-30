@@ -14,7 +14,7 @@ NOTE_START_TOKEN = 'S'
 VELOCITY_PIANO_TOKEN = 'p'
 VELOCITY_FORTE_TOKEN = 'f'
 SILENCE_TOKEN = 'O'
-BCI_TOKENS = {'relax': 'R', 'concentrate': 'C'}
+BCI_TOKENS = {'relaxed': 'R', 'concentrated': 'C'}
 NOTE_SEPARATOR_TOKEN = '_'
 
 

@@ -43,7 +43,7 @@ def thread_function_unicorn(name):
     logging.info("Thread %s: starting", name)
 
     global eeg_classification_buffer 
-    eeg_classification_buffer = [BCI_TOKENS['concentrate']]
+    eeg_classification_buffer = [BCI_TOKENS['concentrated']]
 
     if unicorn is not None:
         unicorn.start_unicorn_recording()
