@@ -17,14 +17,6 @@ class TCN(nn.Module):
 
         self.tcn = TemporalConvNet(embedding_size, num_channels, kernel_size, dropout=dropout)
 
-        # if emphasize_eeg:
-        #     num_channels[-1] += 1
-        #     self.weights_layer = nn.Linear(num_channels[-1], num_channels[-1])
-        #     weights = np.identity(num_channels[-1])
-        #     weights[-1] =  
-        #     self.weights_layer.weight = torch.Tensor(np.identity(num_channels[-1]), requires_grad=False)
-        #     self.weights_layer.bias = torch.Tensor(np.zeros(num_channels[-1]), requires_grad=False)
-
         self.decoder = nn.Linear(num_channels[-1], output_size)
 
         if tied_weights:

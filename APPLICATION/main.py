@@ -69,6 +69,7 @@ if __name__ == "__main__":
     # else:
     #     classifier = svm_model
     # unicorn.set_classifier(scaler = scaler, classifier = classifier, baseline = baseline)
+    # # Validate the classifier
     # validation(unicorn, WINDOW_DURATION)
     
     command = input('Do you want to start the application? (y/n): ')
