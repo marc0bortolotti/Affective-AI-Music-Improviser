@@ -85,18 +85,6 @@ class MIDI_Output:
         self.midi_out_port.close_port()
 
 
-    def generate_track(self, pitch_ticks_velocity, resolution, bpm):   
-        tempo = int((60 / bpm) * 1000000)
-        mid = MidiFile(ticks_per_beat = resolution)
-        track = MidiTrack()
-        mid.tracks.append(track)
-        track.append(MetaMessage('set_tempo', tempo=tempo))
-        for pitch, ticks, velocity in pitch_ticks_velocity:  
-            track.append(Message('note_on', note=pitch, velocity=velocity, time=0)) # NB: time from the previous message in ticks per beat
-            track.append(Message('note_off', note=pitch, velocity=velocity, time=ticks))
-    
-        return mid
-
     def send_midi_to_reaper(self, mid, parse_message = False):
         def thread_reaper(mid, parse_message):
             start_time = time.time()

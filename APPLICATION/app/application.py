@@ -113,7 +113,8 @@ def load_model(model_dict):
     OUTPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK.load_vocab(output_vocab_path)
 
-    with open('config.yaml', 'r') as file:
+    config_path = os.path.join(model_dict, 'config.yaml')
+    with open(config_path, 'r') as file:
         param = yaml.safe_load(file)
         EMBEDDING_SIZE = param['EMBEDDING_SIZE'] 
         NUM_CHANNELS = param['NUM_CHANNELS']
@@ -212,6 +213,7 @@ def run_application():
 
     tokens_buffer = []
     generated_track = None
+    hystory = []
 
     while True:
     
@@ -267,11 +269,12 @@ def run_application():
                 # get only the last predicted bar
                 predicted_sequence = predicted_sequence[-BAR_LENGTH:]
 
+                # save the hystory
+                hystory.append(tokens_buffer.copy())
+                hystory.append(predicted_sequence)
+
                 # Convert the predicted sequence to MIDI.
-                predicted_sequence =  OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=3)
-                
-                # Generate the track
-                generated_track = midi_out_rec.generate_track(predicted_sequence, TICKS_PER_BEAT, BPM)
+                generated_track =  OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=2)
 
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)
@@ -285,6 +288,22 @@ def run_application():
             break
 
     server.close()
+
+    # save the hystory in a txt file
+    with open('hystory.txt', 'w') as file:
+        for i, item in enumerate(hystory):
+            if i % 2 == 0:
+                file.write("Input: \n")
+                for bar_id, bar in enumerate(item):
+                    file.write(f"Bar {bar_id}: ")
+                    for tok in bar:
+                        file.write(INPUT_TOK.VOCAB.idx2word[tok] + ' ')
+                    file.write("\n")
+            else:
+                file.write("Output: \n")
+                for tok in item:
+                    file.write(OUTPUT_TOK.VOCAB.idx2word[tok] + ' ')
+                file.write("\n\n")
 
 
 def close_application():

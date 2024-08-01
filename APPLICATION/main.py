@@ -78,7 +78,7 @@ if __name__ == "__main__":
         thread_app = threading.Thread(target=run_application, args=())
         thread_app.start()
 
-        time.sleep(5*60)
+        time.sleep(2*60)
         set_application_status('STOPPED', True)
         thread_app.join()
 

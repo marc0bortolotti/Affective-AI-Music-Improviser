@@ -2,6 +2,7 @@ import re
 import numpy as np
 import pandas as pd
 import pretty_midi
+from mido import MidiFile, MidiTrack, Message, MetaMessage
 
 
 BPM = 120
@@ -91,8 +92,8 @@ class PrettyMidiTokenizer(object):
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
     if eeg:
-      self.VOCAB.add_word(BCI_TOKENS['relax'])
-      self.VOCAB.add_word(BCI_TOKENS['concentrate'])
+      self.VOCAB.add_word(BCI_TOKENS['relaxed'])
+      self.VOCAB.add_word(BCI_TOKENS['concentrated'])
     self.source_paths = []
 
 
@@ -275,6 +276,20 @@ class PrettyMidiTokenizer(object):
 
   def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None):
 
+    '''
+    Converts a MIDI file into a sequence of tokens.
+
+    Parameters:
+    - midi_path: the path to the MIDI file (str)
+    - update_vocab: a boolean indicating whether to update the vocabulary (bool)
+    - update_sequences: a boolean indicating whether to update the sequences (bool)
+    - emotion_token: the token representing the emotion of the user (str)
+
+    Returns:
+    - sequences: a list of sequences of tokens (np.array)
+    - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
+    '''
+
     notes_df = self.midi_to_df(midi_path)
     
     # split notes into bars and convert notes ticks into a time serie of tokens 
@@ -337,99 +352,167 @@ class PrettyMidiTokenizer(object):
       self.sequences += sequences        
 
     return sequences, notes_df
-
-
-
-  def tokens_to_midi(self, sequence, ticks_filter = 0, out_file_path = None, instrument_name = 'Electric Bass (finger)'):
-
+  
+  def tokens_to_notes_df(self, sequence, ticks_filter = 0):
     '''
-    NB: works only for monophonic sequences of tokens. 
-        So it doesn't work for drum sequences or chords.
+    Converts a sequence of tokens into a pandas dataframe of notes.
+
+    Parameters:
+    - sequence: a sequence of tokens (np.array)
+    - ticks_filter: the minimum duration of a note in ticks (int)
+
+    Returns:
+    - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
     '''
 
-    last_pitch = None
-    last_velocity = None
-    counter = 1
-    pitch_ticks_velocity = []
+    
+    notes_df = pd.DataFrame(columns = ['pitch', 'start', 'duration', 'velocity'])
+    prev_pitches = []
 
     # convert the sequence of tokens into a list of tokens and their duration and velocity
-    for i, token in enumerate(sequence):
+    for token_idx, token in enumerate(sequence):
 
       token_string = self.VOCAB.idx2word[token] # convert token id to string
 
       if NOTE_SEPARATOR_TOKEN in token_string:
-        token_string = token_string.split(NOTE_SEPARATOR_TOKEN)[0]
+          notes = token_string.split(NOTE_SEPARATOR_TOKEN)
+      else:
+          notes = [token_string]
 
-      # extract pitch and velocity from the token string
-      if VELOCITY_PIANO_TOKEN in token_string:
-        velocity = 90
-        token_string = token_string.replace(VELOCITY_PIANO_TOKEN, '') # remove the velocity token
-      elif VELOCITY_FORTE_TOKEN in token_string:
-        velocity = 127
-        token_string = token_string.replace(VELOCITY_FORTE_TOKEN, '') # remove the velocity token
-      else: 
-        velocity = 0
+      # get current pitches in the token
+      pitches = re.findall('\d+', token_string)
 
-      # extract pitch from the token string
-      note_start = False
-      if token_string.isdigit():
-        pitch = int(token_string)
-      elif NOTE_START_TOKEN in token_string:
-        token_string = token_string.replace(NOTE_START_TOKEN, '') # remove the note start token
-        pitch = int(token_string)
-        note_start = True
-      else: # silence token or BCI token
-        pitch = 0
+      for note_string in notes:
 
-      # update the pitch, duration and velocity lists
-      if last_pitch != None and last_velocity != None:
-        # if new note is started, add the previous pitch, duration and velocity to the list
-        if  pitch != last_pitch or note_start:
+        # check if the token is a silence token
+        if SILENCE_TOKEN not in note_string:
 
-          # filter notes with a duration of less than # ticks
-          if counter > ticks_filter:
-            pitch_ticks_velocity.append([last_pitch, counter, last_velocity])
+          pitch = re.findall('\d+', note_string) [0] # re.findall returns a list
+          velocity = 80 if VELOCITY_PIANO_TOKEN in note_string else 127
+          start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
+
+          if start is not None:
+            note = pd.DataFrame([{'pitch': pitch, 'start': start, 'duration': 1, 'velocity': velocity}])
+            notes_df = pd.concat([notes_df, note], ignore_index=True)
+
           else:
-            pitch_ticks_velocity.append([0, counter, 0])
-          
-          counter = 1
-          last_pitch = pitch
-          if i == len(sequence) - 1:
-            pitch_ticks_velocity.append([pitch, 1, velocity])
-        
-        # if the pitch is the same or the note is sustained, increment the duration of the note
-        else:
-          counter += 1
-      
-      last_velocity = velocity  
-      last_pitch = pitch
+            note_idx = notes_df.index[notes_df['pitch'] == pitch].tolist()[-1] # get the index of the last note with the same pitch
+            notes_df.loc[note_idx, 'duration'] += 1
 
-    # generate midi file
-    if out_file_path is not None:
-      self.save_midi(pitch_ticks_velocity, out_file_path, instrument_name)
-      
-    return pitch_ticks_velocity
+      prev_pitches = pitches
+
+    # filter notes with duration less than ticks_filter
+    notes_df = notes_df[notes_df['duration'] > ticks_filter]
+
+    return notes_df
   
+  def notes_df_to_midi_command_df(self, notes_df):
+    '''
+    Converts a pandas dataframe of notes into a pandas dataframe of commands.
 
-  def save_midi(self, pitch_ticks_velocity, out_file_path, instrument_name = 'Electric Bass (finger)'):
-    pm = pretty_midi.PrettyMIDI(midi_file=None, resolution=self.TICKS_PER_BEAT, initial_tempo=self.BPM)
-    program = pretty_midi.instrument_name_to_program(instrument_name)
-    instrument = pretty_midi.Instrument(program=program)
-    prev_end = 0
-    for note in pitch_ticks_velocity:
-      (pitch, ticks, velocity) = note
-      duration = pm.tick_to_time(ticks) # convert ticks to time
-      start = prev_end
-      end = start + duration
-      instrument.notes.append(pretty_midi.Note(velocity=velocity, pitch=pitch, start=start, end=end))
-      prev_end = end
-    pm.instruments.append(instrument)
+    Parameters:
+    - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
+
+    Returns:
+    - command_df: a pandas dataframe containing the commands of the MIDI file (columns: pitch, start, note_on, velocity, dt)
+    '''
+
+    # convert the notes into a list of commands (note_on, note_off, velocity, dt)
+    command_df = pd.DataFrame(columns = ['pitch', 'start', 'note_on', 'velocity', 'dt'])
+    for idx, note in notes_df.iterrows():
+        pitch = note['pitch']
+        start = note['start'] 
+        duration = note['duration']
+        velocity = note['velocity']
+        end = start + duration
+        cmd_on = pd.DataFrame([{'pitch': pitch, 'start': start, 'note_on': True, 'velocity': velocity, 'dt': 0}])
+        cmd_off = pd.DataFrame([{'pitch': pitch, 'start': end, 'note_on': False, 'velocity': velocity, 'dt': 0}])
+        command_df = pd.concat([command_df, cmd_on, cmd_off], ignore_index=True)
+
+    # sort the commands by start time
+    command_df = command_df.sort_values(by = 'start')
+    command_df = command_df.reset_index(drop = True)
+
+    # subtract the start time of the previous command from the start time of the current command 
+    # to get the time interval between the two commands
+    for idx in range(1, len(command_df)):
+      command_df.loc[idx, 'dt'] = command_df.loc[idx, 'start'] - command_df.loc[idx - 1, 'start']
+
+    return command_df
+  
+  def generate_track(self, command_df, bpm = BPM, resolution = TICKS_PER_BEAT, instrument_name = 'Acoustic Grand Piano'):  
+    '''
+    Generates a MIDI track from a pandas dataframe of commands.
+
+    Parameters:
+    - command_df: a pandas dataframe containing the commands of the MIDI file (columns: pitch, start, note_on, velocity, dt)
+    - bpm: the tempo of the MIDI file (int)
+    - resolution: the resolution of the MIDI file (int)
+
+    Returns:
+    - mid: a MIDI file (MIDO object)
+    '''
+    tempo = int((60 / bpm) * 1000000)
+    mid = MidiFile(ticks_per_beat = resolution)
+    track = MidiTrack()
+
+    if instrument_name == 'Drum':
+      channel = 9
+      program = 0
+    elif instrument_name == 'Bass':
+      channel = 0
+      program = 34
+    else:
+      channel = 0
+      program = 0
+    
+    track.append(Message('program_change', program=program))
+    track.append(MetaMessage('set_tempo', tempo=tempo))
+
+    for i in range(len(command_df)):
+        command = command_df.loc[i]
+        pitch = int(command['pitch'])
+        velocity = int(command['velocity'])
+        dt = int(command['dt'])  # in ticks
+        cmd = 'note_on' if command['note_on'] else 'note_off'
+        track.append(Message(cmd, note=pitch, velocity=velocity, time=dt, channel=channel)) # NB: time from the previous message in ticks per beat
+
+    mid.tracks.append(track)
+    return mid
+
+  def tokens_to_midi(self, sequence, out_file_path = None, ticks_filter = 0, instrument_name = 'Acoustic Grand Piano'):
+    '''
+    Converts a sequence of tokens into a MIDI file.
+
+    Parameters:
+    - sequence: a sequence of tokens (np.array)
+    - out_file_path: the path to the output MIDI file (str)
+
+    Returns:
+    - mid: a MIDI file (MIDO object)
+
+    '''
+    notes_df = self.tokens_to_notes_df(sequence, ticks_filter)
+    command_df = self.notes_df_to_midi_command_df(notes_df)
+    mid = self.generate_track(command_df, instrument_name = instrument_name)
+    
     if out_file_path is not None:
-      pm.write(out_file_path)
+      mid.save(out_file_path)
       print(f'MIDI file saved at {out_file_path}')
 
+    return mid
 
   def real_time_tokenization(self, notes, emotion_token = None):
+    '''
+    Converts a list of notes into a sequence of tokens in real-time.
+
+    Parameters:
+    - notes: a list of notes (list of dictionaries)
+    - emotion_token: the token representing the emotion of the user (str)
+
+    Returns:
+    - tokens: a sequence of tokens (np.array)
+    '''
 
     self.real_time_notes = []
     tokens = np.empty((self.BAR_LENGTH), dtype=object)
@@ -488,27 +571,15 @@ class PrettyMidiTokenizer(object):
 
 
 
-
-
 if __name__ == '__main__':
-  import rtmidi
+  
+  vocab_path = 'APPLICATION/model/trained_models/model/input_vocab.txt'
+  
+  tok = PrettyMidiTokenizer()
+  tok.load_vocab(vocab_path)
 
+  midi_path = 'TCN/dataset/input/0_Drum_HardRock_EXCITED.mid'
+  sequences, notes_df = tok.midi_to_tokens(midi_path)
+  tokens = sequences[0]
 
-  # Tokenization of a MIDI file
-  tok = PrettyMidiTokenizer('TCN/dataset/output/bass.mid')
-  sample = tok.sequences[0]
-  note_ticks_velocity = tok.tokens_to_midi(sample, 'MIDI/PRETTY_MIDI/decoded_sample.mid')
-
-
-  # Real-time tokenization
-  midi_in = rtmidi.MidiIn()
-  available_ports = midi_in.get_port_count()
-  print(f'Available MIDI ports: {midi_in.get_ports()}')
-
-  midi_in.open_port(-1)
-  while True:
-    msg_and_dt = midi_in.get_message()
-    if msg_and_dt:
-      (msg, dt) = msg_and_dt
-      command, note, velocity = msg
-      command = hex(command)
+  mid = tok.tokens_to_midi(tokens, out_file_path = 'test_in.mid', ticks_filter = 0, instrument_name = 'Drum')
