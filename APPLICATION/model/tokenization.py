@@ -121,7 +121,7 @@ class PrettyMidiTokenizer(object):
   - real_time_tokenization(notes, emotion_token): converts a list of notes into a sequence of tokens in real-time
   '''
     
-  def __init__(self, midi_file_path = None, eeg = False):
+  def __init__(self, midi_file_path = None):
 
     self.BPM = BPM
     self.BEATS_PER_BAR = BEATS_PER_BAR
@@ -131,15 +131,13 @@ class PrettyMidiTokenizer(object):
     self.SEQ_LENGTH = self.BAR_LENGTH * 4
     self.BEAT_DURATION = 60 / self.BPM
     self.BAR_DURATION = self.BEAT_DURATION * self.BEATS_PER_BAR
+    self.BAR_DURATION_IN_TICKS = self.convert_time_to_ticks(self.BAR_DURATION)
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
     self.sequences = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
-    if eeg:
-      self.VOCAB.add_word(BCI_TOKENS['relaxed'])
-      self.VOCAB.add_word(BCI_TOKENS['concentrated'])
     self.source_paths = []
 
 
@@ -161,23 +159,17 @@ class PrettyMidiTokenizer(object):
     return ticks
 
 
-  def new_note(self, pitch, velocity, start, end, bar, convert_to_ticks = True):
-    # NB: start and end are relative to the bar they are in
-    if convert_to_ticks:
-      start = self.convert_time_to_ticks(start - bar*self.BAR_DURATION)
-      end = self.convert_time_to_ticks(end - bar*self.BAR_DURATION)
-
+  def new_note(self, pitch, velocity, start, end, bar):
     new_note = {
       'pitch': pitch,
       'velocity': velocity,
-      'start': start,
-      'end': end,
+      'start': start - bar*self.BAR_DURATION_IN_TICKS,
+      'end': end - bar*self.BAR_DURATION_IN_TICKS,
       'bar': bar
     }   
-
     return pd.DataFrame([new_note])  
 
-  def midi_to_df(self, midi_path):
+  def midi_to_df(self, midi_path, instrument = ''):
     '''
     Converts a MIDI file into a pandas dataframe.
 
@@ -191,40 +183,40 @@ class PrettyMidiTokenizer(object):
     '''
 
     pm = pretty_midi.PrettyMIDI(midi_path)
-    instrument = pm.instruments[0]
 
-    # if pm.resolution != TICKS_PER_BEAT:
-    #   raise Exception(f'The resolution of the MIDI file is {pm.resolution} instead of {self.TICKS_PER_BEAT}.')
+    if pm.resolution != TICKS_PER_BEAT:
+      raise Exception(f'The resolution of the MIDI file is {pm.resolution} instead of {self.TICKS_PER_BEAT}.')
 
-    # elif pm.get_tempo_changes()[1][0] != BPM:
-    #   raise Exception(f'The tempo of the MIDI file is {pm.get_tempo_changes[1][0]} instead of {self.BPM}.')
+    elif pm.get_tempo_changes()[1][0] != BPM:
+      raise Exception(f'The tempo of the MIDI file is {pm.get_tempo_changes[1][0]} instead of {self.BPM}.')
     
 
     # Sort the notes by start time
-    sorted_notes = sorted(instrument.notes, key=lambda note: note.start)
+    sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
 
     # create a dataframe from the notes dictionary
     notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     
     for note in sorted_notes:
 
-      print(note)
-
       pitch = note.pitch
       velocity = note.velocity
-      start = note.start
-      end = note.end
-      # step = start - prev_start
-      bar = int(start // self.BAR_DURATION) # integer part of the division
+      start = self.convert_time_to_ticks(note.start)
+      end = self.convert_time_to_ticks(note.end)
+
+      if instrument == 'drum':
+        end = start + 1
+
+      bar = int(start // self.BAR_DURATION_IN_TICKS) # integer part of the division
 
       # split the note in two if it spans multiple bars
-      if end > (bar + 1) * self.BAR_DURATION: 
+      if end > (bar + 1) * self.BAR_DURATION_IN_TICKS: 
         # update the current note to end at the end of the bar and update its duration
-        note = self.new_note(pitch, velocity, start, (bar + 1) * self.BAR_DURATION, bar)
+        note = self.new_note(pitch, velocity, start, (bar + 1) * self.BAR_DURATION_IN_TICKS, bar)
         notes_df = pd.concat([notes_df, note], ignore_index=True)
 
         # create new note in the succeeding bar with the remaining duration
-        note = self.new_note(pitch, velocity, (bar + 1) * self.BAR_DURATION, end, bar + 1)
+        note = self.new_note(pitch, velocity, (bar + 1) * self.BAR_DURATION_IN_TICKS, end, bar + 1)
         notes_df = pd.concat([notes_df, note], ignore_index=True)
 
       else:
@@ -273,7 +265,7 @@ class PrettyMidiTokenizer(object):
     return tokens
 
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None):
+  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None, instrument=''):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -288,8 +280,11 @@ class PrettyMidiTokenizer(object):
     - sequences: a list of sequences of tokens (np.array)
     - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
     '''
+    if emotion_token is not None and update_vocab:
+      self.VOCAB.add_word(BCI_TOKENS['relaxed'])
+      self.VOCAB.add_word(BCI_TOKENS['concentrated'])
 
-    notes_df = self.midi_to_df(midi_path)
+    notes_df = self.midi_to_df(midi_path, instrument=instrument)
     
     # split notes into bars and convert notes ticks into a time serie of tokens 
     bars_time_series = []
@@ -496,7 +491,7 @@ class PrettyMidiTokenizer(object):
 
     return mid
 
-  def real_time_tokenization(self, notes, emotion_token = None):
+  def real_time_tokenization(self, notes, emotion_token = None, instrument = 'drum'):
     '''
     Converts a list of notes into a sequence of tokens in real-time.
 
@@ -527,13 +522,16 @@ class PrettyMidiTokenizer(object):
       elif velocity > MIN_VELOCITY:
         start = self.convert_time_to_ticks(duration)
         step = 0
-        for i in range (note_id+1, len(notes)):
-          step += notes[i]['dt']
-          if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
-            step = self.convert_time_to_ticks(step)
-            break
-        
-        end = int(start + step)
+
+        if instrument == 'drum':
+          end = start + 1
+        else:
+          for i in range (note_id+1, len(notes)):
+            step += notes[i]['dt']
+            if notes[i]['velocity'] == 0 and str(notes[i]['pitch']) == pitch: 
+              step = self.convert_time_to_ticks(step)
+              break
+          end = int(start + step)
 
         if end > self.BAR_LENGTH :
           end = self.BAR_LENGTH

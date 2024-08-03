@@ -238,7 +238,7 @@ def run_application():
 
             # tokenize the notes
             if len(notes) > 0:
-                tokens = INPUT_TOK.real_time_tokenization(notes, get_last_eeg_classification())
+                tokens = INPUT_TOK.real_time_tokenization(notes, get_last_eeg_classification(), 'drum')
                 tokens_buffer.append(tokens)
  
             # if the buffer is full (3 bars), make the prediction
