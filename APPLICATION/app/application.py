@@ -215,6 +215,8 @@ def run_application():
     generated_track = None
     hystory = []
 
+    softmax = torch.nn.Softmax(dim=1)
+
     while True:
     
         msg = server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
@@ -259,6 +261,13 @@ def run_application():
                 # Make the prediction.
                 prediction = model(input_data.to(device))
                 prediction = prediction.contiguous().view(-1, len(OUTPUT_TOK.VOCAB))
+
+                # Get the predicted tokens.
+                prediction = softmax(prediction)
+
+                # Get the confidence of the prediction.
+                confidence = torch.mean(torch.max(prediction, 1))
+                logging.info(f"Confidence: {confidence}")
 
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
