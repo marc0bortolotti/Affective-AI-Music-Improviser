@@ -5,7 +5,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn import svm
 from sklearn.metrics import accuracy_score, f1_score
-from eeg.processing import calculate_baseline, extract_features, baseline_correction
+from processing import calculate_baseline, extract_features, baseline_correction
 
 
 def get_eeg_classifiers(self, eeg_samples_baseline, eeg_samples_classes):

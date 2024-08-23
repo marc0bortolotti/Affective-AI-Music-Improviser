@@ -2,7 +2,7 @@ from mne.io import RawArray
 from mne import create_info
 from mne.channels import make_standard_montage
 import numpy as np
-from eeg.loader import unicorn_fs, unicorn_eeg_channels
+from loader import unicorn_fs, unicorn_eeg_channels
 
 
 def generate_samples(eeg, window_size, window_overlap):

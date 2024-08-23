@@ -3,7 +3,7 @@ import bluetooth
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 import numpy as np
 import logging
-from eeg.processing import extract_features, baseline_correction
+from processing import extract_features, baseline_correction
 from sklearn.metrics import accuracy_score, f1_score
 
 

@@ -5,7 +5,7 @@ from pythonosc import udp_client
 from pythonosc import osc_server
 import os
 import mido
-from connections.udp_connection import Server_UDP, Client_UDP
+from udp_connection import Server_UDP, Client_UDP
 import threading
 import logging
 
