@@ -103,7 +103,7 @@ def set_application_status(key, value):
 
 def load_model(model_dict):
 
-    model_path = os.path.join(model_dict, 'model_state_dict.pth')
+    weights_path = os.path.join(model_dict, 'model_state_dict.pth')
     input_vocab_path = os.path.join(model_dict, 'input_vocab.txt')
     output_vocab_path = os.path.join(model_dict, 'output_vocab.txt')
 
@@ -130,7 +130,7 @@ def load_model(model_dict):
                 num_channels = NUM_CHANNELS, 
                 kernel_size = KERNEL_SIZE) 
     
-    model.load_state_dict(torch.load(model_path, map_location = device))
+    model.load_state_dict(torch.load(weights_path, map_location = device))
     model.eval()
     model.to(device)
 
