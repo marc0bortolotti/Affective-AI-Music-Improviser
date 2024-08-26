@@ -20,3 +20,4 @@ PyYAML
 python-osc
 pretty_midi
 dash
+dash-bootstrap-components

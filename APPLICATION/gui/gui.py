@@ -7,7 +7,7 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
 import rtmidi
 import mido
-from application import run_application, close_application, application_status
+from app.application import run_application, close_application, APPLICATION_STATUS
 from OSC.osc_connection import Client_OSC, REC_MSG
 import threading
 import logging
