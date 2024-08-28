@@ -571,9 +571,9 @@ if __name__ == '__main__':
 
   print(df)
 
-  # tok.load_vocab(vocab_path)
+  tok.load_vocab(vocab_path)
 
-  # sequences, notes_df = tok.midi_to_tokens(midi_path)
-  # tokens = sequences[0]
+  sequences, notes_df = tok.midi_to_tokens(midi_path)
+  tokens = sequences[0]
 
-  # mid = tok.tokens_to_midi(tokens, out_file_path = 'test_in.mid', ticks_filter = 0, instrument_name = 'Drum')
+  mid = tok.tokens_to_midi(tokens, out_file_path = 'test_in.mid', ticks_filter = 0, instrument_name = 'Drum')

@@ -216,6 +216,7 @@ def run_application():
     hystory = []
 
     softmax = torch.nn.Softmax(dim=1)
+    temperature = 1.0
 
     while True:
     
@@ -263,11 +264,13 @@ def run_application():
                 prediction = prediction.contiguous().view(-1, len(OUTPUT_TOK.VOCAB))
 
                 # Get the predicted tokens.
+                prediction = prediction / temperature
                 prediction = softmax(prediction)
 
                 # Get the confidence of the prediction.
-                confidence = torch.mean(torch.max(prediction, 1))
-                logging.info(f"Confidence: {confidence}")
+
+                # confidence = torch.mean(torch.max(prediction, 1))
+                # logging.info(f"Confidence: {confidence}")
 
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
