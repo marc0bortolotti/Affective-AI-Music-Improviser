@@ -7,16 +7,24 @@ import logging
 
 from sklearn.metrics import accuracy_score, f1_score
 
+from eeg.loader import synth_eeg_channels
 from eeg.processing import extract_features, baseline_correction
 
 
 class LSLDevice:
-    def __init__(self, name="Cortex EEG", type="EEG", sampling_rate=250):
+    def __init__(self, n_eeg_channels=8, name="Cortex EEG", type="EEG", sampling_rate=250):
         self.sr = sampling_rate
         self.name = name
         self.type = type
         self.streams = []
         self.inlet = None
+
+        self.exit = False
+
+        self.n_eeg_channels = n_eeg_channels
+        self.classifier = None
+        self.scaler = None
+        self.baseline = None
 
     def __str__(self):
         return f"LSLDevice(name={self.name}, type={self.type}, stream={self.streams})"
@@ -29,15 +37,25 @@ class LSLDevice:
         logging.info('LSLDevice: stop recording')
 
     def start_unicorn_recording(self):
+        logging.info('LSLDevice: looking for a stream')
         while not self.streams:
             self.streams = resolve_stream('name', self.name)
             time.sleep(1)
         logging.info("LSL stream found: {}".format(self.streams[0].name()))
         self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
 
-    def get_eeg_data(self, recording_time=4):
-        data = self.inlet.pull_chunk(max_samples=recording_time * self.sr)
-        return data
+    def get_eeg_data(self, recording_time=4, chunk=True):
+        try:
+            if chunk:
+                data, timestamps = self.inlet.pull_chunk(timeout=recording_time)
+            else:
+                data, timestamps = self.inlet.pull_sample()
+            data = np.array(data)
+            logging.info(f"LSLDevice: {data.shape}")
+            #return data[:, 0:self.n_eeg_channels]
+            return data
+        except Exception as e:
+            logging.error(f"LSLDevice: {e}")
 
     def set_classifier(self, baseline, scaler, classifier):
         self.baseline = baseline

@@ -2,7 +2,7 @@ from mne.io import RawArray
 from mne import create_info
 from mne.channels import make_standard_montage
 import numpy as np
-from eeg.loader import unicorn_fs, unicorn_eeg_channels
+from eeg.loader import unicorn_fs, unicorn_eeg_channels, synth_eeg_channels
 
 
 def generate_samples(eeg, window_size, window_overlap):
@@ -57,7 +57,7 @@ def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False):
     return this_rec
 
 
-def extract_features(eeg_samples, fs = unicorn_fs, chs = unicorn_eeg_channels):
+def extract_features(eeg_samples, fs = unicorn_fs, chs = synth_eeg_channels):
     eeg_features = []
 
     for i, sample in enumerate(eeg_samples):

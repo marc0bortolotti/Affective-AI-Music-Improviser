@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 
+synth_eeg_channels = ["Fp1", "Fp2", "F7", "F3", "Fz", "F4", "F8", "T3",
+                     "C3", "Cz", "C4", "T4", "T5", "P3", "Pz", "P4"]
 
 unicorn_eeg_channels = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
 unicorn_fs = 250

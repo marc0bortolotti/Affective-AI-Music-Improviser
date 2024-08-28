@@ -3,7 +3,7 @@ import bluetooth
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 import numpy as np
 import logging
-from processing import extract_features, baseline_correction
+from eeg.processing import extract_features, baseline_correction
 from sklearn.metrics import accuracy_score, f1_score
 
 
@@ -61,7 +61,7 @@ class Unicorn:
         logging.info('Unicorn: start recording')
 
     def get_eeg_data(self, recording_time=4):
-        data = self.board.get_board_data()
+        data = self.board.get_current_board_data(num_samples=self.sample_frequency * recording_time)
         data = np.array(data).T
         data = data[:, self.eeg_channels]
         data = data[- recording_time * self.sample_frequency : ]
