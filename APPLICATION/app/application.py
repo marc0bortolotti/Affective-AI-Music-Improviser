@@ -98,7 +98,12 @@ def set_application_status(key, value):
 
 
 def load_model(model_dict):
+<<<<<<< HEAD
     model_path = os.path.join(model_dict, 'model_state_dict.pth')
+=======
+
+    weights_path = os.path.join(model_dict, 'model_state_dict.pth')
+>>>>>>> 6e33de1217d3e523a44647fd1a441c3198bad542
     input_vocab_path = os.path.join(model_dict, 'input_vocab.txt')
     output_vocab_path = os.path.join(model_dict, 'output_vocab.txt')
 
@@ -118,6 +123,7 @@ def load_model(model_dict):
         KERNEL_SIZE = param['KERNEL_SIZE']
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+<<<<<<< HEAD
     model = TCN(input_size=INPUT_SIZE,
                 embedding_size=EMBEDDING_SIZE,
                 output_size=OUTPUT_SIZE,
@@ -125,6 +131,15 @@ def load_model(model_dict):
                 kernel_size=KERNEL_SIZE)
 
     model.load_state_dict(torch.load(model_path, map_location=device))
+=======
+    model = TCN(input_size = INPUT_SIZE,
+                embedding_size = EMBEDDING_SIZE, 
+                output_size = OUTPUT_SIZE, 
+                num_channels = NUM_CHANNELS, 
+                kernel_size = KERNEL_SIZE) 
+    
+    model.load_state_dict(torch.load(weights_path, map_location = device))
+>>>>>>> 6e33de1217d3e523a44647fd1a441c3198bad542
     model.eval()
     model.to(device)
 
@@ -209,6 +224,7 @@ def run_application():
     hystory = []
 
     softmax = torch.nn.Softmax(dim=1)
+    temperature = 1.0
 
     while True:
 
@@ -256,11 +272,13 @@ def run_application():
                 prediction = prediction.contiguous().view(-1, len(OUTPUT_TOK.VOCAB))
 
                 # Get the predicted tokens.
+                prediction = prediction / temperature
                 prediction = softmax(prediction)
 
                 # Get the confidence of the prediction.
-                confidence = torch.mean(torch.max(prediction, 1))
-                logging.info(f"Confidence: {confidence}")
+
+                # confidence = torch.mean(torch.max(prediction, 1))
+                # logging.info(f"Confidence: {confidence}")
 
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
