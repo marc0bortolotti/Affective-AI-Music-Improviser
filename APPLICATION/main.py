@@ -45,7 +45,8 @@ if __name__ == "__main__":
     else:
         classifier = svm_model
     eeg_device.set_classifier(scaler = scaler, classifier = classifier, baseline = baseline)
-    # Validate the classifier
+
+    # Validate the EEG classifier
     validation(eeg_device, WINDOW_DURATION)
     
     command = input('Do you want to start the application? (y/n): ')
