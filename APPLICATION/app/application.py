@@ -31,9 +31,6 @@ BEAT_PER_BAR = 4
 TICKS_PER_BEAT = 12  # quantization of a beat
 '''----------------------------------------------'''
 
-'''--------------- EEG PARAMETERS --------------'''
-EEG_CLASSES = ['relax', 'excited']
-
 
 def thread_function_eeg(name):
     logging.info("Thread %s: starting", name)
