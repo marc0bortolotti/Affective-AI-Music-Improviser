@@ -11,7 +11,7 @@ from eeg.loader import synth_eeg_channels
 from eeg.processing import extract_features, baseline_correction
 
 
-class LSLDevice:
+class LSLDevice():
     def __init__(self, n_eeg_channels=8, name="Cortex EEG", type="EEG", sampling_rate=250):
         self.sr = sampling_rate
         self.name = name
@@ -32,11 +32,11 @@ class LSLDevice:
     def __repr__(self):
         return str(self)
 
-    def stop_unicorn_recording(self):
+    def stop_recording(self):
         self.inlet.close_stream()
         logging.info('LSLDevice: stop recording')
 
-    def start_unicorn_recording(self):
+    def start_recording(self):
         logging.info('LSLDevice: looking for a stream')
         while not self.streams:
             self.streams = resolve_stream('name', self.name)

@@ -10,13 +10,13 @@ excited_music = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/Bli
 white_noise = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/White_Noise.wav')
 
 
-def pretraining(unicorn, WINDOW_SIZE, WINDOW_OVERLAP):
+def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
     logging.info("Pretraining: Start Training")
 
     steps = 2
 
     # start recording eeg
-    unicorn.start_unicorn_recording()
+    eeg_device.start_recording()
     time.sleep(7)  # wait for signal to stabilize
 
     eeg_samples_baseline = []
@@ -25,27 +25,31 @@ def pretraining(unicorn, WINDOW_SIZE, WINDOW_OVERLAP):
 
     for i in range(steps):
         # Baseline (30 seconds)
-        logging.info("Pretraining: Pause for 20 seconds. Please, do not move or think about anything. Just relax.")
-        white_noise.play()
-        eeg = unicorn.get_eeg_data(recording_time=30)
+        logging.info("Pretraining: Pause for 30 seconds. Please, do not move or think about anything. Just relax.")
+        play = white_noise.play()
+        play.wait_done()
+        eeg = eeg_device.get_eeg_data(recording_time=30)
         eeg_samples_baseline.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
         # Relax (1 minute)
-        logging.info("Pretraining: Play a relaxed rythm on the metronome for 30 seconds")
-        relax_music.play()
-        eeg = unicorn.get_eeg_data(recording_time=60)
+        logging.info("Pretraining: Play a relaxed rythm for 60 seconds")
+        play = relax_music.play()
+        play.wait_done()
+        eeg = eeg_device.get_eeg_data(recording_time=60)
         eeg_samples_relax.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
         # Baseline (30 seconds)
-        logging.info("Pretraining: Pause for 20 seconds. Please, do not move or think about anything. Just relax.")
-        white_noise.play()
-        eeg = unicorn.get_eeg_data(recording_time=30)
+        logging.info("Pretraining: Pause for 30 seconds. Please, do not move or think about anything. Just relax.")
+        play = white_noise.play()
+        play.wait_done()
+        eeg = eeg_device.get_eeg_data(recording_time=30)
         eeg_samples_baseline.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
         # Excited (1 minute)
-        logging.info("Pretraining: Play an excited rythm on the metronome")
-        excited_music.play()
-        eeg = unicorn.get_eeg_data(recording_time=60)
+        logging.info("Pretraining: Play an excited rythm for 60 seconds")
+        play = excited_music.play()
+        play.wait_done()
+        eeg = eeg_device.get_eeg_data(recording_time=60)
         eeg_samples_excited.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
     eeg_samples_baseline = np.concatenate(eeg_samples_baseline)
@@ -53,7 +57,7 @@ def pretraining(unicorn, WINDOW_SIZE, WINDOW_OVERLAP):
     eeg_samples_excited = np.concatenate(eeg_samples_excited)
 
     # stop recording eeg
-    unicorn.stop_unicorn_recording()
+    eeg_device.stop_recording()
 
     #------------CLASSIFICATION----------------
     scaler, svm_model, lda_model, baseline = get_eeg_classifiers(eeg_samples_baseline,
@@ -63,32 +67,34 @@ def pretraining(unicorn, WINDOW_SIZE, WINDOW_OVERLAP):
     return scaler, svm_model, lda_model, baseline
 
 
-def validation(unicorn, WINDOW_DURATION):
+def validation(eeg_device, WINDOW_DURATION):
     logging.info("Validation: Start Validation")
 
     # start recording eeg
-    unicorn.start_unicorn_recording()
+    eeg_device.start_unicorn_recording()
     time.sleep(7)  # wait for signal to stabilize
 
     eeg_samples_classes = []
 
     # Relax (1 minute)
-    logging.info("Validation: Play a relaxed rythm on the metronome for 30 seconds")
-    relax_music.play()
-    eeg = unicorn.get_eeg_data(recording_time=60)
+    logging.info("Validation: Play a relaxed rythm for 60 seconds")
+    play = relax_music.play()
+    play.wait_done()
+    eeg = eeg_device.get_eeg_data(recording_time=60)
     eeg_samples_classes.append(generate_samples(eeg, WINDOW_DURATION))
 
     # Excited (1 minute)
-    logging.info("Validation: Play an excited rythm on the metronome")
-    excited_music.play()
-    eeg = unicorn.get_eeg_data(recording_time=60)
+    logging.info("Validation: Play an excited rythm for 60 seconds")
+    play = excited_music.play()
+    play.wait_done()
+    eeg = eeg_device.get_eeg_data(recording_time=60)
     eeg_samples_classes.append(generate_samples(eeg, WINDOW_DURATION))
 
     # stop recording eeg
-    unicorn.stop_unicorn_recording()
+    eeg_device.stop_recording()
 
     #------------CLASSIFICATION----------------
-    accuracy, f1 = unicorn.get_metrics(eeg_samples_classes)
+    accuracy, f1 = eeg_device.get_metrics(eeg_samples_classes)
 
     logging.info(f"Validation: Accuracy: {accuracy:.2f} F1 Score: {f1:.2f}")
     logging.info("Validation: Validation Finished")

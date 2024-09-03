@@ -21,8 +21,7 @@ log.setLevel(logging.ERROR)
 
 
 # PORTS
-midi_in = rtmidi.MidiIn()
-midi_in_ports = midi_in.get_ports()
+midi_in_ports = rtmidi.MidiIn().get_ports()
 midi_out_ports = mido.get_output_names()
 unicorns = ['UNICORN']
 

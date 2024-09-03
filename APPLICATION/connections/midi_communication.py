@@ -7,14 +7,40 @@ import pretty_midi as pm
 import threading
 
 class MIDI_Input:
+    '''
+    Class to receive MIDI messages from a MIDI port
 
-    def __init__(self, midi_in_port: rtmidi, midi_out_port: rtmidi = None, parse_message = False):
-        
-        self.midi_in_port = midi_in_port
+    Args:
+    midi_in_port_name (str): MIDI input port name
+    midi_out_port_name (str): MIDI output port name
+    parse_message (bool): whether to print the message received from the port
+    '''
+
+    def __init__(self, midi_in_port_name, midi_out_port_name = None, parse_message = False):
+
+        available_ports = rtmidi.MidiIn().get_ports()
+
+        try:
+            self.midi_in_port = rtmidi.MidiIn().open_port(available_ports.index(midi_in_port_name))
+            logging.info(f'MIDI Input: Connected to port {midi_in_port_name}')
+        except:
+            self.midi_in_port = None
+            logging.error(f'MIDI Input: Could not connect to port {midi_in_port_name}, check if the port is available')
+            logging.error(f'MIDI Input Available ports: {available_ports}')
+
+        if midi_out_port_name is not None:
+            available_ports = rtmidi.MidiOut().get_ports()
+            try:
+                self.midi_out_port = rtmidi.MidiOut().open_port(available_ports.index(midi_out_port_name))
+                logging.info(f'MIDI Output: Connected to port {midi_out_port_name}')
+            except:
+                self.midi_out_port = None
+                logging.error(f'MIDI Output: Could not connect to port {midi_out_port_name}, check if the port is available')
+                logging.error(f'MIDI Output Available ports: {available_ports}')
+            
         self.note_buffer = []
         self.exit = False
         self.parse_message = parse_message
-        self.midi_out_port = midi_out_port
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -36,26 +62,16 @@ class MIDI_Input:
         self.midi_in_port.close_port()
         logging.info(f'MIDI Input: Disconnected')
 
-    def run_simulation(self, path, midi_port: mido.open_output):
-        def simulate_midi(path):
+    def simulate_midi(self, path, midi_port: mido.open_output):
+        def simulate_midi_thread_function(path):
             mid = mido.MidiFile(path)
             for msg in mid.play(): 
                 if not msg.is_meta:
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
                     midi_port.send(msg)
 
-        t = threading.Thread(target=simulate_midi, args=(path,))
-        t.start()
-
-        # mid = pm.PrettyMIDI(path)
-        # instrument = mid.instruments[0]
-        
-        # for note in instrument.notes:
-        #     self.note_buffer.append({'pitch' : note.pitch, 
-        #                              'velocity' : note.velocity, 
-        #                              'start': mid.time_to_tick(note.start),
-        #                              'end': mid.time_to_tick(note.end)})
-
+        thread = threading.Thread(target=simulate_midi_thread_function, args=(path,))
+        thread.start()
 
     def get_note_buffer(self):
         return self.note_buffer
@@ -70,10 +86,23 @@ class MIDI_Input:
 
 
 class MIDI_Output:
+    '''
+    Class to send MIDI messages to a MIDI port
 
-    def __init__(self, midi_out_port, parse_message = False):
-        
-        self.midi_out_port = midi_out_port
+    Args:
+    midi_out_port_name (str): MIDI output port name
+    parse_message (bool): whether to print the message sent to the port
+    '''
+
+    def __init__(self, midi_out_port_name, parse_message = False):
+
+        try:
+            self.midi_out_port = mido.open_output(midi_out_port_name) 
+            logging.info(f'MIDI Output: Connected to port {midi_out_port_name}')
+        except:
+            self.midi_out_port = None
+            logging.error(f'MIDI Output: Could not connect to port {midi_out_port_name}, check if the port is available')
+            logging.error(f'MIDI Output Available ports: {mido.get_output_names()}')
         self.parse_message = parse_message
 
     def send_message(self, message):
@@ -97,14 +126,4 @@ class MIDI_Output:
         thread = threading.Thread(target=thread_reaper, args=(mid, parse_message))
         thread.start()
 
-
-
-
-if __name__ == '__main__':
-
-    midi_in = rtmidi.MidiIn()
-    midi_in.open_port(3)
-    print(f'MIDI Input: Connected to port {midi_in.get_port_name(3)}') 
-
-    midi_in = MIDI_Input(midi_in)
-    midi_in.run()
+    

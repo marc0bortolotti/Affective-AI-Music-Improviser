@@ -3,7 +3,7 @@ import logging
 from connections.midi_communication import MIDI_Input, MIDI_Output
 from connections.osc_connection import Server_OSC, Client_OSC, REC_MSG, SYNCH_MSG, SEND_MSG
 from connections.udp_connection import Server_UDP
-from eeg.lsl_device import LSLDevice
+from eeg.eeg_device import EEG_Device, LSLDevice
 from model.model import TCN
 from model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 import torch
@@ -35,29 +35,29 @@ TICKS_PER_BEAT = 12  # quantization of a beat
 EEG_CLASSES = ['relax', 'excited']
 
 
-def thread_function_unicorn(name):
+def thread_function_eeg(name):
     logging.info("Thread %s: starting", name)
 
     global eeg_classification_buffer
     eeg_classification_buffer = [BCI_TOKENS['concentrated']]
 
-    if unicorn is not None:
-        unicorn.start_unicorn_recording()
+    if eeg_device is not None:
+        eeg_device.start_recording()
         time.sleep(5)  # wait for signal to stabilize
 
         while True:
 
             time.sleep(WINDOW_DURATION)
-            eeg = unicorn.get_eeg_data(recording_time=WINDOW_DURATION)
-            prediction = unicorn.get_prediction(eeg)
+            eeg = eeg_device.get_eeg_data(recording_time=WINDOW_DURATION)
+            prediction = eeg_device.get_prediction(eeg)
             # eeg_classification_buffer.append(BCI_TOKENS[prediction])
 
             if APPLICATION_STATUS['STOPPED']:
                 logging.info("Thread %s: closing", name)
                 break
 
-        unicorn.stop_unicorn_recording()
-        unicorn.close()
+        eeg_device.stop_recording()
+        eeg_device.close()
 
 
 def thread_function_midi(name):
@@ -131,18 +131,18 @@ def load_model(model_dict):
     return model, device, INPUT_TOK, OUTPUT_TOK
 
 
-def initialize_application(drum_in_port,
-                           drum_out_port,
-                           bass_play_port,
-                           bass_record_port,
+def initialize_application(drum_in_port_name,
+                           drum_out_port_name,
+                           bass_play_port_name,
+                           bass_record_port_name,
                            window_duration,
                            model_dict):
     '''
     Parameters:
-    - drum_in_port (Int): MIDI input port for the drum
-    - drum_out_port (Int): MIDI output port for the drum
-    - bass_play_port (Int): MIDI output port for the bass (play)
-    - bass_record_port (Int): MIDI output port for the bass (record)
+    - drum_in_port_name (str): drum MIDI input port name
+    - drum_out_port_name (str): drum MIDI output port name
+    - bass_play_port_name (str): bass MIDI play port name
+    - bass_record_port_name (str): bass MIDI record port name
     - window_duration: duration of the window in seconds
     - model_dict: path to the model dictionary
     '''
@@ -152,9 +152,9 @@ def initialize_application(drum_in_port,
 
     logging.info('Thread Main: Starting application...')
     global midi_in, midi_out_rec, midi_out_play
-    midi_in = MIDI_Input(drum_in_port, drum_out_port)
-    midi_out_rec = MIDI_Output(bass_record_port)
-    midi_out_play = MIDI_Output(bass_play_port)
+    midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
+    midi_out_rec = MIDI_Output(bass_record_port_name)
+    midi_out_play = MIDI_Output(bass_play_port_name)
 
     # send the synchronization msg when receives the beat=1 from Reaper
     global osc_server
@@ -165,20 +165,10 @@ def initialize_application(drum_in_port,
                             bpm=BPM,
                             parse_message=False)
 
-    global unicorn
-    unicorn = None
-    unicorn = LSLDevice()
-
-    # threads
-    global thread_midi_input, thread_osc, thread_unicorn
-    thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI',))
-    thread_osc = threading.Thread(target=thread_function_osc, args=('OSC',))
-    thread_unicorn = threading.Thread(target=thread_function_unicorn, args=('Unicorn',))
-
-    # start the threads
-    thread_midi_input.start()
-    thread_osc.start()
-    thread_unicorn.start()
+    global eeg_device
+    eeg_device = EEG_Device()
+    if eeg_device.params.serial_number == 'synthetic':
+        eeg_device = LSLDevice()
 
     # load the model
     global model, device, INPUT_TOK, OUTPUT_TOK, BAR_LENGTH
@@ -187,10 +177,22 @@ def initialize_application(drum_in_port,
 
 
 def get_eeg_device():
-    return unicorn
+    return eeg_device
 
 
 def run_application():
+
+    # threads
+    global thread_midi_input, thread_osc, thread_unicorn
+    thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI',))
+    thread_osc = threading.Thread(target=thread_function_osc, args=('OSC',))
+    thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG',))
+
+    # start the threads
+    thread_midi_input.start()
+    thread_osc.start()
+    thread_eeg.start()
+    
     # start recording in Reaper
     global osc_client
     osc_client = Client_OSC(OSC_REAPER_IP, OSC_REAPER_PORT, parse_message=False)
