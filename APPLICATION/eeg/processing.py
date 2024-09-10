@@ -2,7 +2,6 @@ from mne.io import RawArray
 from mne import create_info
 from mne.channels import make_standard_montage
 import numpy as np
-from eeg.loader import unicorn_fs, unicorn_eeg_channels, synth_eeg_channels
 
 
 def generate_samples(eeg, window_size, window_overlap):
@@ -57,12 +56,12 @@ def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False):
     return this_rec
 
 
-def extract_features(eeg_samples, fs = unicorn_fs, chs = synth_eeg_channels):
+def extract_features(eeg_samples, fs, ch_names):
     eeg_features = []
 
     for i, sample in enumerate(eeg_samples):
         print(f'Processing sample: {i+1}/{len(eeg_samples)}', end='\r')
-        filtered_sample = apply_filters(sample, fs, chs)
+        filtered_sample = apply_filters(sample, fs, ch_names)
         log_var_sample = log_var_transform(filtered_sample)
         eeg_features.append(log_var_sample)
 
@@ -73,8 +72,8 @@ def extract_features(eeg_samples, fs = unicorn_fs, chs = synth_eeg_channels):
     return eeg_features
 
 
-def calculate_baseline(eeg_samples, fs = unicorn_fs, chs = unicorn_eeg_channels):
-    eeg_features = extract_features(eeg_samples, fs, chs)
+def calculate_baseline(eeg_samples, fs, ch_names):
+    eeg_features = extract_features(eeg_samples, fs, ch_names)
     baseline = np.mean(eeg_features, axis=0)
     return np.array(baseline)
 

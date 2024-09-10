@@ -14,7 +14,6 @@ import logging
 import time
 import yaml
 
-APPLICATION_STATUS = {'READY': False, 'STOPPED': False}
 
 '''---------- CONNECTION PARAMETERS ------------'''
 UDP_SERVER_IP = '127.0.0.1'
@@ -30,68 +29,6 @@ BPM = 120
 BEAT_PER_BAR = 4
 TICKS_PER_BEAT = 12  # quantization of a beat
 '''----------------------------------------------'''
-
-
-def thread_function_eeg(name):
-    logging.info("Thread %s: starting", name)
-
-    global eeg_classification_buffer
-    eeg_classification_buffer = [BCI_TOKENS['concentrated']]
-
-    if eeg_device is not None:
-        eeg_device.start_recording()
-        time.sleep(5)  # wait for signal to stabilize
-
-        while True:
-
-            time.sleep(WINDOW_DURATION)
-            eeg = eeg_device.get_eeg_data(recording_time=WINDOW_DURATION)
-            prediction = eeg_device.get_prediction(eeg)
-            # eeg_classification_buffer.append(BCI_TOKENS[prediction])
-
-            if APPLICATION_STATUS['STOPPED']:
-                logging.info("Thread %s: closing", name)
-                break
-
-        eeg_device.stop_recording()
-        eeg_device.close()
-
-
-def thread_function_midi(name):
-    logging.info("Thread %s: starting", name)
-    midi_in.run()
-    logging.info("Thread %s: closing", name)
-
-    # new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
-    # new_server.run()
-    # MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
-    # while True:
-    #     msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
-    #     if SYNCH_MSG in msg:
-    #         midi_in.run_simulation(MIDI_FILE_PATH)
-
-    #     if APPLICATION_STATUS['STOPPED']:
-    #         logging.info("Thread %s: closing", name)
-    #         break
-    # new_server.close()
-
-
-def thread_function_osc(name):
-    logging.info("Thread %s: starting", name)
-    osc_server.run()
-    logging.info("Thread %s: closing", name)
-
-
-def get_last_eeg_classification():
-    return eeg_classification_buffer[-1]
-
-
-def get_application_status():
-    return APPLICATION_STATUS
-
-
-def set_application_status(key, value):
-    APPLICATION_STATUS[key] = value
 
 
 def load_model(model_dict):
@@ -129,199 +66,262 @@ def load_model(model_dict):
     return model, device, INPUT_TOK, OUTPUT_TOK
 
 
-def initialize_application(drum_in_port_name,
-                           drum_out_port_name,
-                           bass_play_port_name,
-                           bass_record_port_name,
-                           window_duration,
-                           model_dict):
-    '''
-    Parameters:
-    - drum_in_port_name (str): drum MIDI input port name
-    - drum_out_port_name (str): drum MIDI output port name
-    - bass_play_port_name (str): bass MIDI play port name
-    - bass_record_port_name (str): bass MIDI record port name
-    - window_duration: duration of the window in seconds
-    - model_dict: path to the model dictionary
-    '''
+def thread_function_eeg(name, app):
+    logging.info("Thread %s: starting", name)
+  
 
-    global WINDOW_DURATION
-    WINDOW_DURATION = window_duration
+    if app.eeg_device is not None:
+        app.eeg_device.start_recording()
+        time.sleep(5)  # wait for signal to stabilize
 
-    logging.info('Thread Main: Starting application...')
-    global midi_in, midi_out_rec, midi_out_play
-    midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
-    midi_out_rec = MIDI_Output(bass_record_port_name)
-    midi_out_play = MIDI_Output(bass_play_port_name)
+        while True:
 
-    # send the synchronization msg when receives the beat=1 from Reaper
-    global osc_server
-    osc_server = Server_OSC(self_ip=OSC_SERVER_IP,
-                            self_port=OSC_SERVER_PORT,
-                            udp_ip=UDP_SERVER_IP,
-                            udp_port=UDP_SERVER_PORT,
-                            bpm=BPM,
-                            parse_message=False)
+            time.sleep(app.WINDOW_DURATION)
+            eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
+            prediction = app.eeg_device.get_prediction(eeg)
+            app.eeg_classification_buffer.append(BCI_TOKENS[prediction])
 
-    global eeg_device
-    eeg_device = EEG_Device()
-    if eeg_device.params.serial_number == 'synthetic':
-        eeg_device = LSLDevice()
+            if not app.STATUS['RUNNING']:
+                logging.info("Thread %s: closing", name)
+                break
 
-    # load the model
-    global model, device, INPUT_TOK, OUTPUT_TOK, BAR_LENGTH
-    model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_dict)
-    BAR_LENGTH = INPUT_TOK.BAR_LENGTH
+        app.eeg_device.stop_recording()
+        app.eeg_device.close()
 
 
-def get_eeg_device():
-    return eeg_device
+def thread_function_midi(name, app):
+    logging.info("Thread %s: starting", name)
+    app.midi_in.run()
+    logging.info("Thread %s: closing", name)
+
+    # new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
+    # new_server.run()
+    # MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
+    # while True:
+    #     msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
+    #     if SYNCH_MSG in msg:
+    #         midi_in.run_simulation(MIDI_FILE_PATH)
+
+    #     if APPLICATION_STATUS['STOPPED']:
+    #         logging.info("Thread %s: closing", name)
+    #         break
+    # new_server.close()
 
 
-def run_application():
+def thread_function_osc(name, app):
+    logging.info("Thread %s: starting", name)
+    app.osc_server.run()
+    logging.info("Thread %s: closing", name)
 
-    # threads
-    global thread_midi_input, thread_osc, thread_unicorn
-    thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI',))
-    thread_osc = threading.Thread(target=thread_function_osc, args=('OSC',))
-    thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG',))
 
-    # start the threads
-    thread_midi_input.start()
-    thread_osc.start()
-    thread_eeg.start()
-    
-    # start recording in Reaper
-    global osc_client
-    osc_client = Client_OSC(OSC_REAPER_IP, OSC_REAPER_PORT, parse_message=False)
-    osc_client.send(REC_MSG)
 
-    # it receives the synchronization msg 
-    server = Server_UDP(ip=UDP_SERVER_IP, port=UDP_SERVER_PORT, parse_message=False)
-    server.run()
 
-    APPLICATION_STATUS['READY'] = True
 
-    tokens_buffer = []
-    generated_track = None
-    hystory = []
 
-    softmax = torch.nn.Softmax(dim=1)
-    temperature = 1.0
+class AI_AffectiveMusicImproviser():
 
-    while True:
+    def __init__(self,  drum_in_port_name,
+                        drum_out_port_name,
+                        bass_play_port_name,
+                        bass_record_port_name,
+                        window_duration,
+                        model_dict):
+        '''
+        Parameters:
+        - drum_in_port_name (str): drum MIDI input port name
+        - drum_out_port_name (str): drum MIDI output port name
+        - bass_play_port_name (str): bass MIDI play port name
+        - bass_record_port_name (str): bass MIDI record port name
+        - window_duration: duration of the window in seconds
+        - model_dict: path to the model dictionary
+        '''
 
-        msg = server.get_message()  # NB: it must receive at least one packet, otherwise it will block the loop
+        self.STATUS = {'READY': True, 'RUNNING': False}
 
-        if SEND_MSG in msg:
-            if generated_track is not None:
-                midi_out_play.send_midi_to_reaper(generated_track)
+        logging.info('Thread Main: Starting application...')
+        self.midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
+        self.midi_out_rec = MIDI_Output(bass_record_port_name)
+        self.midi_out_play = MIDI_Output(bass_play_port_name)
 
-        elif SYNCH_MSG in msg:
+        # send the synchronization msg when receives the beat=1 from Reaper
+        self.osc_server = Server_OSC(self_ip=OSC_SERVER_IP,
+                                    self_port=OSC_SERVER_PORT,
+                                    udp_ip=UDP_SERVER_IP,
+                                    udp_port=UDP_SERVER_PORT,
+                                    bpm=BPM,
+                                    parse_message=False)
 
-            if generated_track is not None:
-                midi_out_rec.send_midi_to_reaper(generated_track)
+        # EEG 
+        self.eeg_device = EEG_Device()
+        if self.eeg_device.params.serial_number == 'synthetic':
+            self.eeg_device = LSLDevice()
 
-            start_time = time.time()
+        self.eeg_classification_buffer = [BCI_TOKENS['concentrated']]
+        self.WINDOW_DURATION = window_duration
+        self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
-            # get the notes from the buffer
-            notes = midi_in.get_note_buffer()
+        # AI-MODEL
+        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_dict)
+        self.model = model
+        self.device = device
+        self.INPUT_TOK = INPUT_TOK
+        self.OUTPUT_TOK = OUTPUT_TOK
+        self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
 
-            # clear the buffer
-            midi_in.clear_note_buffer()
+    def get_last_eeg_classification(self):
+        return self.eeg_classification_buffer[-1]
 
-            # tokenize the notes
-            if len(notes) > 0:
-                tokens = INPUT_TOK.real_time_tokenization(notes, get_last_eeg_classification(), 'drum')
-                tokens_buffer.append(tokens)
 
-            # if the buffer is full (3 bars), make the prediction
-            if len(tokens_buffer) == 3:
-                # Flatten the tokens buffer
-                input_data = np.array(tokens_buffer, dtype=np.int32).flatten()
+    def get_application_status(self):
+        return self.STATUS
 
-                # Convert the tokens to tensor
-                input_data = torch.LongTensor(input_data)
+    def set_application_status(self, key, value):
+        self.STATUS[key] = value
 
-                # Add the batch dimension.
-                input_data = input_data.unsqueeze(0)
+    def get_eeg_device(self):
+        return self.eeg_device
 
-                # Mask the last bar of the input data.
-                input_data = torch.cat((input_data[:, :BAR_LENGTH * 3], torch.ones([1, BAR_LENGTH], dtype=torch.long)),
-                                       dim=1)
+    def run(self):
 
-                # Make the prediction.
-                prediction = model(input_data.to(device))
-                prediction = prediction.contiguous().view(-1, len(OUTPUT_TOK.VOCAB))
+        self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
+        self.thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', self))
+        self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
 
-                # Get the predicted tokens.
-                prediction = prediction / temperature
-                prediction = softmax(prediction)
+        # start the threads
+        self.thread_midi_input.start()
+        self.thread_osc.start()
+        self.thread_eeg.start()
+        
+        # start recording in Reaper
+        self.osc_client = Client_OSC(OSC_REAPER_IP, OSC_REAPER_PORT, parse_message=False)
+        self.osc_client.send(REC_MSG)
 
-                # Get the confidence of the prediction.
+        # it receives the synchronization msg 
+        server = Server_UDP(ip=UDP_SERVER_IP, port=UDP_SERVER_PORT, parse_message=False)
+        server.run()
 
-                # confidence = torch.mean(torch.max(prediction, 1))
-                # logging.info(f"Confidence: {confidence}")
+        tokens_buffer = []
+        generated_track = None
+        hystory = []
 
-                # Get the predicted tokens.
-                predicted_tokens = torch.argmax(prediction, 1)
+        softmax = torch.nn.Softmax(dim=1)
+        temperature = 1.0
 
-                # Get the predicted sequence.
-                predicted_sequence = predicted_tokens.cpu().numpy().tolist()
+        while True:
 
-                # get only the last predicted bar
-                predicted_sequence = predicted_sequence[-BAR_LENGTH:]
+            msg = server.get_message()  # NB: it must receive at least one packet, otherwise it will block the loop
 
-                # save the hystory
-                hystory.append(tokens_buffer.copy())
-                hystory.append(predicted_sequence)
+            if SEND_MSG in msg:
+                if generated_track is not None:
+                    self.midi_out_play.send_midi_to_reaper(generated_track)
 
-                # Convert the predicted sequence to MIDI.
-                generated_track = OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=2)
+            elif SYNCH_MSG in msg:
 
-                # remove the first bar from the tokens buffer
-                tokens_buffer.pop(0)
+                if generated_track is not None:
+                    self.midi_out_rec.send_midi_to_reaper(generated_track)
 
-            logging.info(f"Elapsed time: {time.time() - start_time}")
+                start_time = time.time()
 
-        else:
-            time.sleep(0.001)
+                # get the notes from the buffer
+                notes = self.midi_in.get_note_buffer()
 
-        if APPLICATION_STATUS['STOPPED']:
-            break
+                # clear the buffer
+                self.midi_in.clear_note_buffer()
 
-    server.close()
+                # tokenize the notes
+                if len(notes) > 0:
+                    tokens = self.INPUT_TOK.real_time_tokenization(notes, self.get_last_eeg_classification(), 'drum')
+                    tokens_buffer.append(tokens)
 
-    # save the hystory in a txt file
-    with open('hystory.txt', 'w') as file:
-        for i, item in enumerate(hystory):
-            if i % 2 == 0:
-                file.write("Input: \n")
-                for bar_id, bar in enumerate(item):
-                    file.write(f"Bar {bar_id}: ")
-                    for tok in bar:
-                        file.write(INPUT_TOK.VOCAB.idx2word[tok] + ' ')
-                    file.write("\n")
+                # if the buffer is full (3 bars), make the prediction
+                if len(tokens_buffer) == 3:
+                    # Flatten the tokens buffer
+                    input_data = np.array(tokens_buffer, dtype=np.int32).flatten()
+
+                    # Convert the tokens to tensor
+                    input_data = torch.LongTensor(input_data)
+
+                    # Add the batch dimension.
+                    input_data = input_data.unsqueeze(0)
+
+                    # Mask the last bar of the input data.
+                    input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.ones([1, self.BAR_LENGTH], dtype=torch.long)),
+                                        dim=1)
+
+                    # Make the prediction.
+                    prediction = self.model(input_data.to(self.device))
+                    prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
+
+                    # Get the predicted tokens.
+                    prediction = prediction / temperature
+                    prediction = softmax(prediction)
+
+                    # Get the confidence of the prediction.
+
+                    # confidence = torch.mean(torch.max(prediction, 1))
+                    # logging.info(f"Confidence: {confidence}")
+
+                    # Get the predicted tokens.
+                    predicted_tokens = torch.argmax(prediction, 1)
+
+                    # Get the predicted sequence.
+                    predicted_sequence = predicted_tokens.cpu().numpy().tolist()
+
+                    # get only the last predicted bar
+                    predicted_sequence = predicted_sequence[-self.BAR_LENGTH:]
+
+                    # save the hystory
+                    hystory.append(tokens_buffer.copy())
+                    hystory.append(predicted_sequence)
+
+                    # Convert the predicted sequence to MIDI.
+                    generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=2)
+
+                    # remove the first bar from the tokens buffer
+                    tokens_buffer.pop(0)
+
+                logging.info(f"Elapsed time: {time.time() - start_time}")
+
             else:
-                file.write("Output: \n")
-                for tok in item:
-                    file.write(OUTPUT_TOK.VOCAB.idx2word[tok] + ' ')
-                file.write("\n\n")
+                time.sleep(0.001)
+
+            if not self.STATUS['RUNNING']:
+                break
+
+        server.close()
+
+        # save the hystory in a txt file
+        with open('hystory.txt', 'w') as file:
+            for i, item in enumerate(hystory):
+                if i % 2 == 0:
+                    file.write("Input: \n")
+                    for bar_id, bar in enumerate(item):
+                        file.write(f"Bar {bar_id}: ")
+                        for tok in bar:
+                            file.write(self.INPUT_TOK.VOCAB.idx2word[tok] + ' ')
+                        file.write("\n")
+                else:
+                    file.write("Output: \n")
+                    for tok in item:
+                        file.write(self.OUTPUT_TOK.VOCAB.idx2word[tok] + ' ')
+                    file.write("\n\n")
 
 
-def close_application():
-    logging.info('Thread Main: Closing application...')
+    def close(self):
+        logging.info('Thread Main: Closing application...')
 
-    # close the threads
-    midi_in.close()
-    thread_midi_input.join()
+        self.STATUS('RUNNING', False)
 
-    osc_server.close()  # serve_forever() must be closed outside the thread
-    thread_osc.join()
+        # close the threads
+        self.midi_in.close()
+        self.thread_midi_input.join()
 
-    thread_unicorn.join()
+        self.osc_server.close()  # serve_forever() must be closed outside the thread
+        self.thread_osc.join()
 
-    # stop recording in Reaper
-    osc_client.send(REC_MSG)
+        self.thread_eeg.join()
 
-    logging.info('All done')
+        # stop recording in Reaper
+        self.osc_client.send(REC_MSG)
+
+        logging.info('All done')

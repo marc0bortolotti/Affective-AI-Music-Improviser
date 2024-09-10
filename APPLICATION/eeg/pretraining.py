@@ -2,7 +2,6 @@ import time
 import numpy as np
 import logging
 from eeg.processing import generate_samples
-from eeg.classification import get_eeg_classifiers
 import simpleaudio
 
 relax_music = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/The_Scientist.wav')
@@ -13,7 +12,7 @@ white_noise = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/White
 def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
     logging.info("Pretraining: Start Training")
 
-    steps = 2
+    steps = 1
 
     # start recording eeg
     eeg_device.start_recording()
@@ -55,23 +54,22 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
     eeg_samples_baseline = np.concatenate(eeg_samples_baseline)
     eeg_samples_relax = np.concatenate(eeg_samples_relax)
     eeg_samples_excited = np.concatenate(eeg_samples_excited)
+    eeg_samples_classes = [eeg_samples_relax, eeg_samples_excited]
 
     # stop recording eeg
     eeg_device.stop_recording()
 
     #------------CLASSIFICATION----------------
-    scaler, svm_model, lda_model, baseline = get_eeg_classifiers(eeg_samples_baseline,
-                                                                 [eeg_samples_relax, eeg_samples_excited])
-
+    scaler, svm_model, lda_model, baseline = eeg_device.fit_classifier(eeg_samples_baseline, eeg_samples_classes)
     logging.info("Pretraining: Training Finished")
     return scaler, svm_model, lda_model, baseline
 
 
-def validation(eeg_device, WINDOW_DURATION):
+def validation(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
     logging.info("Validation: Start Validation")
 
     # start recording eeg
-    eeg_device.start_unicorn_recording()
+    eeg_device.start_recording()
     time.sleep(7)  # wait for signal to stabilize
 
     eeg_samples_classes = []
@@ -81,14 +79,14 @@ def validation(eeg_device, WINDOW_DURATION):
     play = relax_music.play()
     play.wait_done()
     eeg = eeg_device.get_eeg_data(recording_time=60)
-    eeg_samples_classes.append(generate_samples(eeg, WINDOW_DURATION))
+    eeg_samples_classes.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
     # Excited (1 minute)
     logging.info("Validation: Play an excited rythm for 60 seconds")
     play = excited_music.play()
     play.wait_done()
     eeg = eeg_device.get_eeg_data(recording_time=60)
-    eeg_samples_classes.append(generate_samples(eeg, WINDOW_DURATION))
+    eeg_samples_classes.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
     # stop recording eeg
     eeg_device.stop_recording()
