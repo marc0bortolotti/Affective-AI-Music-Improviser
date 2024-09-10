@@ -90,22 +90,21 @@ def thread_function_eeg(name, app):
 
 
 def thread_function_midi(name, app):
-    logging.info("Thread %s: starting", name)
-    app.midi_in.run()
+    logging.info("Thread %s: starting", name)   
+    MIDI_FILE_PATH = 'APPLICATION/connections/midi_simulation_tracks/drum_rock_relax.mid'
+    if app.STATUS['SIMULATION']:
+        while True:
+            msg = app.SERVER.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
+            if SYNCH_MSG in msg:
+                app.midi_in.run_simulation(MIDI_FILE_PATH)
+
+            if not app.STATUS['RUNNING']:
+                logging.info("Thread %s: closing", name)
+                break
+    else:
+        app.midi_in.run()
+
     logging.info("Thread %s: closing", name)
-
-    # new_server = Server_UDP(ip= UDP_SERVER_IP, port= 1111)
-    # new_server.run()
-    # MIDI_FILE_PATH = os.path.join(PROJECT_PATH, 'TCN/dataset/test/drum_rock_relax_one_bar.mid')
-    # while True:
-    #     msg = new_server.get_message() # NB: it must receive at least one packet, otherwise it will block the loop
-    #     if SYNCH_MSG in msg:
-    #         midi_in.run_simulation(MIDI_FILE_PATH)
-
-    #     if APPLICATION_STATUS['STOPPED']:
-    #         logging.info("Thread %s: closing", name)
-    #         break
-    # new_server.close()
 
 
 def thread_function_osc(name, app):
@@ -136,7 +135,7 @@ class AI_AffectiveMusicImproviser():
         - model_dict: path to the model dictionary
         '''
 
-        self.STATUS = {'READY': True, 'RUNNING': False}
+        self.STATUS = {'READY': False, 'RUNNING': False, 'SIMULATION': False}
 
         logging.info('Thread Main: Starting application...')
         self.midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
@@ -168,6 +167,10 @@ class AI_AffectiveMusicImproviser():
         self.OUTPUT_TOK = OUTPUT_TOK
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
 
+        # set the application status
+        self.set_application_status('READY', True)
+
+
     def get_last_eeg_classification(self):
         return self.eeg_classification_buffer[-1]
 
@@ -197,8 +200,8 @@ class AI_AffectiveMusicImproviser():
         self.osc_client.send(REC_MSG)
 
         # it receives the synchronization msg 
-        server = Server_UDP(ip=UDP_SERVER_IP, port=UDP_SERVER_PORT, parse_message=False)
-        server.run()
+        self.SERVER = Server_UDP(ip=UDP_SERVER_IP, port=UDP_SERVER_PORT, parse_message=False)
+        self.SERVER.run()
 
         tokens_buffer = []
         generated_track = None
@@ -209,7 +212,7 @@ class AI_AffectiveMusicImproviser():
 
         while True:
 
-            msg = server.get_message()  # NB: it must receive at least one packet, otherwise it will block the loop
+            msg = self.SERVER.get_message()  # NB: it must receive at least one packet, otherwise it will block the loop
 
             if SEND_MSG in msg:
                 if generated_track is not None:
@@ -288,7 +291,7 @@ class AI_AffectiveMusicImproviser():
             if not self.STATUS['RUNNING']:
                 break
 
-        server.close()
+        self.SERVER.close()
 
         # save the hystory in a txt file
         with open('hystory.txt', 'w') as file:

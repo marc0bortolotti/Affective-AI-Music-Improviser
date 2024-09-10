@@ -47,6 +47,9 @@ if __name__ == "__main__":
                                       bass_record_port_name, 
                                       WINDOW_DURATION, 
                                       MODEL_DICT)
+    
+
+    app.set_application_status('SIMULATION', True)
 
     # train the EEG classification model
     scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
