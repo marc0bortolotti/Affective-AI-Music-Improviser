@@ -1,17 +1,13 @@
 import time
 from pythonosc.dispatcher import Dispatcher
-from pythonosc import osc_message_builder
-from pythonosc import udp_client
 from pythonosc import osc_server
+from pythonosc.udp_client import SimpleUDPClient
 import os
 import mido
-from connections.udp_connection import Server_UDP, Client_UDP
 import threading
 import logging
 
 
-SYNCH_MSG = "Click:1"
-SEND_MSG = "Action:sendToReaper"
 REC_MSG = '/action/_SWS_RECTOGGLE'
 
 ESTIMATED_LATENCY_FOR_RX = 0.25 # in seconds
@@ -24,30 +20,25 @@ class Client_OSC:
     self.ip = ip
     self.port = port
     self.parse_message = parse_message
-    self.client = udp_client.UDPClient(ip, port)
+    self.client = SimpleUDPClient(ip, port)
 
-  def send(self, msg):
-    decoded_msg = osc_message_builder.OscMessageBuilder(address = msg).build()
-    self.client.send(decoded_msg)
+  def send(self, msg, value):
+    self.client.send_message(msg, value)
     if self.parse_message:
-      logging.info(f"OSC Client: sent message <<{msg}>> to Reaper on {self.ip}:{self.port}")
+      logging.info(f"OSC Client: sent message <<{msg, value}>> to Reaper on {self.ip}:{self.port}")
 
 
 
 class Server_OSC:
 
-  def __init__(self, self_ip, self_port, udp_ip, udp_port, bpm, parse_message = False):
+  def __init__(self, ip, port, bpm, parse_message = False):
     self.parse_message = parse_message
     
     self.BEAT_DURATION = 60/bpm
     self.last_beat = None 
     self.record_started = False
     self.exit = False
-
-    # to send a synchronization msg
-    self.udp_ip = udp_ip 
-    self.udp_port = udp_port
-    self.udp_client = Client_UDP('Click', parse_message=self.parse_message)
+    self.synch_event = None
 
     # OSC manager
     self.dispatcher = Dispatcher()
@@ -55,17 +46,18 @@ class Server_OSC:
     self.dispatcher.map("/record", self.record_handler, "Record")
     self.dispatcher.map("/beat/str", self.beat_handler, "Beat")
 
-    self.server = osc_server.ThreadingOSCUDPServer((self_ip, self_port), self.dispatcher)
+    self.server = osc_server.ThreadingOSCUDPServer((ip, port), self.dispatcher)
   
-
   def run(self):
     logging.info("OSC Server: running on {}".format(self.server.server_address))
     self.server.serve_forever()
 
-
   def print_message(self, unused_addr, args):
     if self.parse_message:
       logging.info(args)
+
+  def set_event(self, event):
+    self.synch_event = event
 
   def beat_handler(self, unused_addr, args, bar_beat_ticks):
     if not self.exit:
@@ -81,18 +73,9 @@ class Server_OSC:
           logging.info("{0}: {1}".format(args[0], bar_beat_ticks))
           logging.info(f'Delay: {delay} ms')
         if beat == 4:
-          # while True:
-          #   if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX - ESTIMATED_LATENCY_FOR_TX):
-          #     self.udp_client.send(SEND_MSG, self.udp_ip, self.udp_port)
-          #     self.udp_client.send(SEND_MSG, self.udp_ip, 1111)
-          #     break 
-          #   else:
-          #     time.sleep(0.001)
-
           while True:
             if time.time() - start_time >= (self.BEAT_DURATION - delay - ESTIMATED_LATENCY_FOR_RX):
-              self.udp_client.send(SYNCH_MSG, self.udp_ip, self.udp_port)
-              self.udp_client.send(SYNCH_MSG, self.udp_ip, 1111)
+              self.synch_event.set()
               break 
             else:
               time.sleep(0.001)

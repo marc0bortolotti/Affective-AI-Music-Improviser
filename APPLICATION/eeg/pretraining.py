@@ -3,10 +3,12 @@ import numpy as np
 import logging
 from eeg.processing import generate_samples
 import simpleaudio
+import os
 
-relax_music = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/The_Scientist.wav')
-excited_music = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/Blitzkrieg_Bop.wav')
-white_noise = simpleaudio.WaveObject.from_wave_file('APPLICATION/app/music/White_Noise.wav')
+file_path = os.path.dirname(__file__)
+relax_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/The_Scientist.wav')
+excited_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/Blitzkrieg_Bop.wav')
+white_noise = simpleaudio.WaveObject.from_wave_file(file_path + '/music/White_Noise.wav')
 
 
 def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):

@@ -24,6 +24,9 @@ WINDOW_OVERLAP = 0.875 # percentage
 PROJECT_PATH = os.path.dirname(__file__)
 MODEL_DICT = os.path.join(PROJECT_PATH, 'model/trained_models/model')
 
+# APPLICATION PARAMETERS
+SIMULATION = True
+USE_EEG = False
 
 if __name__ == "__main__":
 
@@ -40,6 +43,7 @@ if __name__ == "__main__":
     drum_out_port_name = 'Drum Out Port 1'
     bass_play_port_name = 'Bass Out Port Playing 3'
     bass_record_port_name = 'Bass Out Port Recording 2'
+    simulation_port_name = 'Simulation Port 5' # output port for MIDI simulation
 
     app = AI_AffectiveMusicImproviser(drum_in_port_name, 
                                       drum_out_port_name, 
@@ -48,20 +52,23 @@ if __name__ == "__main__":
                                       WINDOW_DURATION, 
                                       MODEL_DICT)
     
+    if SIMULATION:
+        app.set_application_status('SIMULATION', SIMULATION)
+        app.midi_in.set_midi_simulation_port(simulation_port_name)
 
-    app.set_application_status('SIMULATION', True)
+    if USE_EEG:
+        app.set_application_status('EEG', True)
+        # train the EEG classification model
+        scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
+        command = input('Set EEG model (lda/svm): ')
+        if command == 'lda':
+            classifier = lda_model
+        else:
+            classifier = svm_model
+        app.eeg_device.set_classifier(scaler = scaler, classifier = classifier, baseline = baseline)
 
-    # train the EEG classification model
-    scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
-    command = input('Set EEG model (lda/svm): ')
-    if command == 'lda':
-        classifier = lda_model
-    else:
-        classifier = svm_model
-    app.eeg_device.set_classifier(scaler = scaler, classifier = classifier, baseline = baseline)
-
-    # Validate the EEG classifier
-    validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
+        # Validate the EEG classifier
+        validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
     
     command = input('Do you want to start the application? (y/n): ')
 

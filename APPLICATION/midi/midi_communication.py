@@ -41,6 +41,7 @@ class MIDI_Input:
         self.note_buffer = []
         self.exit = False
         self.parse_message = parse_message
+        self.midi_simulation_port = None
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -62,15 +63,18 @@ class MIDI_Input:
         self.midi_in_port.close_port()
         logging.info(f'MIDI Input: Disconnected')
 
-    def simulate_midi(self, path, midi_port: mido.open_output):
-        def simulate_midi_thread_function(path):
+    def set_midi_simulation_port(self, midi_simulation_port):
+        self.midi_simulation_port = mido.open_output(midi_simulation_port)
+
+    def simulate(self, path):
+        def thread_function(path):
             mid = mido.MidiFile(path)
             for msg in mid.play(): 
-                if not msg.is_meta:
+                if not msg.is_meta and msg.type != 'control_change':
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
-                    midi_port.send(msg)
+                    self.midi_simulation_port.send(msg)
 
-        thread = threading.Thread(target=simulate_midi_thread_function, args=(path,))
+        thread = threading.Thread(target=thread_function, args=(path,))
         thread.start()
 
     def get_note_buffer(self):

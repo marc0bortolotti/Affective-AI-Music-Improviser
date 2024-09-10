@@ -1,6 +1,5 @@
 import socket
 import logging
-import time
 
 
 class Server_UDP:
@@ -17,7 +16,6 @@ class Server_UDP:
     def run(self):
         self.sock.bind((self.ip, self.port))
         logging.info(f"UDP Server {self.ip}:{self.port}: started")
-
 
     def get_message(self):
         data, addr = self.sock.recvfrom(self.window_size)
