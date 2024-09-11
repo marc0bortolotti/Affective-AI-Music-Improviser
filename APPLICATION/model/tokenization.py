@@ -15,7 +15,7 @@ NOTE_START_TOKEN = 'S'
 VELOCITY_PIANO_TOKEN = 'p'
 VELOCITY_FORTE_TOKEN = 'f'
 SILENCE_TOKEN = 'O'
-BCI_TOKENS = {'relaxed': 'R', 'concentrated': 'C'}
+BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
 
 
@@ -328,6 +328,7 @@ class PrettyMidiTokenizer(object):
       if emotion_token is not None:
         seq = np.concatenate(([emotion_token], seq[:-1])) 
 
+      # convert string tokens into integer tokens
       for i in range(len(seq)):
         if self.VOCAB.is_in_vocab(seq[i]):
           seq[i] = self.VOCAB.word2idx[seq[i]] 

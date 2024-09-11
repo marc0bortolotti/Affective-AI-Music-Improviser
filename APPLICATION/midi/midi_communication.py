@@ -1,10 +1,9 @@
 import time
 import rtmidi
 import logging
-from mido import MidiFile, MidiTrack, Message, MetaMessage
 import mido
-import pretty_midi as pm
 import threading
+import os
 
 class MIDI_Input:
     '''
@@ -66,7 +65,10 @@ class MIDI_Input:
     def set_midi_simulation_port(self, midi_simulation_port):
         self.midi_simulation_port = mido.open_output(midi_simulation_port)
 
-    def simulate(self, path):
+    def simulate(self, path=None):
+
+        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks\drum_rock_relax.mid')
+
         def thread_function(path):
             mid = mido.MidiFile(path)
             for msg in mid.play(): 

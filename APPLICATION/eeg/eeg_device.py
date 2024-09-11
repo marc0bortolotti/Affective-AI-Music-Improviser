@@ -12,50 +12,70 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn import svm
 from pylsl import resolve_stream, StreamInlet
 import pylsl 
+import pickle
+import os
+from brainflow.data_filter import DataFilter
+
+EEG_DEVICE_BOARD_TYPES = {'SYNTHETIC': BoardIds.SYNTHETIC_BOARD.value,
+                          'UNICORN':   BoardIds.UNICORN_BOARD.value , 
+                          'ENOPHONE':  BoardIds.ENOPHONE_BOARD.value , 
+                          'LSL':       'LSL'}
 
 def retrieve_eeg_devices():
-    saved_devices = bluetooth.discover_devices(duration=1, lookup_names=True, lookup_class=True)
+    saved_devices = bluetooth.discover_devices(duration=2, flush_cache=True, lookup_names=True, lookup_class=True)
     unicorn_devices = list(filter(lambda x: re.search(r'UN-\d{4}.\d{2}.\d{2}', x[1]), saved_devices))
     enophone_devices = list(filter(lambda x: re.search(r'enophone', x[1]), saved_devices))
     return unicorn_devices, enophone_devices
 
 class EEG_Device:
+    def __init__(self, device_board_type):
 
-    def __init__(self):
+        self.device_board_type = device_board_type
 
-        self.exit = False
-
-        # recordings raw data
-        self.recording_data = None
+        self.recording_data = None # recordings raw data
+        self.streams = None
 
         self.classifier = None
         self.scaler = None
         self.baseline = None
     
         self.params = BrainFlowInputParams()
-        logging.info("EEG Device: searching for devices...")
-        
-        unicorn_devices, enophone_devices = retrieve_eeg_devices()
 
-        if len(unicorn_devices) > 0:
-            self.params.serial_number = unicorn_devices[0][1]
-            self.params.board_id = BoardIds.UNICORN_BOARD.value
-            
-        elif len(enophone_devices) > 0:
-            self.params.serial_number = enophone_devices[0][1]
-            self.params.board_id = BoardIds.ENOPHONE_BOARD.value
+        if not self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']: 
 
-        else:
-            logging.info("EEG Device: no devices found, run a synthetic device")
-            self.params.serial_number = 'synthetic'
-            return 
+            logging.info("EEG Device: searching for devices...")
+            unicorn_devices, enophone_devices = retrieve_eeg_devices()
+            self.params.board_id = self.device_board_type
 
-        self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
-        self.board = BoardShim(self.params.board_id, self.params)
-        self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
-        logging.info(f"EEG Device: connected to {self.params.serial_number}")
-        
-        self.board.prepare_session()
+            if self.device_board_type == EEG_DEVICE_BOARD_TYPES['UNICORN']:
+                if len(unicorn_devices) > 1:
+                    print("Available Unicorn devices:")
+                    for i, device in enumerate(unicorn_devices):
+                        print(f"\t{i}: {device[1]}")
+                    id = input('Select the Unicorn device:(0/1/2/...): ')
+                    self.params.serial_number = unicorn_devices[int(id)][1]
+                elif unicorn_devices:
+                    self.params.serial_number = unicorn_devices[0][1]
+                else:
+                    logging.error("EEG Device: Unicorn device not found")
+            elif self.device_board_type == EEG_DEVICE_BOARD_TYPES['ENOPHONE']:
+                if enophone_devices:
+                    self.params.serial_number = enophone_devices[0][1]
+                else:
+                    logging.error("EEG Device: Enophone device not found")
+            else:
+                self.params.serial_number = 'SYNTHETIC_BOARD'
+
+            self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
+            self.board = BoardShim(self.params.board_id, self.params)
+            self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
+            logging.info(f"EEG Device: connected to {self.params.serial_number}")
+
+            try:
+                self.board.prepare_session()
+            except Exception as e:
+                logging.error(f"EEG Device: {e}")
+                self.board.release_session()
         
     def stop_recording(self):
         self.recording_data = self.board.get_board_data()
@@ -63,23 +83,66 @@ class EEG_Device:
         logging.info('EEG Device: stop recording')
 
     def start_recording(self):
-        self.board.start_stream()
+        if self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']:
+            logging.info('LSLDevice: looking for a stream')
+            while not self.streams:
+                self.streams = resolve_stream()
+                time.sleep(1)
+            logging.info("LSL stream found: {}".format(self.streams[0].name()))
+            self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
+        else:
+            self.board.start_stream()
         logging.info('EEG Device: start recording')
 
-    def get_eeg_data(self, recording_time=4):
-        data = self.board.get_current_board_data(num_samples=self.sample_frequency * recording_time)
-        data = np.array(data).T
-        data = data[:, 0:len(self.ch_names)]
-        data = data[- recording_time * self.sample_frequency : ]
+    def get_eeg_data(self, recording_time=4, chunk = False):
+        if self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']: 
+            try:
+                if chunk:
+                    data, timestamps = self.inlet.pull_chunk(timeout=recording_time, max_samples=int(recording_time * self.sr))
+                else:
+                    data, timestamps = self.inlet.pull_sample()
+                data = np.array(data)
+                data = data[:, 0:self.n_eeg_channels]
+            except Exception as e:
+                logging.error(f"LSLDevice: {e}")
+        else:
+            data = self.board.get_current_board_data(num_samples=self.sample_frequency * recording_time)
+            data = np.array(data).T
+            data = data[:, 0:len(self.ch_names)]
+            data = data[- recording_time * self.sample_frequency : ]
         return data
     
     def close(self):
-        self.board.release_session()
-        self.exit = True
+        if self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']:
+            self.inlet.close_stream()
+        else:
+            self.recording_data = self.board.get_board_data()
+            self.board.release_session()
         logging.info('EEG Device: disconnected')
     
     def get_classifier(self):
         return self.classifier, self.scaler, self.baseline
+    
+    def save_classifier(self, path, scaler, lda_model, svm_model, baseline):
+        # Save the scaler 
+        with open(os.path.join(path, 'scaler.pkl'), 'wb') as pickle_file:
+            pickle.dump(scaler, pickle_file)
+        # Save the LDA model
+        with open(os.path.join(path, 'LDA_model.pkl'), 'wb') as pickle_file:
+            pickle.dump(lda_model, pickle_file)
+        # Save the SVM model
+        with open(os.path.join(path, 'SVM_model.pkl'), 'wb') as pickle_file:
+            pickle.dump(svm_model, pickle_file)
+        # Save the baseline
+        with open(os.path.join(path, 'baseline.pkl'), 'wb') as pickle_file:
+            pickle.dump(baseline, pickle_file)
+    
+    def load_classifier(self, path):
+        lda_model = pickle.load(open(os.path.join(path, 'LDA_model.pkl'), 'rb'))
+        svm_model = pickle.load(open(os.path.join(path, 'SVM_model.pkl'), 'rb'))
+        scaler = pickle.load(open(os.path.join(path, 'scaler.pkl'), 'rb'))
+        baseline = pickle.load(open(os.path.join(path, 'baseline.pkl'), 'rb'))
+        return scaler, lda_model, svm_model, baseline
 
     def set_classifier(self, baseline, scaler, classifier):
         self.baseline = baseline
@@ -95,10 +158,12 @@ class EEG_Device:
         try:
             sample = self.scaler.transform(eeg_features_corrected)
             prediction = self.classifier.predict(sample)
+            print(prediction)
+            prediction = int(prediction[0])
         except:
             logging.info('Unicorn: no classifier set')
-            prediction = 0
-        
+            prediction = None
+
         return prediction
 
     def get_metrics(self, eeg_samples_classes):
@@ -165,49 +230,8 @@ class EEG_Device:
 
         return scaler, svm_model, lda_model, baseline
 
-
-
-
-
-
-class LSLDevice(EEG_Device):
-    def __init__(self, n_eeg_channels=8, name="Cortex EEG", type="EEG", sampling_rate=250):
-        self.sr = sampling_rate
-        self.name = name
-        self.type = type
-        self.streams = []
-        self.inlet = None
-        self.n_eeg_channels = n_eeg_channels
-
-    def __str__(self):
-        return f"LSLDevice(name={self.name}, type={self.type}, stream={self.streams})"
-
-    def __repr__(self):
-        return str(self)
-
-    def stop_recording(self):
-        self.inlet.close_stream()
-        logging.info('LSLDevice: stop recording')
-
-    def start_recording(self):
-        logging.info('LSLDevice: looking for a stream')
-        while not self.streams:
-            self.streams = resolve_stream('name', self.name)
-            time.sleep(1)
-        logging.info("LSL stream found: {}".format(self.streams[0].name()))
-        self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
-
-    def get_eeg_data(self, recording_time=4, chunk=True):
-        try:
-            if chunk:
-                data, timestamps = self.inlet.pull_chunk(timeout=recording_time, max_samples=int(recording_time * self.sr))
-            else:
-                data, timestamps = self.inlet.pull_sample()
-            data = np.array(data)
-            data = data[:, 0:self.n_eeg_channels]
-            
-            logging.info(f"LSLDevice: {data.shape}")
-            return data
-        except Exception as e:
-            logging.error(f"LSLDevice: {e}")
+    def save_session(self, path):
+        if self.recording_data is not None:
+            DataFilter.write_file(self.recording_data, path, "w")
+        
 

@@ -2,7 +2,7 @@ import threading
 import logging
 from midi.midi_communication import MIDI_Input, MIDI_Output
 from osc.osc_connection import Server_OSC, Client_OSC, REC_MSG
-from eeg.eeg_device import EEG_Device, LSLDevice
+from eeg.eeg_device import EEG_Device
 from model.model import TCN
 from model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 import torch
@@ -63,21 +63,18 @@ def load_model(model_dict):
 
     return model, device, INPUT_TOK, OUTPUT_TOK
 
-
-
-
 def thread_function_eeg(name, app):
     logging.info("Thread %s: starting", name)
 
-    if not app.STATUS['EEG']:
+    if app.STATUS['USE_EEG']:
         app.eeg_device.start_recording()
         time.sleep(5)  # wait for signal to stabilize
 
         while True:
             time.sleep(app.WINDOW_DURATION)
             eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
-            # prediction = app.eeg_device.get_prediction(eeg)
-            # app.eeg_classification_buffer.append(BCI_TOKENS[prediction])
+            prediction = app.eeg_device.get_prediction(eeg) 
+            app.eeg_classification_buffer.append(BCI_TOKENS[prediction])
 
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
@@ -87,13 +84,12 @@ def thread_function_eeg(name, app):
 
 def thread_function_midi(name, app):
     logging.info("Thread %s: starting", name)   
-    MIDI_FILE_PATH = 'APPLICATION/connections/midi_simulation_tracks/drum_rock_relax.mid'
-    if app.STATUS['SIMULATION']:
+    if app.STATUS['SIMULATE_MIDI']:
         while True:
             SYNCH_EVENT.wait()
             SYNCH_EVENT.clear()
             print('Event get')
-            app.midi_in.simulate(MIDI_FILE_PATH)
+            app.midi_in.simulate()
 
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
@@ -101,7 +97,6 @@ def thread_function_midi(name, app):
     else:
         app.midi_in.run()
     logging.info("Thread %s: closing", name)
-
 
 def thread_function_osc(name, app):
     logging.info("Thread %s: starting", name)
@@ -118,6 +113,7 @@ class AI_AffectiveMusicImproviser():
                         drum_out_port_name,
                         bass_play_port_name,
                         bass_record_port_name,
+                        eeg_device_type,
                         window_duration,
                         model_dict):
         '''
@@ -132,8 +128,8 @@ class AI_AffectiveMusicImproviser():
 
         self.STATUS = {'READY': False, 
                        'RUNNING': False, 
-                       'SIMULATION': False,
-                       'EEG': False}
+                       'SIMULATE_MIDI': False,
+                       'USE_EEG': False}
 
         logging.info('Thread Main: Starting application...')
         self.midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
@@ -145,11 +141,8 @@ class AI_AffectiveMusicImproviser():
         self.osc_client = Client_OSC(OSC_REAPER_IP, OSC_REAPER_PORT, parse_message=False)
 
         # EEG 
-        self.eeg_device = EEG_Device()
-        if self.eeg_device.params.serial_number == 'synthetic':
-            self.eeg_device = LSLDevice()
-
-        self.eeg_classification_buffer = [BCI_TOKENS['concentrated']]
+        self.eeg_device = EEG_Device(eeg_device_type)
+        self.eeg_classification_buffer = [BCI_TOKENS[0]]
         self.WINDOW_DURATION = window_duration
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
@@ -299,7 +292,7 @@ class AI_AffectiveMusicImproviser():
     def close(self):
         logging.info('Thread Main: Closing application...')
 
-        self.STATUS('RUNNING', False)
+        self.set_application_status('RUNNING', False)
 
         # close the threads
         self.midi_in.close()
@@ -311,6 +304,6 @@ class AI_AffectiveMusicImproviser():
         self.thread_eeg.join()
 
         # stop recording in Reaper
-        self.osc_client.send(REC_MSG)
+        self.osc_client.send(REC_MSG, 1)
 
         logging.info('All done')

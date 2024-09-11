@@ -11,10 +11,8 @@ excited_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/Blitzk
 white_noise = simpleaudio.WaveObject.from_wave_file(file_path + '/music/White_Noise.wav')
 
 
-def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
+def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1):
     logging.info("Pretraining: Start Training")
-
-    steps = 1
 
     # start recording eeg
     eeg_device.start_recording()

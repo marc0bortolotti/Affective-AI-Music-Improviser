@@ -5,6 +5,7 @@ import rtmidi
 import os
 from app.application import AI_AffectiveMusicImproviser
 from eeg.pretraining import pretraining, validation
+from eeg.eeg_device import EEG_DEVICE_BOARD_TYPES
 import threading
 import brainflow
 
@@ -19,14 +20,18 @@ logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 # EEG PARAMETERS
 WINDOW_DURATION = 4 # seconds
 WINDOW_OVERLAP = 0.875 # percentage
+EEG_DEVICE_TYPE = EEG_DEVICE_BOARD_TYPES['UNICORN'] # 'SYNTHETIC', 'UNICORN', 'ENOPHONE', 'LSL'
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
 MODEL_DICT = os.path.join(PROJECT_PATH, 'model/trained_models/model')
+SAVE_PATH = os.path.join(PROJECT_PATH, 'output')
 
 # APPLICATION PARAMETERS
-SIMULATION = True
-USE_EEG = False
+SIMULATE_MIDI = False
+USE_EEG = True
+EEG_TRAINING = False
+TRAINING_SESSIONS = 3
 
 if __name__ == "__main__":
 
@@ -39,36 +44,47 @@ if __name__ == "__main__":
         print('\t',port)
     print('\n')
 
-    drum_in_port_name = 'Drum In Port 3'
-    drum_out_port_name = 'Drum Out Port 1'
-    bass_play_port_name = 'Bass Out Port Playing 3'
-    bass_record_port_name = 'Bass Out Port Recording 2'
-    simulation_port_name = 'Simulation Port 5' # output port for MIDI simulation
+    DRUM_IN_PORT_NAME = 'Drum In Port 3'
+    DRUM_OUT_PORT_NAME = 'Drum Out Port 1'
+    BASS_PLAY_PORT_NAME = 'Bass Out Port Playing 3'
+    BASS_RECORD_PORT_NAME = 'Bass Out Port Recording 2'
+    SIMULATION_PORT_NAME = 'Simulation Port 5' # output port for MIDI simulation
 
-    app = AI_AffectiveMusicImproviser(drum_in_port_name, 
-                                      drum_out_port_name, 
-                                      bass_play_port_name, 
-                                      bass_record_port_name, 
+    app = AI_AffectiveMusicImproviser(DRUM_IN_PORT_NAME, 
+                                      DRUM_OUT_PORT_NAME, 
+                                      BASS_PLAY_PORT_NAME, 
+                                      BASS_RECORD_PORT_NAME, 
+                                      EEG_DEVICE_TYPE,
                                       WINDOW_DURATION, 
                                       MODEL_DICT)
     
-    if SIMULATION:
-        app.set_application_status('SIMULATION', SIMULATION)
-        app.midi_in.set_midi_simulation_port(simulation_port_name)
+    if SIMULATE_MIDI:
+        app.set_application_status('SIMULATE_MIDI', True)
+        app.midi_in.set_midi_simulation_port(SIMULATION_PORT_NAME)
 
     if USE_EEG:
-        app.set_application_status('EEG', True)
-        # train the EEG classification model
-        scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
-        command = input('Set EEG model (lda/svm): ')
-        if command == 'lda':
-            classifier = lda_model
-        else:
-            classifier = svm_model
-        app.eeg_device.set_classifier(scaler = scaler, classifier = classifier, baseline = baseline)
+        app.set_application_status('USE_EEG', True)
 
-        # Validate the EEG classifier
-        validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
+    if EEG_TRAINING:
+        # train the EEG classification model
+        scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS)
+
+        # Save the EEG classifier and the EEG raw data
+        app.eeg_device.save_session(os.path.join(SAVE_PATH, 'pretraining.csv'))
+        app.eeg_device.save_classifier(SAVE_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
+    else:
+        scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(SAVE_PATH)
+    
+    command = input('Set EEG model (lda/svm): ')
+    if command == 'lda':
+        classifier = lda_model
+    else:
+        classifier = svm_model
+    app.eeg_device.set_classifier(baseline=baseline, classifier=classifier, scaler=scaler)
+
+    # Validate the EEG classifier
+    validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP)
+    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'validation.csv'))
     
     command = input('Do you want to start the application? (y/n): ')
 
@@ -77,7 +93,10 @@ if __name__ == "__main__":
         thread_app.start()
 
         time.sleep(2*60)
+
         app.close()
+        app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+
         thread_app.join()
 
     

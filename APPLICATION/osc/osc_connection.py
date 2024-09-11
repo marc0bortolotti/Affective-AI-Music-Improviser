@@ -2,15 +2,12 @@ import time
 from pythonosc.dispatcher import Dispatcher
 from pythonosc import osc_server
 from pythonosc.udp_client import SimpleUDPClient
-import os
-import mido
-import threading
 import logging
 
 
 REC_MSG = '/action/_SWS_RECTOGGLE'
 
-ESTIMATED_LATENCY_FOR_RX = 0.25 # in seconds
+ESTIMATED_LATENCY_FOR_RX = 0.28 # in seconds
 ESTIMATED_LATENCY_FOR_TX = 0.1 # in seconds
 
 
@@ -92,57 +89,7 @@ class Server_OSC:
 
   def close(self):
     self.exit = True
-    self.udp_client.close()
     self.server.shutdown()
     logging.info("OSC Server: closed")
-
-
-
-
-
-
-
-
-
-
-if __name__ == "__main__":
-
-  def udp_server_thread_function(udp_server):
-    # logging.info(mido.get_output_names())
-    playing_port = mido.open_output('loopMIDI Port Playing 2')
-    recording_port = mido.open_output('loopMIDI Port Recording 3')
-    mid = mido.MidiFile(os.path.join(MIDI_FOLDER_PATH, 'example/bass_one_bar.MID'))
-    udp_server.start()
-
-    while True:
-      if udp_server.get_message():
-        for msg in mid.play():
-            playing_port.send(msg)
-      else:
-        time.sleep(0.001)
-
-  format = "%(asctime)s: %(message)s"
-  logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
-
-  MIDI_FOLDER_PATH = 'C:/Users/Gianni/Desktop/MARCO/UNI/Magistrale/TESI/Code/MIDI'
-
-  OSC_SERVER_IP = "127.0.0.1"
-  OSC_SERVER_PORT = 9000
-
-  REAPER_IP = "127.0.0.1"
-  REAPER_PORT = 8000
-
-  MIDI_IP = "127.0.0.1"
-  MIDI_PORT = 7000
-
-  # udp_server = Server_UDP(MIDI_IP, MIDI_PORT, parse_message = True)
-  # udp_server_thread = threading.Thread(target = udp_server_thread_function, args = (udp_server,))
-  # udp_server_thread.start()
-  
-  # client = Client_OSC(REAPER_IP, REAPER_PORT, parse_message = True)
-  # client.send(REC_MSG)
-
-  server_osc = Server_OSC(OSC_SERVER_IP, OSC_SERVER_PORT, MIDI_IP, MIDI_PORT, bpm = 60, parse_message = True)
-  server_osc.run()
 
 
