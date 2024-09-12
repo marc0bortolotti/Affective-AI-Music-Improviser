@@ -93,3 +93,9 @@ class Server_OSC:
     logging.info("OSC Server: closed")
 
 
+
+
+if __name__ == "__main__":
+  client = Client_OSC('127.0.0.1', 12000)
+  client.send('/test', 1.0)
+  

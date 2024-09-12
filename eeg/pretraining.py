@@ -74,12 +74,14 @@ def validation(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
 
     eeg_samples_classes = []
 
-    # Relax (1 minute)
+    # Relaxed (1 minute)
     logging.info("Validation: Play a relaxed rythm for 60 seconds")
     play = relax_music.play()
     play.wait_done()
     eeg = eeg_device.get_eeg_data(recording_time=60)
     eeg_samples_classes.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
+
+    time.sleep(5)  # wait for signal to stabilize
 
     # Excited (1 minute)
     logging.info("Validation: Play an excited rythm for 60 seconds")
@@ -91,7 +93,7 @@ def validation(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP):
     # stop recording eeg
     eeg_device.stop_recording()
 
-    #------------CLASSIFICATION----------------
+    # classification
     accuracy, f1 = eeg_device.get_metrics(eeg_samples_classes)
 
     logging.info(f"Validation: Accuracy: {accuracy:.2f} F1 Score: {f1:.2f}")

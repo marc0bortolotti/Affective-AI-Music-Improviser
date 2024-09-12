@@ -16,21 +16,21 @@ import pickle
 import os
 from brainflow.data_filter import DataFilter
 
-EEG_DEVICE_BOARD_TYPES = {'SYNTHETIC': BoardIds.SYNTHETIC_BOARD.value,
-                          'UNICORN':   BoardIds.UNICORN_BOARD.value , 
-                          'ENOPHONE':  BoardIds.ENOPHONE_BOARD.value , 
-                          'LSL':       'LSL'}
-
-def retrieve_eeg_devices():
-    saved_devices = bluetooth.discover_devices(duration=2, flush_cache=True, lookup_names=True, lookup_class=True)
-    unicorn_devices = list(filter(lambda x: re.search(r'UN-\d{4}.\d{2}.\d{2}', x[1]), saved_devices))
-    enophone_devices = list(filter(lambda x: re.search(r'enophone', x[1]), saved_devices))
-    return unicorn_devices, enophone_devices
+def retrieve_board_id(device_name):
+    if re.search(r'UN-\d{4}.\d{2}.\d{2}', device_name):
+        return BoardIds.UNICORN_BOARD
+    elif re.search(r'(?i)enophone', device_name):
+        return BoardIds.ENOPHONE_BOARD
+    elif re.search(r'(?i)ANT.NEURO.225', device_name):
+        return BoardIds.ANT_NEURO_EE_225_BOARD
+    elif re.search(r'(?i)ANT.NEURO.411', device_name):
+        return BoardIds.ANT_NEURO_EE_411_BOARD
+    else:
+        return BoardIds.SYNTHETIC_BOARD
+    
 
 class EEG_Device:
-    def __init__(self, device_board_type):
-
-        self.device_board_type = device_board_type
+    def __init__(self, serial_number):
 
         self.recording_data = None # recordings raw data
         self.streams = None
@@ -41,31 +41,10 @@ class EEG_Device:
     
         self.params = BrainFlowInputParams()
 
-        if not self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']: 
+        if not serial_number == 'LSL': 
 
-            logging.info("EEG Device: searching for devices...")
-            unicorn_devices, enophone_devices = retrieve_eeg_devices()
-            self.params.board_id = self.device_board_type
-
-            if self.device_board_type == EEG_DEVICE_BOARD_TYPES['UNICORN']:
-                if len(unicorn_devices) > 1:
-                    print("Available Unicorn devices:")
-                    for i, device in enumerate(unicorn_devices):
-                        print(f"\t{i}: {device[1]}")
-                    id = input('Select the Unicorn device:(0/1/2/...): ')
-                    self.params.serial_number = unicorn_devices[int(id)][1]
-                elif unicorn_devices:
-                    self.params.serial_number = unicorn_devices[0][1]
-                else:
-                    logging.error("EEG Device: Unicorn device not found")
-            elif self.device_board_type == EEG_DEVICE_BOARD_TYPES['ENOPHONE']:
-                if enophone_devices:
-                    self.params.serial_number = enophone_devices[0][1]
-                else:
-                    logging.error("EEG Device: Enophone device not found")
-            else:
-                self.params.serial_number = 'SYNTHETIC_BOARD'
-
+            self.params.serial_number = serial_number
+            self.params.board_id = retrieve_board_id(self.params.serial_number)
             self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
             self.board = BoardShim(self.params.board_id, self.params)
             self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
@@ -83,7 +62,7 @@ class EEG_Device:
         logging.info('EEG Device: stop recording')
 
     def start_recording(self):
-        if self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']:
+        if self.params.serial_number == 'LSL':
             logging.info('LSLDevice: looking for a stream')
             while not self.streams:
                 self.streams = resolve_stream()
@@ -95,7 +74,7 @@ class EEG_Device:
         logging.info('EEG Device: start recording')
 
     def get_eeg_data(self, recording_time=4, chunk = False):
-        if self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']: 
+        if self.params.serial_number == 'LSL':
             try:
                 if chunk:
                     data, timestamps = self.inlet.pull_chunk(timeout=recording_time, max_samples=int(recording_time * self.sr))
@@ -113,7 +92,7 @@ class EEG_Device:
         return data
     
     def close(self):
-        if self.device_board_type == EEG_DEVICE_BOARD_TYPES['LSL']:
+        if self.params.serial_number == 'LSL':
             self.inlet.close_stream()
         else:
             self.recording_data = self.board.get_board_data()

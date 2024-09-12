@@ -8,7 +8,7 @@ import plotly.graph_objs as go
 import rtmidi
 import mido
 from app.application import run_application, close_application, APPLICATION_STATUS
-from OSC.osc_connection import Client_OSC, REC_MSG
+from osc.osc_connection import Client_OSC, REC_MSG
 import threading
 import logging
 import time
