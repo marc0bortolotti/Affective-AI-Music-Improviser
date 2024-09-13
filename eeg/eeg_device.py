@@ -1,5 +1,4 @@
 import re
-import bluetooth 
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 import numpy as np
 import time
@@ -46,6 +45,7 @@ class EEG_Device:
             self.params.serial_number = serial_number
             self.params.board_id = retrieve_board_id(self.params.serial_number)
             self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
+            self.ch_names = self.ch_names if len(self.ch_names) <= 8 else self.ch_names[:8] 
             self.board = BoardShim(self.params.board_id, self.params)
             self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
             logging.info(f"EEG Device: connected to {self.params.serial_number}")
@@ -85,10 +85,11 @@ class EEG_Device:
             except Exception as e:
                 logging.error(f"LSLDevice: {e}")
         else:
-            data = self.board.get_current_board_data(num_samples=self.sample_frequency * recording_time)
+            num_samples = int(self.sample_frequency * recording_time)
+            data = self.board.get_current_board_data(num_samples=num_samples)
             data = np.array(data).T
             data = data[:, 0:len(self.ch_names)]
-            data = data[- recording_time * self.sample_frequency : ]
+            data = data[- num_samples : ]
         return data
     
     def close(self):
@@ -137,7 +138,6 @@ class EEG_Device:
         try:
             sample = self.scaler.transform(eeg_features_corrected)
             prediction = self.classifier.predict(sample)
-            print(prediction)
             prediction = int(prediction[0])
         except:
             logging.info('Unicorn: no classifier set')
@@ -149,7 +149,7 @@ class EEG_Device:
 
         eeg_features_classes = []
         for eeg_samples in eeg_samples_classes:
-            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names)
+            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names, parse=True)
             # Apply baseline correction
             eeg_features_corrected = baseline_correction(eeg_features, self.baseline)
             eeg_features_classes.append(eeg_features_corrected)
@@ -170,10 +170,10 @@ class EEG_Device:
     
     def fit_classifier(self, eeg_samples_baseline, eeg_samples_classes):
         # Preprocessing (Feature extraction and Baseline correction)
-        baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names)
+        baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names, parse=True)
         eeg_features_list = []
         for eeg_samples in eeg_samples_classes:
-            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names)
+            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names, parse=True)
             # Apply baseline correction
             eeg_features_corrected = baseline_correction(eeg_features, baseline)
             eeg_features_list.append(eeg_features_corrected)

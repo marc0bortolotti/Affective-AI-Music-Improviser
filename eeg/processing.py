@@ -4,7 +4,7 @@ from mne.channels import make_standard_montage
 import numpy as np
 
 
-def generate_samples(eeg, window_size, window_overlap):
+def generate_samples(eeg, window_size, window_overlap, parse=False):
     samples = []
     step_size = int(window_size * (1 - window_overlap))
     for i in range(0, eeg.shape[0]-window_size, step_size):
@@ -12,9 +12,10 @@ def generate_samples(eeg, window_size, window_overlap):
         sample = eeg[i:i+window_size]
         samples.append(sample)
 
-    print('EEG dimension:', eeg.shape)
-    print('Sample dimension:', samples[0].shape)
-    print('Number of samples:', len(samples))
+    if parse:
+        print('EEG dimension:', eeg.shape)
+        print('Sample dimension:', samples[0].shape)
+        print('Number of samples:', len(samples))
     return samples
 
 
@@ -56,24 +57,26 @@ def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False):
     return this_rec
 
 
-def extract_features(eeg_samples, fs, ch_names):
+def extract_features(eeg_samples, fs, ch_names, parse=False):
     eeg_features = []
 
     for i, sample in enumerate(eeg_samples):
-        print(f'Processing sample: {i+1}/{len(eeg_samples)}', end='\r')
+        if parse:
+            print(f'Processing sample: {i+1}/{len(eeg_samples)}', end='\r')
         filtered_sample = apply_filters(sample, fs, ch_names)
         log_var_sample = log_var_transform(filtered_sample)
         eeg_features.append(log_var_sample)
 
 
     eeg_features = np.array(eeg_features)
-    print(f'\nFeatures dimension: {eeg_features.shape}')
+    if parse:
+        print(f'\nFeatures dimension: {eeg_features.shape}')
 
     return eeg_features
 
 
-def calculate_baseline(eeg_samples, fs, ch_names):
-    eeg_features = extract_features(eeg_samples, fs, ch_names)
+def calculate_baseline(eeg_samples, fs, ch_names, parse=False):
+    eeg_features = extract_features(eeg_samples, fs, ch_names, parse=parse)
     baseline = np.mean(eeg_features, axis=0)
     return np.array(baseline)
 

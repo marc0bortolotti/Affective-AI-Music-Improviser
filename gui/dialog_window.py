@@ -36,12 +36,10 @@ class SetupDialog(QtWidgets.QDialog):
         # Create layout
         layout = QtWidgets.QVBoxLayout(self)
 
-        # Create dropdown for midi input selection
+        # Create dropdown for eeg devices
         devices = retrieve_eeg_devices()
         self.device_combo = QtWidgets.QComboBox(self)
         self.device_combo.addItems([device[1] for device in devices])
-        layout.addWidget(QtWidgets.QLabel('Select EEG device'))
-        layout.addWidget(self.device_combo)
 
         # Create dropdown for MIDI ports selection
         input_ports, output_ports = retrieve_midi_ports()
@@ -49,53 +47,42 @@ class SetupDialog(QtWidgets.QDialog):
         self.instrument_input_combo = QtWidgets.QComboBox(self)
         self.instrument_input_combo.addItems([port for port in input_ports])
         self.instrument_input_combo.setCurrentText('Drum In Port 3')
-        layout.addWidget(QtWidgets.QLabel('Select MIDI INPUT port for the INSTRUMENT'))
-        layout.addWidget(self.instrument_input_combo)
 
         self.instrument_output_combo = QtWidgets.QComboBox(self)
         self.instrument_output_combo.addItems([port for port in output_ports])
         self.instrument_output_combo.setCurrentText('Drum Out Port 1')
-        layout.addWidget(QtWidgets.QLabel('Select MIDI OUTPUT port for the INSTRUMENT'))
-        layout.addWidget(self.instrument_output_combo)
 
         self.melody_rec_combo = QtWidgets.QComboBox(self)
         self.melody_rec_combo.addItems([port for port in output_ports])
         self.melody_rec_combo.setCurrentText('Bass Out Port Recording 2')
-        layout.addWidget(QtWidgets.QLabel('Select MIDI RECORD port for the GENERATED MELODY'))
-        layout.addWidget(self.melody_rec_combo)
 
         self.melody_play_combo = QtWidgets.QComboBox(self)
         self.melody_play_combo.addItems([port for port in output_ports])
         self.melody_play_combo.setCurrentText('Bass Out Port Playing 3')
-        layout.addWidget(QtWidgets.QLabel('Select MIDI PLAY port for the GENERATED MELODY'))
-        layout.addWidget(self.melody_play_combo)
 
-        self.simulation_combo = QtWidgets.QComboBox(self)
-        self.simulation_combo.addItems([port for port in output_ports])
-        self.simulation_combo.setCurrentText('Simulation Port 5')
-        layout.addWidget(QtWidgets.QLabel('Select MIDI SIMULATION port for the GENERATED MELODY'))
-        layout.addWidget(self.simulation_combo)
-
-
-        # Create slider for window size
-        self.window_size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.window_size_slider.setMinimum(1)
-        self.window_size_slider.setMaximum(20)
-        self.window_size_slider.setValue(4)
-        self.window_size_slider.valueChanged.connect(self.update_window_size_label)
-        self.window_size_label = QtWidgets.QLabel(f'Window size: {self.window_size_slider.value()} seconds', self)
-
-        layout.addWidget(self.window_size_label)
-        layout.addWidget(self.window_size_slider)
+        self.simulation_port_combo = QtWidgets.QComboBox(self)
+        self.simulation_port_combo.addItems([port for port in output_ports])
+        self.simulation_port_combo.setCurrentText('Simulation Port 5')
 
         # Add OK and Cancel buttons
         self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
 
-    def update_window_size_label(self, value):
-        self.window_size_label.setText(f'Window size: {value} seconds')
+        # Add widgets to layout
+        layout.addWidget(QtWidgets.QLabel('Select EEG device'))
+        layout.addWidget(self.device_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI INPUT port for the INSTRUMENT'))
+        layout.addWidget(self.instrument_input_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI OUTPUT port for the INSTRUMENT'))
+        layout.addWidget(self.instrument_output_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI RECORD port for the GENERATED MELODY'))
+        layout.addWidget(self.melody_rec_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI PLAY port for the GENERATED MELODY'))
+        layout.addWidget(self.melody_play_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI SIMULATION port for the  INSTRUMENT'))
+        layout.addWidget(self.simulation_port_combo)
+        layout.addWidget(self.button_box)
 
 
     def get_data(self):
@@ -105,8 +92,7 @@ class SetupDialog(QtWidgets.QDialog):
             'INSTRUMENT_MIDI_OUT_PORT_NAME' : self.instrument_output_combo.currentText(),
             'MELODY_MIDI_REC_PORT_NAME' : self.melody_rec_combo.currentText(),
             'MELODY_MIDI_PLAY_PORT_NAME' : self.melody_play_combo.currentText(),
-            'SIMULATION_MIDI_OUT_PORT_NAME' : self.simulation_combo.currentText(),
-            'WINDOW_DURATION' : self.window_size_slider.value()
+            'SIMULATION_MIDI_OUT_PORT_NAME' : self.simulation_port_combo.currentText()
         }
 
 
@@ -117,6 +103,8 @@ class CustomDialog(QMessageBox):
 
         # Create a message box (QMessageBox)
         self.setWindowTitle('Custom Dialog')
+
+        # Set the text of the message box in the center
         self.setText(answer)
 
         # Add custom buttons
@@ -127,6 +115,7 @@ class CustomDialog(QMessageBox):
                 self.addButton(button, QMessageBox.NoRole)
             else:
                 self.addButton(button, QMessageBox.ActionRole)
+    
 
 
 if __name__ == '__main__':

@@ -88,7 +88,7 @@ def thread_function_midi(name, app):
         while True:
             SYNCH_EVENT.wait()
             SYNCH_EVENT.clear()
-            print('Event get')
+
             app.midi_in.simulate()
 
             if not app.STATUS['RUNNING']:
@@ -202,8 +202,6 @@ class AI_AffectiveMusicImproviser():
             SYNCH_EVENT.wait()
             SYNCH_EVENT.clear()
 
-            print('Synch message received')
-
             if generated_track is not None:
                 self.midi_out_rec.send_midi_to_reaper(generated_track)
 
@@ -244,9 +242,8 @@ class AI_AffectiveMusicImproviser():
                 prediction = softmax(prediction)
 
                 # Get the confidence of the prediction.
-
-                # confidence = torch.mean(torch.max(prediction, 1))
-                # logging.info(f"Confidence: {confidence}")
+                confidence = torch.mean(torch.max(prediction, 1)[0]) # max returns a tuple (values, indices)
+                logging.info(f"Confidence: {confidence}")
 
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
@@ -267,7 +264,7 @@ class AI_AffectiveMusicImproviser():
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)
 
-            logging.info(f"Elapsed time: {time.time() - start_time}")
+            # logging.info(f"Elapsed time: {time.time() - start_time}")
 
             if not self.STATUS['RUNNING']:
                 break
