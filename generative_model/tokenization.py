@@ -9,11 +9,10 @@ BPM = 120
 TICKS_PER_BEAT = 12 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
-VELOCITY_THRESHOLD = 80
-MIN_VELOCITY = 40
-NOTE_START_TOKEN = 'S'
+VELOCITY_LEVELS = {'MINIMUM': 40, 'p': 64, 'f': 100, 'THRESHOLD': 80}
 VELOCITY_PIANO_TOKEN = 'p'
 VELOCITY_FORTE_TOKEN = 'f'
+NOTE_START_TOKEN = 'S'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
@@ -121,7 +120,7 @@ class PrettyMidiTokenizer(object):
   - real_time_tokenization(notes, emotion_token): converts a list of notes into a sequence of tokens in real-time
   '''
     
-  def __init__(self, midi_file_path = None):
+  def __init__(self):
 
     self.BPM = BPM
     self.BEATS_PER_BAR = BEATS_PER_BAR
@@ -135,26 +134,19 @@ class PrettyMidiTokenizer(object):
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
     self.sequences = []
+    self.source_paths = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
-    self.source_paths = []
-
-
-    if midi_file_path is not None:
-      self.source_paths.append(midi_file_path)
-      self.sequences, self.notes_df = self.midi_to_tokens(self.source_paths[-1], update_vocab = True)
 
 
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
     self.VOCAB.load(path)
 
-
   def convert_time_to_ticks(self, time, resolution = TICKS_PER_BEAT, bpm = BPM):
     beat_duration = 60 / bpm
     tick_duration = beat_duration / resolution
-    # ticks = int(time * bpm / (60 * resolution))
     ticks = int(time / tick_duration)
     return ticks
 
@@ -163,13 +155,13 @@ class PrettyMidiTokenizer(object):
     new_note = {
       'pitch': pitch,
       'velocity': velocity,
-      'start': start - bar*self.BAR_DURATION_IN_TICKS,
-      'end': end - bar*self.BAR_DURATION_IN_TICKS,
+      'start': start,
+      'end': end,
       'bar': bar
     }   
     return pd.DataFrame([new_note])  
 
-  def midi_to_df(self, midi_path, instrument = ''):
+  def midi_to_df(self, midi_path, instrument = None):
     '''
     Converts a MIDI file into a pandas dataframe.
 
@@ -184,11 +176,11 @@ class PrettyMidiTokenizer(object):
 
     pm = pretty_midi.PrettyMIDI(midi_path)
 
-    if pm.resolution != TICKS_PER_BEAT:
-      raise Exception(f'The resolution of the MIDI file is {pm.resolution} instead of {self.TICKS_PER_BEAT}.')
+    # if pm.resolution != TICKS_PER_BEAT:
+    #   raise Exception(f'The resolution of the MIDI file is {pm.resolution} instead of {self.TICKS_PER_BEAT}.')
 
-    elif pm.get_tempo_changes()[1][0] != BPM:
-      raise Exception(f'The tempo of the MIDI file is {pm.get_tempo_changes[1][0]} instead of {self.BPM}.')
+    # elif pm.get_tempo_changes()[1][0] != BPM:
+    #   raise Exception(f'The tempo of the MIDI file is {pm.get_tempo_changes[1][0]} instead of {self.BPM}.')
     
 
     # Sort the notes by start time
@@ -203,23 +195,35 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
-
       if instrument == 'drum':
         end = start + 1
 
-      bar = int(start // self.BAR_DURATION_IN_TICKS) # integer part of the division
+      # bar is the integer part of the start time divided by the duration of a bar
+      start_bar = start // self.BAR_DURATION_IN_TICKS
+      end_bar = end // self.BAR_DURATION_IN_TICKS
 
-      # split the note in two if it spans multiple bars
-      if end > (bar + 1) * self.BAR_DURATION_IN_TICKS: 
-        # update the current note to end at the end of the bar and update its duration
-        note = self.new_note(pitch, velocity, start, (bar + 1) * self.BAR_DURATION_IN_TICKS, bar)
-        notes_df = pd.concat([notes_df, note], ignore_index=True)
+      # update the start and end times to be with index of the bar
+      start -= start_bar * self.BAR_DURATION_IN_TICKS
+      end -= end_bar * self.BAR_DURATION_IN_TICKS
 
-        # create new note in the succeeding bar with the remaining duration
-        note = self.new_note(pitch, velocity, (bar + 1) * self.BAR_DURATION_IN_TICKS, end, bar + 1)
-        notes_df = pd.concat([notes_df, note], ignore_index=True)
-
+      # split the note if it spans multiple bars
+      if start_bar != end_bar: 
+        for bar in range(start_bar, end_bar):
+          note = None
+          if bar == start_bar: 
+            if self.BAR_DURATION_IN_TICKS - start > 5: # filter notes with duration less than 5 ticks
+              note = self.new_note(pitch, velocity, start, self.BAR_DURATION_IN_TICKS, bar)
+          elif bar == end_bar: 
+            if end > 5: # filter notes with duration less than 5 ticks  
+              note = self.new_note(pitch, velocity, 0, end, bar)
+          else:
+            note = self.new_note(pitch, velocity, 0, self.BAR_DURATION_IN_TICKS, bar)
+          
+          if note is not None:
+            notes_df = pd.concat([notes_df, note], ignore_index=True)
+          
       else:
+        bar = start_bar
         note = self.new_note(pitch, velocity, start, end, bar)
         notes_df = pd.concat([notes_df, note], ignore_index=True)
       
@@ -243,9 +247,9 @@ class PrettyMidiTokenizer(object):
     '''
 
 
-    if velocity < MIN_VELOCITY:
+    if velocity < VELOCITY_LEVELS['MINIMUM']:
       return tokens
-    elif velocity > VELOCITY_THRESHOLD:
+    elif velocity > VELOCITY_LEVELS['THRESHOLD']:
       velocity_token = VELOCITY_FORTE_TOKEN
     else:
       velocity_token = VELOCITY_PIANO_TOKEN
@@ -281,8 +285,8 @@ class PrettyMidiTokenizer(object):
     - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
     '''
     if emotion_token is not None and update_vocab:
-      self.VOCAB.add_word(BCI_TOKENS['relaxed'])
-      self.VOCAB.add_word(BCI_TOKENS['concentrated'])
+      self.VOCAB.add_word(BCI_TOKENS[0])
+      self.VOCAB.add_word(BCI_TOKENS[1])
 
     notes_df = self.midi_to_df(midi_path, instrument=instrument)
     
@@ -378,7 +382,7 @@ class PrettyMidiTokenizer(object):
         if SILENCE_TOKEN not in note_string:
 
           pitch = re.findall('\d+', note_string) [0] # re.findall returns a list
-          velocity = 80 if VELOCITY_PIANO_TOKEN in note_string else 127
+          velocity = VELOCITY_LEVELS['p'] if VELOCITY_PIANO_TOKEN in note_string else VELOCITY_LEVELS['f']
           start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
 
           if start is not None:
@@ -410,17 +414,17 @@ class PrettyMidiTokenizer(object):
     # convert the notes into a list of commands (note_on, note_off, velocity, dt)
     command_df = pd.DataFrame(columns = ['pitch', 'start', 'note_on', 'velocity', 'dt'])
     for idx, note in notes_df.iterrows():
-        pitch = note['pitch']
-        start = note['start'] 
-        duration = note['duration']
-        velocity = note['velocity']
-        end = start + duration
-        cmd_on = pd.DataFrame([{'pitch': pitch, 'start': start, 'note_on': True, 'velocity': velocity, 'dt': 0}])
-        cmd_off = pd.DataFrame([{'pitch': pitch, 'start': end, 'note_on': False, 'velocity': velocity, 'dt': 0}])
-        command_df = pd.concat([command_df, cmd_on, cmd_off], ignore_index=True)
+      pitch = note['pitch']
+      start = note['start'] 
+      duration = note['duration']
+      velocity = note['velocity']
+      end = start + duration
+      cmd_on = pd.DataFrame([{'pitch': pitch, 'start': start, 'note_on': True, 'velocity': velocity, 'dt': 0}])
+      cmd_off = pd.DataFrame([{'pitch': pitch, 'start': end, 'note_on': False, 'velocity': velocity, 'dt': 0}])
+      command_df = pd.concat([command_df, cmd_on, cmd_off], ignore_index=True)
 
-    # sort the commands by start time
-    command_df = command_df.sort_values(by = 'start')
+    # sort the commands by start time and then sort for note_off before note_on (when start times are equal)
+    command_df = command_df.sort_values(by = ['start', 'note_on'])
     command_df = command_df.reset_index(drop = True)
 
     # subtract the start time of the previous command from the start time of the current command 
@@ -520,7 +524,7 @@ class PrettyMidiTokenizer(object):
       if duration > self.BAR_DURATION:
         break
 
-      elif velocity > MIN_VELOCITY:
+      elif velocity > VELOCITY_LEVELS['MINIMUM']:
         start = self.convert_time_to_ticks(duration)
         step = 0
 
@@ -556,25 +560,12 @@ class PrettyMidiTokenizer(object):
   
 
 
-
-
-
 if __name__ == '__main__':
-  
-  vocab_path = 'APPLICATION/model/trained_models/model/input_vocab.txt'
-  midi_path = 'TCN/dataset/input/drum_and_bass.mid'
-  
+  import os
+  file_path = os.path.join(os.path.dirname(__file__), 'test/chords.mid')
+  save_path = os.path.join(os.path.dirname(__file__), 'test/chords_reconstructed.mid')
+
   tok = PrettyMidiTokenizer()
-
-  df = tok.midi_to_df(midi_path)
-  df = df[df['bar']>5]
-  df = df[df['bar']<8]
-
-  print(df)
-
-  tok.load_vocab(vocab_path)
-
-  sequences, notes_df = tok.midi_to_tokens(midi_path)
+  sequences, midi_df = tok.midi_to_tokens(file_path, update_vocab=True)
   tokens = sequences[0]
-
-  mid = tok.tokens_to_midi(tokens, out_file_path = 'test_in.mid', ticks_filter = 0, instrument_name = 'Drum')
+  mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'piano')
