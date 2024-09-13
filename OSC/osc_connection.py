@@ -91,6 +91,8 @@ class Server_OSC:
 
 
 if __name__ == "__main__":
-  client = Client_OSC('127.0.0.1', 12000)
-  client.send('/test', 1.0)
+  client = Client_OSC()
+  while True:
+    confidence = input("Confidence: ")
+    client.send('127.0.0.1', 7000, '/confidence', float(confidence))
   

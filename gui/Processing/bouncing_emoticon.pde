@@ -1,12 +1,4 @@
-import controlP5.*;
-
-ControlP5 cp5;           // ControlP5 object for the slider
-float confidence = 0.1;   // Confidence variable (0 to 1)
-int emoticonSize = 200;   // Diameter of the emoticon
-int emoticonRadius;       // Radius of the emoticon
-int x, y;                // Position of the emoticon
-int ySpeed;              // Speed of the emoticon in the y direction
-int lowConfidenceTime = 0;
+int emoticonSize = 300;   // Diameter of the emoticon
 boolean sustainedHigh = false; // Tracks whether confidence has been high for 5 seconds
 float pulseRadius = 0;    // Pulse size for glow effect
 float pulseSpeed = 120 / 60; // Pulsating speed (120 beats per minute)

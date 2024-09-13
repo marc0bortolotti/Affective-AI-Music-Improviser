@@ -1,3 +1,11 @@
+import controlP5.*;
+ControlP5 cp5;           // ControlP5 object for the slider
+
+float confidence = 0.1;   // Confidence variable (0 to 1)
+int emoticonRadius;       // Radius of the emoticon
+int x, y;                // Position of the emoticon
+int ySpeed;              // Speed of the emoticon in the y direction
+
 void setup() {
   // Initialize the OSC server
   oscP5 = new OscP5(this, port);
@@ -5,19 +13,19 @@ void setup() {
   
   size(500, 400);         // Increased width to accommodate the slider
   emoticonRadius = emoticonSize / 2; // Calculate the radius
-  x = width / 2 - 50;     // Keep the emoticon horizontally centered (offset for the slider)
+  x = width / 2 ;     // Keep the emoticon horizontally centered (offset for the slider)
   y = height / 2;         // Start in the middle vertically
-  ySpeed = 3;             // Speed of the vertical movement
+  ySpeed = 2;             // Speed of the vertical movement
   frameRate(50);          // Set frame rate to 50 Hertz
 
   // Initialize ControlP5 slider for confidence
-  cp5 = new ControlP5(this);
-  cp5.addSlider("confidence")         // Attach the confidence variable to the slider
-     .setPosition(width - 80, 100)    // Position of the slider (right of the screen)
-     .setSize(30, 200)                // Size of the slider
-     .setRange(0, 1)                  // Set range from 0 to 1 (for confidence)
-     .setValue(0.1)                   // Initial value for confidence
-     .setLabel("Confidence");         // Label for the slider
+  //cp5 = new ControlP5(this);
+  //cp5.addSlider("confidence")         // Attach the confidence variable to the slider
+  //   .setPosition(width - 80, 100)    // Position of the slider (right of the screen)
+  //   .setSize(30, 200)                // Size of the slider
+  //   .setRange(0, 1)                  // Set range from 0 to 1 (for confidence)
+  //   .setValue(0.1)                   // Initial value for confidence
+  //   .setLabel("Confidence");         // Label for the slider
 }
 
 void draw() {
