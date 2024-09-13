@@ -285,8 +285,8 @@ class PrettyMidiTokenizer(object):
     - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
     '''
     if emotion_token is not None and update_vocab:
-      self.VOCAB.add_word(BCI_TOKENS['relaxed'])
-      self.VOCAB.add_word(BCI_TOKENS['concentrated'])
+      self.VOCAB.add_word(BCI_TOKENS[0])
+      self.VOCAB.add_word(BCI_TOKENS[1])
 
     notes_df = self.midi_to_df(midi_path, instrument=instrument)
     

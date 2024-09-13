@@ -15,10 +15,10 @@ import yaml
 
 
 '''---------- CONNECTION PARAMETERS ------------'''
-OSC_SERVER_IP = "127.0.0.1"
+LOCAL_HOST = "127.0.0.1"
 OSC_SERVER_PORT = 9000
-OSC_REAPER_IP = "127.0.0.1"
 OSC_REAPER_PORT = 8000
+OSC_PROCESSING_PORT = 7000
 '''---------------------------------------------'''
 
 '''--------------- MIDI PARAMETERS --------------'''
@@ -137,8 +137,8 @@ class AI_AffectiveMusicImproviser():
         self.midi_out_play = MIDI_Output(bass_play_port_name)
 
         # SYNCHRONIZATION
-        self.osc_server = Server_OSC(OSC_SERVER_IP, OSC_SERVER_PORT, BPM, parse_message=False)
-        self.osc_client = Client_OSC(OSC_REAPER_IP, OSC_REAPER_PORT, parse_message=False)
+        self.osc_server = Server_OSC(LOCAL_HOST, OSC_SERVER_PORT, BPM, parse_message=False)
+        self.osc_client = Client_OSC()
 
         # EEG 
         self.eeg_device = EEG_Device(eeg_device_type)
@@ -183,7 +183,7 @@ class AI_AffectiveMusicImproviser():
 
         # activate the metronome and start recording in Reaper
         # self.osc_client.send('/click', 1) 
-        self.osc_client.send(REC_MSG, 1)
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
 
         # start the threads
         self.thread_midi_input.start()
@@ -242,7 +242,8 @@ class AI_AffectiveMusicImproviser():
                 prediction = softmax(prediction)
 
                 # Get the confidence of the prediction.
-                confidence = torch.mean(torch.max(prediction, 1)[0]) # max returns a tuple (values, indices)
+                confidence = torch.mean(torch.max(prediction, 1)[0]).item() # torch.max returns a tuple (values, indices)
+                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
                 logging.info(f"Confidence: {confidence}")
 
                 # Get the predicted tokens.
@@ -301,6 +302,6 @@ class AI_AffectiveMusicImproviser():
         self.thread_eeg.join()
 
         # stop recording in Reaper
-        self.osc_client.send(REC_MSG, 1)
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
 
         logging.info('All done')

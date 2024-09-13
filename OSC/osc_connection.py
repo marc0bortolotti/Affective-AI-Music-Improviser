@@ -6,20 +6,15 @@ import logging
 
 
 REC_MSG = '/action/_SWS_RECTOGGLE'
-
 ESTIMATED_LATENCY_FOR_RX = 0.28 # in seconds
-ESTIMATED_LATENCY_FOR_TX = 0.1 # in seconds
-
 
 
 class Client_OSC:
-  def __init__(self, ip, port, parse_message = False):
-    self.ip = ip
-    self.port = port
+  def __init__(self, parse_message = False):
     self.parse_message = parse_message
-    self.client = SimpleUDPClient(ip, port)
 
-  def send(self, msg, value):
+  def send(self, ip, port, msg, value):
+    self.client = SimpleUDPClient(ip, port)
     self.client.send_message(msg, value)
     if self.parse_message:
       logging.info(f"OSC Client: sent message <<{msg, value}>> to Reaper on {self.ip}:{self.port}")
