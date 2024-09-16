@@ -132,6 +132,8 @@ class AI_AffectiveMusicImproviser():
                        'USE_EEG': False}
 
         logging.info('Thread Main: Starting application...')
+
+        # MIDI
         self.midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
         self.midi_out_rec = MIDI_Output(bass_record_port_name)
         self.midi_out_play = MIDI_Output(bass_play_port_name)
@@ -195,7 +197,6 @@ class AI_AffectiveMusicImproviser():
         hystory = []
 
         softmax = torch.nn.Softmax(dim=1)
-        temperature = 1.0
 
         while True:
 
@@ -233,16 +234,21 @@ class AI_AffectiveMusicImproviser():
                 input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.ones([1, self.BAR_LENGTH], dtype=torch.long)),
                                     dim=1)
 
-                # Make the prediction.
+                # Make the prediction and flatten the output.
                 prediction = self.model(input_data.to(self.device))
                 prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
-                # Get the predicted tokens.
+                # Get the probability distribution of the prediction by applying the softmax function and the temperature.
+                prediction_no_temperature = prediction
+                prediction_no_temperature = softmax(prediction_no_temperature)
+
+                temperature = self.osc_server.get_temperature()
+                print(f"Temperature: {temperature}")
                 prediction = prediction / temperature
                 prediction = softmax(prediction)
 
-                # Get the confidence of the prediction.
-                confidence = torch.mean(torch.max(prediction, 1)[0]).item() # torch.max returns a tuple (values, indices)
+                # Get the confidence of the prediction withouth the temperature contribution.
+                confidence = torch.mean(torch.max(prediction_no_temperature, 1)[0]).item() # torch.max returns a tuple (values, indices)
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
                 logging.info(f"Confidence: {confidence}")
 
