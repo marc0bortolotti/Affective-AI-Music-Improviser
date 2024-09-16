@@ -1,27 +1,33 @@
 import oscP5.*;
 import netP5.*;
 
-OscP5 oscP5;  // OSC object
-int port = 12000;  // Port number to listen for incoming messages
-
-// Variables to store incoming data
-float receivedValue = 0;
-String messageAddress = "";
-
-// This function is automatically called when an OSC message is received
-void oscEvent(OscMessage message) {
-  // Print the address pattern of the received message
-  println("Received an OSC message with address: " + message.addrPattern());
+class OSCClientServer{
+  OscP5 oscP5;  
+  int port = 7000;  
+  int python_port = 9000;
+  float receivedValue;
+  String messageAddress;
   
-  // Store the address of the OSC message
-  messageAddress = message.addrPattern();
-  
-  // Check if the message has at least one argument
-  if (message.checkAddrPattern("/test") == true) {
-    // Extract the first argument (assuming it's a float)
-    if (message.checkTypetag("f")) {  // "f" stands for float
-      receivedValue = message.get(0).floatValue();  // Get the float value
+  OSCClientServer(){
+    // Initialize the OSC server
+    oscP5 = new OscP5(this, port);
+    println("OSC started on port " + port);
+  }
+
+  // This function is automatically called when an OSC message is received
+  void oscEvent(OscMessage message) {
+    messageAddress = message.addrPattern();
+    if (message.checkAddrPattern("/confidence") == true) {
+      receivedValue = message.get(0).floatValue();  
       println("Value: " + receivedValue);
+      confidence = receivedValue;
     }
+  }
+  
+  void sendOSCMessage(String address, float value) {
+    OscMessage msg = new OscMessage(address);
+    msg.add(value);
+    oscP5.send(msg, new NetAddress("127.0.0.1", python_port));
+    println(address + ": " + value);
   }
 }

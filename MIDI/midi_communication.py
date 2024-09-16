@@ -127,7 +127,8 @@ class MIDI_Output:
                 self.midi_out_port.send(msg)
                 if parse_message:
                     logging.info(f"MIDI Output: sent message <<{msg}>>")
-            logging.info(f"MIDI Output: finished sending midi to Reaper in {time.time() - start_time:.2f} s")
+            if parse_message:
+                logging.info(f"MIDI Output: finished sending midi to Reaper in {time.time() - start_time:.2f} s")
 
         thread = threading.Thread(target=thread_reaper, args=(mid, parse_message))
         thread.start()

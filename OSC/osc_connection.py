@@ -24,21 +24,29 @@ class Client_OSC:
 class Server_OSC:
 
   def __init__(self, ip, port, bpm, parse_message = False):
+
+    # Variables for the server
     self.parse_message = parse_message
-    
+    self.ip = ip
+    self.port = port
+    self.exit = False
+
+    # Variables for synchronization
     self.BEAT_DURATION = 60/bpm
     self.last_beat = None 
     self.record_started = False
-    self.exit = False
     self.synch_event = None
+
+    # Variables for the temperature
+    self.temperature = 1.0
 
     # OSC manager
     self.dispatcher = Dispatcher()
     # self.dispatcher.map("/*", self.print_message)
     self.dispatcher.map("/record", self.record_handler, "Record")
     self.dispatcher.map("/beat/str", self.beat_handler, "Beat")
-
-    self.server = osc_server.ThreadingOSCUDPServer((ip, port), self.dispatcher)
+    self.dispatcher.map("/temperature", self.temperature_handler, "Temperature")
+    self.server = osc_server.ThreadingOSCUDPServer((self.ip, self.port), self.dispatcher)
   
   def run(self):
     logging.info("OSC Server: running on {}".format(self.server.server_address))
@@ -82,6 +90,14 @@ class Server_OSC:
         logging.info("OSC Server: <<stop record>> from Reaper")
       self.record_started = False
 
+  def temperature_handler(self, unused_addr, args, temperature):
+    if self.parse_message:
+      logging.info(f"Temperature: {temperature}")
+    self.temperature = float(temperature)
+
+  def get_temperature(self):
+    return self.temperature
+
   def close(self):
     self.exit = True
     self.server.shutdown()
@@ -91,6 +107,8 @@ class Server_OSC:
 
 
 if __name__ == "__main__":
-  client = Client_OSC('127.0.0.1', 12000)
-  client.send('/test', 1.0)
+  client = Client_OSC()
+  while True:
+    confidence = input("Confidence: ")
+    client.send('127.0.0.1', 7000, '/confidence', float(confidence))
   
