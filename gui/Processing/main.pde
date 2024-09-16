@@ -4,7 +4,7 @@ float newTemperature, newConfidence;
 OSCClientServer oscClientServer;
 Emoticon emoticon;
 CustomSlider temperatureSlider, confidenceSlider;
-ControlP5 cp5;  
+ControlP5 cp5_temperature, cp5_confidence;  
 boolean confidenceSliderOn = true;
 
 void setup() {  
@@ -16,10 +16,12 @@ void setup() {
   
   emoticon = new Emoticon();
   
-  cp5 = new ControlP5(this);
-  temperatureSlider = new CustomSlider(cp5, "temperature", "TEMPERATURE", width * 7/8, height * 1/8, -7.0, 15.0, 0.0);
+  cp5_temperature = new ControlP5(this);
+  cp5_confidence = new ControlP5(this);
+  
+  temperatureSlider = new CustomSlider(cp5_temperature, "temperature", "TEMPERATURE", width * 7/8, height * 1/8, -7.0, 15.0, 0.0);
   if (confidenceSliderOn){
-    confidenceSlider = new CustomSlider(cp5, "confidence", "CONFIDENCE", width * 7/8, height * 5/8, 0.0, 1.0, 0.1);
+    confidenceSlider = new CustomSlider(cp5_confidence, "confidence", "CONFIDENCE", width * 7/8, height * 5/8, 0.0, 1.0, 0.1);
   }
 }
 
@@ -35,7 +37,7 @@ void draw() {
     oscClientServer.sendOSCMessage("/temperature", temperature);
     
   }
-  //temperatureSlider.updateValueLabel(temperature);
+  temperatureSlider.updateValueLabel(temperature);
   
   if (confidenceSliderOn){
     confidenceSlider.updateValueLabel(confidence);  

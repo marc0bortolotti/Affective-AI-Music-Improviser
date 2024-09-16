@@ -115,7 +115,8 @@ class AI_AffectiveMusicImproviser():
                         bass_record_port_name,
                         eeg_device_type,
                         window_duration,
-                        model_dict):
+                        model_dict,
+                        parse_message=False):
         '''
         Parameters:
         - drum_in_port_name (str): drum MIDI input port name
@@ -130,8 +131,8 @@ class AI_AffectiveMusicImproviser():
                        'RUNNING': False, 
                        'SIMULATE_MIDI': False,
                        'USE_EEG': False}
-
-        logging.info('Thread Main: Starting application...')
+        
+        self.parse_message = parse_message
 
         # MIDI
         self.midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
@@ -178,13 +179,29 @@ class AI_AffectiveMusicImproviser():
 
     def get_eeg_device(self):
         return self.eeg_device
+    
+    def save_hystory(self, path):
+        path = os.path.join(path, 'hystory.txt')
+        with open(path, 'w') as file:
+            for i, item in enumerate(self.hystory):
+                if i % 2 == 0:
+                    file.write("Input: \n")
+                    for bar_id, bar in enumerate(item):
+                        file.write(f"Bar {bar_id}: ")
+                        for tok in bar:
+                            file.write(self.INPUT_TOK.VOCAB.idx2word[tok] + ' ')
+                        file.write("\n")
+                else:
+                    file.write("Output: \n")
+                    for tok in item:
+                        file.write(self.OUTPUT_TOK.VOCAB.idx2word[tok] + ' ')
+                    file.write("\n\n")
 
     def run(self):
 
         self.STATUS['RUNNING'] = True
 
-        # activate the metronome and start recording in Reaper
-        # self.osc_client.send('/click', 1) 
+        # start recording in Reaper
         self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
 
         # start the threads
@@ -194,7 +211,10 @@ class AI_AffectiveMusicImproviser():
 
         tokens_buffer = []
         generated_track = None
-        hystory = []
+        confidence = 0.0
+        temperature = 1.0
+
+        self.hystory = []
 
         softmax = torch.nn.Softmax(dim=1)
 
@@ -243,14 +263,12 @@ class AI_AffectiveMusicImproviser():
                 prediction_no_temperature = softmax(prediction_no_temperature)
 
                 temperature = self.osc_server.get_temperature()
-                print(f"Temperature: {temperature}")
                 prediction = prediction / temperature
                 prediction = softmax(prediction)
 
                 # Get the confidence of the prediction withouth the temperature contribution.
                 confidence = torch.mean(torch.max(prediction_no_temperature, 1)[0]).item() # torch.max returns a tuple (values, indices)
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
-                logging.info(f"Confidence: {confidence}")
 
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
@@ -262,8 +280,8 @@ class AI_AffectiveMusicImproviser():
                 predicted_sequence = predicted_sequence[-self.BAR_LENGTH:]
 
                 # save the hystory
-                hystory.append(tokens_buffer.copy())
-                hystory.append(predicted_sequence)
+                self.hystory.append(tokens_buffer.copy())
+                self.hystory.append(predicted_sequence)
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=2)
@@ -271,27 +289,13 @@ class AI_AffectiveMusicImproviser():
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)
 
-            # logging.info(f"Elapsed time: {time.time() - start_time}")
+            if self.parse_message:
+                logging.info(f"Confidence: {confidence}")
+                logging.info(f"Temperature: {temperature}")
+                logging.info(f"Elapsed time: {time.time() - start_time}")
 
             if not self.STATUS['RUNNING']:
                 break
-
-        # save the hystory in a txt file
-        with open('hystory.txt', 'w') as file:
-            for i, item in enumerate(hystory):
-                if i % 2 == 0:
-                    file.write("Input: \n")
-                    for bar_id, bar in enumerate(item):
-                        file.write(f"Bar {bar_id}: ")
-                        for tok in bar:
-                            file.write(self.INPUT_TOK.VOCAB.idx2word[tok] + ' ')
-                        file.write("\n")
-                else:
-                    file.write("Output: \n")
-                    for tok in item:
-                        file.write(self.OUTPUT_TOK.VOCAB.idx2word[tok] + ' ')
-                    file.write("\n\n")
-
 
     def close(self):
         logging.info('Thread Main: Closing application...')

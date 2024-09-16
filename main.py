@@ -57,7 +57,8 @@ if __name__ == "__main__":
                                             setup_parameters['MELODY_MIDI_REC_PORT_NAME'], 
                                             setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
                                             WINDOW_DURATION, 
-                                            MODEL_DICT)
+                                            MODEL_DICT,
+                                            parse_message=True)
 
         if SIMULATE_MIDI:
             app.set_application_status('SIMULATE_MIDI', True)
@@ -105,15 +106,17 @@ if __name__ == "__main__":
             app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
 
         
-        start_dialog = CustomDialog('Do you want to start the application?')
+        start_dialog = CustomDialog('Do you want to START the application?')
+        close_dialog = CustomDialog('Do you want to CLOSE the application?')
         if start_dialog.exec_() == 0:
             thread_app = threading.Thread(target=app.run, args=())
             thread_app.start()
-            time.sleep(2*60)
-            app.close()
-            if SAVE_SESSION:
-                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-            thread_app.join()
+            if close_dialog.exec_() == 0:
+                app.close()
+                if SAVE_SESSION:
+                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+                    app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+                thread_app.join()
         else:
             sys.exit()
 
