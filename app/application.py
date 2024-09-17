@@ -109,20 +109,20 @@ def thread_function_osc(name, app):
 
 class AI_AffectiveMusicImproviser():
 
-    def __init__(self,  drum_in_port_name,
-                        drum_out_port_name,
-                        bass_play_port_name,
-                        bass_record_port_name,
+    def __init__(self,  instrument_in_port_name,
+                        instrument_out_port_name,
+                        generation_play_port_name,
+                        # generation_record_port_name,
                         eeg_device_type,
                         window_duration,
                         model_dict,
                         parse_message=False):
         '''
         Parameters:
-        - drum_in_port_name (str): drum MIDI input port name
-        - drum_out_port_name (str): drum MIDI output port name
-        - bass_play_port_name (str): bass MIDI play port name
-        - bass_record_port_name (str): bass MIDI record port name
+        - instrument_in_port_name: name of the MIDI input port for the instrument
+        - instrument_out_port_name: name of the MIDI output port for the instrument
+        - generation_play_port_name: name of the MIDI output port for the generated melody
+        - generation_record_port_name: name of the MIDI output port for the generated melody
         - window_duration: duration of the window in seconds
         - model_dict: path to the model dictionary
         '''
@@ -135,9 +135,9 @@ class AI_AffectiveMusicImproviser():
         self.parse_message = parse_message
 
         # MIDI
-        self.midi_in = MIDI_Input(drum_in_port_name, drum_out_port_name, parse_message=False)
-        self.midi_out_rec = MIDI_Output(bass_record_port_name)
-        self.midi_out_play = MIDI_Output(bass_play_port_name)
+        self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
+        self.midi_out_play = MIDI_Output(generation_play_port_name)
+        # self.midi_out_rec = MIDI_Output(generation_record_port_name)
 
         # SYNCHRONIZATION
         self.osc_server = Server_OSC(LOCAL_HOST, OSC_SERVER_PORT, BPM, parse_message=False)
