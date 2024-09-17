@@ -30,7 +30,6 @@ TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 VALIDATION_TIME = 5
 
 # APPLICATION PARAMETERS
-SIMULATE_MIDI = True
 USE_EEG = True
 SAVE_SESSION = False
 
@@ -54,15 +53,15 @@ if __name__ == "__main__":
         app = AI_AffectiveMusicImproviser(  setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'], 
                                             setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'], 
                                             setup_parameters['MELODY_MIDI_PLAY_PORT_NAME'], 
-                                            setup_parameters['MELODY_MIDI_REC_PORT_NAME'], 
+                                            # setup_parameters['MELODY_MIDI_REC_PORT_NAME'], 
                                             setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
                                             WINDOW_DURATION, 
                                             MODEL_DICT,
                                             parse_message=True)
 
-        if SIMULATE_MIDI:
+        if setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'] == 'Simulate Instrument':
             app.set_application_status('SIMULATE_MIDI', True)
-            app.midi_in.set_midi_simulation_port(setup_parameters['SIMULATION_MIDI_OUT_PORT_NAME'])
+            app.midi_in.set_midi_simulation_port(setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'])
 
         if USE_EEG:
             app.set_application_status('USE_EEG', True)

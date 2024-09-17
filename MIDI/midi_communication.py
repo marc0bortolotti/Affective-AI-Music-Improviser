@@ -19,13 +19,14 @@ class MIDI_Input:
 
         available_ports = rtmidi.MidiIn().get_ports()
 
-        try:
-            self.midi_in_port = rtmidi.MidiIn().open_port(available_ports.index(midi_in_port_name))
-            logging.info(f'MIDI Input: Connected to port {midi_in_port_name}')
-        except:
-            self.midi_in_port = None
-            logging.error(f'MIDI Input: Could not connect to port {midi_in_port_name}, check if the port is available')
-            logging.error(f'MIDI Input Available ports: {available_ports}')
+        if midi_in_port_name is not 'Simulate Instrument':
+            try:
+                self.midi_in_port = rtmidi.MidiIn().open_port(available_ports.index(midi_in_port_name))
+                logging.info(f'MIDI Input: Connected to port {midi_in_port_name}')
+            except:
+                self.midi_in_port = None
+                logging.error(f'MIDI Input: Could not connect to port {midi_in_port_name}, check if the port is available')
+                logging.error(f'MIDI Input Available ports: {available_ports}')
 
         if midi_out_port_name is not None:
             available_ports = rtmidi.MidiOut().get_ports()
@@ -60,9 +61,15 @@ class MIDI_Input:
                 time.sleep(0.001)
         
         self.midi_in_port.close_port()
+        if self.midi_out_port is not None:
+            self.midi_out_port.close_port()
+        if self.midi_simulation_port is not None:
+            self.midi_simulation_port.close()
+            
         logging.info(f'MIDI Input: Disconnected')
 
     def set_midi_simulation_port(self, midi_simulation_port):
+        self.midi_out_port.close_port()
         self.midi_simulation_port = mido.open_output(midi_simulation_port)
 
     def simulate(self, path=None):
