@@ -9,9 +9,7 @@ BPM = 120
 TICKS_PER_BEAT = 12 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
-VELOCITY_LEVELS = {'MINIMUM': 40, 'p': 64, 'f': 100, 'THRESHOLD': 80}
-VELOCITY_PIANO_TOKEN = 'p'
-VELOCITY_FORTE_TOKEN = 'f'
+VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'}
 NOTE_START_TOKEN = 'S'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
@@ -150,7 +148,11 @@ class PrettyMidiTokenizer(object):
     ticks = int(time / tick_duration)
     return ticks
 
-
+  def compute_velocity_token(self, target):
+    keys = list(VELOCITY_TOKENS.keys())
+    nearest_key = min(keys, key=lambda k: abs(k - target))
+    return VELOCITY_TOKENS[nearest_key]
+  
   def new_note(self, pitch, velocity, start, end, bar):
     new_note = {
       'pitch': pitch,
@@ -234,7 +236,7 @@ class PrettyMidiTokenizer(object):
     return notes_df
 
 
-  def note_to_string(self, tokens, pitch, velocity, start, end):
+  def note_to_string(self, tokens, pitch, velocity, start, end, rythm = False):
     '''
     Converts a note into a string token and adds it to the time serie of tokens.
 
@@ -246,13 +248,7 @@ class PrettyMidiTokenizer(object):
     - end: the end time of the note (int)
     '''
 
-
-    if velocity < VELOCITY_LEVELS['MINIMUM']:
-      return tokens
-    elif velocity > VELOCITY_LEVELS['THRESHOLD']:
-      velocity_token = VELOCITY_FORTE_TOKEN
-    else:
-      velocity_token = VELOCITY_PIANO_TOKEN
+    velocity_token = self.compute_velocity_token(velocity)
 
     for i in range(start, end):
       if tokens[i] != SILENCE_TOKEN:
@@ -262,6 +258,7 @@ class PrettyMidiTokenizer(object):
       if i == start: 
         tokens[i] += NOTE_START_TOKEN
 
+      # sort the tokens by pitch to avoid redundancy
       if NOTE_SEPARATOR_TOKEN in tokens[i]:
         sorted_tokens = sorted(tokens[i].split(NOTE_SEPARATOR_TOKEN)) # sort the tokens by pitch
         tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
@@ -382,7 +379,7 @@ class PrettyMidiTokenizer(object):
         if SILENCE_TOKEN not in note_string:
 
           pitch = re.findall('\d+', note_string) [0] # re.findall returns a list
-          velocity = VELOCITY_LEVELS['p'] if VELOCITY_PIANO_TOKEN in note_string else VELOCITY_LEVELS['f']
+          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string] [0]
           start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
 
           if start is not None:
@@ -524,7 +521,7 @@ class PrettyMidiTokenizer(object):
       if duration > self.BAR_DURATION:
         break
 
-      elif velocity > VELOCITY_LEVELS['MINIMUM']:
+      elif velocity > VELOCITY_TOKENS['pp']:
         start = self.convert_time_to_ticks(duration)
         step = 0
 
@@ -555,6 +552,9 @@ class PrettyMidiTokenizer(object):
         tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
 
     return tokens
+  
+
+
 
 
   
