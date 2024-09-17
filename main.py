@@ -8,7 +8,7 @@ from eeg.validation import validation
 import threading
 import brainflow
 from PyQt5 import QtWidgets
-from gui.dialog_window import SetupDialog, CustomDialog
+from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
 import sys
 
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
                                             MODEL_DICT,
                                             parse_message=True)
 
-        if setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'] == 'Simulate Instrument':
+        if setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'] == SIMULATE_INSTRUMENT:
             app.set_application_status('SIMULATE_MIDI', True)
             app.midi_in.set_midi_simulation_port(setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'])
 

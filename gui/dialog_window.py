@@ -4,6 +4,7 @@ import bluetooth
 import rtmidi
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
+SIMULATE_INSTRUMENT = 'Simulate Instrument'
 
 def retrieve_eeg_devices():
     saved_devices = bluetooth.discover_devices(duration=1, lookup_names=True, lookup_class=True)
@@ -46,7 +47,7 @@ class SetupDialog(QtWidgets.QDialog):
 
         self.instrument_input_combo = QtWidgets.QComboBox(self)
         self.instrument_input_combo.addItems([port for port in input_ports])
-        self.instrument_input_combo.addItems('Simulate Instrument')
+        self.instrument_input_combo.addItems([SIMULATE_INSTRUMENT])
         self.instrument_input_combo.setCurrentText('Drum In Port 3')
 
         self.instrument_output_combo = QtWidgets.QComboBox(self)
@@ -85,7 +86,7 @@ class SetupDialog(QtWidgets.QDialog):
             'EEG_DEVICE_SERIAL_NUMBER' : self.device_combo.currentText(),
             'INSTRUMENT_MIDI_IN_PORT_NAME' : self.instrument_input_combo.currentText(),
             'INSTRUMENT_MIDI_OUT_PORT_NAME' : self.instrument_output_combo.currentText(),
-            'MELODY_MIDI_REC_PORT_NAME' : self.melody_rec_combo.currentText(),
+            # 'MELODY_MIDI_REC_PORT_NAME' : self.melody_rec_combo.currentText(),
             'MELODY_MIDI_PLAY_PORT_NAME' : self.melody_play_combo.currentText()
         }
 

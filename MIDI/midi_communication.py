@@ -4,6 +4,7 @@ import logging
 import mido
 import threading
 import os
+from gui.dialog_window import SIMULATE_INSTRUMENT
 
 class MIDI_Input:
     '''
@@ -19,7 +20,7 @@ class MIDI_Input:
 
         available_ports = rtmidi.MidiIn().get_ports()
 
-        if midi_in_port_name is not 'Simulate Instrument':
+        if midi_in_port_name != SIMULATE_INSTRUMENT:
             try:
                 self.midi_in_port = rtmidi.MidiIn().open_port(available_ports.index(midi_in_port_name))
                 logging.info(f'MIDI Input: Connected to port {midi_in_port_name}')
