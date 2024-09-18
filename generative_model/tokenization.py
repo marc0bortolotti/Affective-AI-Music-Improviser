@@ -147,9 +147,6 @@ class PrettyMidiTokenizer(object):
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
 
-  def initialize_vocab(self):
-    self.VOCAB = Dictionary()
-
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
     self.VOCAB.load(path)
