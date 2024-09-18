@@ -374,6 +374,9 @@ def epoch_step(dataloader, mode):
 
     total_loss = 0
     accuracy.reset()
+    BAR_LENGTH = INPUT_TOK.BAR_LENGTH
+    global GRADIENT_CLIP
+    GRADIENT_CLIP = 0.35
 
     # iterate over the training data
     for batch_idx, (data, targets) in enumerate(dataloader):
