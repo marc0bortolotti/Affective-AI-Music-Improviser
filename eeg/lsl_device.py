@@ -1,14 +1,10 @@
 import time
-
 import numpy as np
 import pylsl
 from pylsl import resolve_stream, StreamInlet
 import logging
-
 from sklearn.metrics import accuracy_score, f1_score
-
-from eeg.loader import synth_eeg_channels
-from eeg.processing import extract_features, baseline_correction
+from EEG.processing import extract_features, baseline_correction
 
 
 class LSLDevice():

@@ -1,8 +1,8 @@
 import threading
 import logging
-from midi.midi_communication import MIDI_Input, MIDI_Output
-from osc.osc_connection import Server_OSC, Client_OSC, REC_MSG
-from eeg.eeg_device import EEG_Device
+from MIDI.midi_communication import MIDI_Input, MIDI_Output
+from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG
+from EEG.eeg_device import EEG_Device
 from generative_model.model import TCN
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 import torch

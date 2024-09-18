@@ -2,7 +2,7 @@ import os
 import time
 import simpleaudio
 import logging
-from eeg.processing import generate_samples
+from EEG.processing import generate_samples
 
 file_path = os.path.dirname(__file__)
 relax_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/The_Scientist.wav')

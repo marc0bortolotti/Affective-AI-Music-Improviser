@@ -3,8 +3,8 @@ import time
 import mne
 import os
 from app.application import AI_AffectiveMusicImproviser
-from eeg.pretraining import pretraining
-from eeg.validation import validation
+from EEG.pretraining import pretraining
+from EEG.validation import validation
 import threading
 import brainflow
 from PyQt5 import QtWidgets
