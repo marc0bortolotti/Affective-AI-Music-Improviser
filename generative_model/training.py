@@ -15,6 +15,7 @@ from tokenization import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN
 from model import TCN
 from tokenization import Dictionary
 from torch.utils.tensorboard import SummaryWriter
+from torcheval.metrics import MulticlassAccuracy
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -54,8 +55,6 @@ def tokenize_midi_files():
             emotion_token = BCI_TOKENS[1]
         else:
             raise Exception('Emotion not found in file name. Please add the emotion to the file name.')
-
-        print(f'Emotion token: {emotion_token}')
 
         in_seq, in_df = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
         out_seq, out_df = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
@@ -427,9 +426,9 @@ def epoch_step(dataloader, mode):
 
 def train(results_path = None):
 
-    global RESULTS_PATH, MODEL_PATH
-    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses
-    global best_train_accuracy, best_eval_accuracy
+    global RESULTS_PATH, MODEL_PATH, accuracy
+    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, test_loss
+    global best_train_accuracy, best_eval_accuracy, test_accuracy
 
     if results_path is None:
         RESULTS_PATH = os.path.join('results', time.strftime("%Y%m%d_%H%M%S"))
@@ -449,6 +448,7 @@ def train(results_path = None):
     eval_losses = []
     train_losses = []
     lr = LEARNING_RATE
+    accuracy = MulticlassAccuracy()
 
     writer = SummaryWriter()
 
@@ -509,7 +509,6 @@ def train(results_path = None):
 
 
     # test the model
-    global test_loss, test_accuracy
     test_loss, test_accuracy = epoch_step(test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')

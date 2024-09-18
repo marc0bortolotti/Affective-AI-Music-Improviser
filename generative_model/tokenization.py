@@ -295,6 +295,10 @@ class PrettyMidiTokenizer(object):
       self.VOCAB.add_word(BCI_TOKENS[0])
       self.VOCAB.add_word(BCI_TOKENS[1])
 
+    filename = midi_path.split('/')[-1]
+    print(f'Processing MIDI file: {filename}')
+    if emotion_token is not None:
+      print(f'Emotion token: {emotion_token}')
     print('Creating notes dataframe...')
     notes_df = self.midi_to_df(midi_path, instrument=instrument)
 
@@ -336,7 +340,7 @@ class PrettyMidiTokenizer(object):
       stop_index = 1
       seq_len = len(tokens)
       
-    print(f"Creating sequences of tokens...")
+    print(f"\nCreating sequences of tokens...")
     for idx in range(0, stop_index, self.BAR_LENGTH):
       print(f"Processing sequence: {idx}/{stop_index}", end="\r")
       seq = tokens[idx:(idx+seq_len)].copy() # NB: copy is necessary to avoid modifying the original array
