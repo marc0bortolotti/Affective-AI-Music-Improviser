@@ -3,7 +3,7 @@ from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 import numpy as np
 import time
 import logging
-from eeg.processing import extract_features, baseline_correction, calculate_baseline
+from EEG.processing import extract_features, baseline_correction, calculate_baseline
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
