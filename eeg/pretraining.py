@@ -1,7 +1,7 @@
 import time
 import numpy as np
 import logging
-from eeg.processing import generate_samples
+from EEG.processing import generate_samples
 import simpleaudio
 import os
 

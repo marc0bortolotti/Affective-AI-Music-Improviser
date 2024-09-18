@@ -41,15 +41,22 @@ SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 if __name__ == "__main__":
 
+    # Setup the application
     win = QtWidgets.QApplication([])
     dialog = SetupDialog()
+
+    
     if dialog.exec_() == QtWidgets.QDialog.Accepted:
+    
+        # Get the setup parameters from the dialog window
         setup_parameters = dialog.get_data()
 
+        # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
             if not os.path.exists(SAVE_PATH):
                 os.makedirs(SAVE_PATH)
 
+        # Initialize the application
         app = AI_AffectiveMusicImproviser(  setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'], 
                                             setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'], 
                                             setup_parameters['MELODY_MIDI_PLAY_PORT_NAME'], 
@@ -59,15 +66,19 @@ if __name__ == "__main__":
                                             MODEL_DICT,
                                             parse_message=True)
 
+        # Set the simulation mode
         if setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'] == SIMULATE_INSTRUMENT:
             app.set_application_status('SIMULATE_MIDI', True)
             app.midi_in.set_midi_simulation_port(setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'])
 
+        # Set if the EEG device should be used in the application    
         if USE_EEG:
             app.set_application_status('USE_EEG', True)
 
+        # Train the EEG classifier
         dialog = CustomDialog('Do you want to TRAIN EEG classifiers?', buttons=['Yes', 'No'])
         if dialog.exec_() == 0:
+
             # train the EEG classification model
             scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
 
@@ -75,8 +86,11 @@ if __name__ == "__main__":
             if SAVE_SESSION:
                 app.eeg_device.save_session(os.path.join(SAVE_PATH, 'pretraining.csv'))
                 app.eeg_device.save_classifier(SAVE_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
+
         else:
+
             try:
+                # Load the EEG classifier from the file
                 scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
             except:
                 logging.error("No classifier found. Please, train the classifier first.")
@@ -84,7 +98,6 @@ if __name__ == "__main__":
         
         # Validate the EEG classifier with both LDA and SVM
         dialog = CustomDialog('Do you want to VALIDATE classifiers?')
-        f1_lda = None
         if dialog.exec_() == 0:
             app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
             print('\nLDA')
@@ -98,23 +111,30 @@ if __name__ == "__main__":
             if SAVE_SESSION:
                 app.eeg_device.save_session(os.path.join(SAVE_PATH, 'svm_validation.csv'))
 
+        # Set the classifier to be used in the application
         dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
         if dialog.exec_() == 0:
             app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
         else:
             app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
 
-        
+        # Start the application
         start_dialog = CustomDialog('Do you want to START the application?')
-        close_dialog = CustomDialog('Do you want to CLOSE the application?')
         if start_dialog.exec_() == 0:
+
+            # Start the application in a separate thread
             thread_app = threading.Thread(target=app.run, args=())
             thread_app.start()
+
+            # Close the application
+            close_dialog = CustomDialog('Do you want to CLOSE the application?')
             if close_dialog.exec_() == 0:
                 app.close()
+
                 if SAVE_SESSION:
                     app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
                     app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+
                 thread_app.join()
         else:
             sys.exit()
