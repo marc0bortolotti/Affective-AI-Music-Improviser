@@ -200,8 +200,9 @@ class PrettyMidiTokenizer(object):
     # create a dataframe from the notes dictionary
     notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     
-    for note in sorted_notes:
+    for idx, note in enumerate(sorted_notes):
 
+      print(f"Processing note: {idx}/{len(sorted_notes)}", end="\r")
       pitch = note.pitch
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
@@ -294,12 +295,16 @@ class PrettyMidiTokenizer(object):
       self.VOCAB.add_word(BCI_TOKENS[0])
       self.VOCAB.add_word(BCI_TOKENS[1])
 
+    print('Creating notes dataframe...')
     notes_df = self.midi_to_df(midi_path, instrument=instrument)
+
+    print('\nConverting notes to tokens...')
     
     # split notes into bars and convert notes ticks into a time serie of tokens 
     bars_time_series = []
     bar_ids = notes_df['bar'].unique()
     for bar_id in bar_ids:
+      print(f"Processing bar: {bar_id}/{len(bar_ids)}", end="\r")
       bar_df = notes_df[notes_df['bar'] == bar_id]
       bar_df = bar_df.reset_index(drop=True)
 
@@ -331,7 +336,9 @@ class PrettyMidiTokenizer(object):
       stop_index = 1
       seq_len = len(tokens)
       
+    print(f"Creating sequences of tokens...")
     for idx in range(0, stop_index, self.BAR_LENGTH):
+      print(f"Processing sequence: {idx}/{stop_index}", end="\r")
       seq = tokens[idx:(idx+seq_len)].copy() # NB: copy is necessary to avoid modifying the original array
 
       # remove the last token add the BCI token at the beginning
@@ -349,7 +356,9 @@ class PrettyMidiTokenizer(object):
 
     # concatenate the sequences if necessary
     if update_sequences: 
-      self.sequences += sequences        
+      self.sequences += sequences 
+
+    print('\nDone!')       
 
     return sequences, notes_df
   

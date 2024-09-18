@@ -46,7 +46,7 @@ def tokenize_midi_files():
 
         in_file_name = os.path.basename(in_file)
         out_file_name = os.path.basename(out_file)
-        print(f'{i + 1}: {in_file_name} -> {out_file_name}')
+        print(f'\n{i + 1}: {in_file_name} -> {out_file_name}')
 
         if 'RELAXED' in in_file_name:
             emotion_token = BCI_TOKENS[0]
@@ -55,6 +55,8 @@ def tokenize_midi_files():
         else:
             raise Exception('Emotion not found in file name. Please add the emotion to the file name.')
 
+        print(f'Emotion token: {emotion_token}')
+
         in_seq, in_df = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
         out_seq, out_df = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
 
@@ -62,8 +64,6 @@ def tokenize_midi_files():
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
             INPUT_TOK.sequences = INPUT_TOK.sequences[:min_len]
             OUTPUT_TOK.sequences = OUTPUT_TOK.sequences[:min_len]
-
-        print(f'Emotion token: {emotion_token}\n')
 
     print(f'\nNumber of input sequences: {len(INPUT_TOK.sequences)}')
     print(f'Input sequence length: {len(INPUT_TOK.sequences[0])}')
@@ -75,53 +75,57 @@ def tokenize_midi_files():
     return INPUT_TOK, OUTPUT_TOK
 
 
-for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
-
-    token_frequency_threshold = 0.0001 / 100
-    original_vocab = tokenizer.VOCAB
-    tokenizer.VOCAB.compute_weights()
-
-    # Remove tokens that appear less than # times in the dataset
-    for idx, weigth in enumerate(original_vocab.weights):
-        if weigth < token_frequency_threshold:
-            original_vocab.counter[idx] = 0
-
-    # Create a new vocab with the updated tokens
-    updated_vocab = Dictionary()
-    updated_vocab.add_word(SILENCE_TOKEN)
-    updated_vocab.add_word(BCI_TOKENS[0])
-    updated_vocab.add_word(BCI_TOKENS[1])
-    for word in original_vocab.word2idx.keys():
-        if original_vocab.counter[original_vocab.word2idx[word]] > 0:
-            updated_vocab.add_word(word)
-
-    # Verify that the sequences were updated
-    seq = tokenizer.sequences[0][:20].copy()
-    seq = [original_vocab.idx2word[tok] for tok in seq]
-    print(f'Initial sequence: {seq}')
-
-    # Update the sequences with the new vocab
-    for seq in tokenizer.sequences:
-        for i, tok in enumerate(seq):
-            if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
-                seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
-                updated_vocab.add_word(SILENCE_TOKEN)
-            else:
-                word = original_vocab.idx2word[tok]
-                seq[i] = updated_vocab.word2idx[word]
-                updated_vocab.add_word(word)
+def update_sequences(INPUT_TOK, OUTPUT_TOK):
     
-    tokenizer.VOCAB = updated_vocab
-    tokenizer.VOCAB.compute_weights()
+    for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
 
-    # Verify that the sequences were updated
-    seq = tokenizer.sequences[0][:20].copy()
-    seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
-    print(f'Updated sequence: {seq}')
+        token_frequency_threshold = 0.001 / 100
+        original_vocab = tokenizer.VOCAB
+        tokenizer.VOCAB.compute_weights()
 
-    # Verify that the vocab was updated
-    print(f'Inintial number of tokens: {len(original_vocab)}')
-    print(f'Final number of tokens: {len(tokenizer.VOCAB)}\n')
+        # Remove tokens that appear less than # times in the dataset
+        for idx, weigth in enumerate(original_vocab.weights):
+            if weigth < token_frequency_threshold:
+                original_vocab.counter[idx] = 0
+
+        # Create a new vocab with the updated tokens
+        updated_vocab = Dictionary()
+        updated_vocab.add_word(SILENCE_TOKEN)
+        updated_vocab.add_word(BCI_TOKENS[0])
+        updated_vocab.add_word(BCI_TOKENS[1])
+        for word in original_vocab.word2idx.keys():
+            if original_vocab.counter[original_vocab.word2idx[word]] > 0:
+                updated_vocab.add_word(word)
+
+        # Verify that the sequences were updated
+        seq = tokenizer.sequences[0][:20].copy()
+        seq = [original_vocab.idx2word[tok] for tok in seq]
+        print(f'Initial sequence: {seq}')
+
+        # Update the sequences with the new vocab
+        for seq in tokenizer.sequences:
+            for i, tok in enumerate(seq):
+                if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
+                    seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
+                    updated_vocab.add_word(SILENCE_TOKEN)
+                else:
+                    word = original_vocab.idx2word[tok]
+                    seq[i] = updated_vocab.word2idx[word]
+                    updated_vocab.add_word(word)
+        
+        tokenizer.VOCAB = updated_vocab
+        tokenizer.VOCAB.compute_weights()
+
+        # Verify that the sequences were updated
+        seq = tokenizer.sequences[0][:20].copy()
+        seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
+        print(f'Updated sequence: {seq}')
+
+        # Verify that the vocab was updated
+        print(f'Inintial number of tokens: {len(original_vocab)}')
+        print(f'Final number of tokens: {len(tokenizer.VOCAB)}\n')
+
+    return INPUT_TOK, OUTPUT_TOK
     
 
 def create_dataset(split = [0.7, 0.2, 0.1]):
@@ -130,6 +134,8 @@ def create_dataset(split = [0.7, 0.2, 0.1]):
 
     # Split the dataset into training, evaluation and test sets
     train_set, eval_set, test_set = random_split(dataset, split)
+
+    return train_set, eval_set, test_set
 
 def data_augmentation_shift(dataset, shifts):
     '''
@@ -520,9 +526,12 @@ if __name__ == '__main__':
     global INPUT_TOK, OUTPUT_TOK
     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
+    # update the sequences
+    INPUT_TOK, OUTPUT_TOK = update_sequences(INPUT_TOK, OUTPUT_TOK)
+
     # create the dataset
     train_set, eval_set, test_set = create_dataset()
-    print(f'Train set size: {len(train_set_augmented)}')
+    print(f'Train set size: {len(train_set)}')
     print(f'Evaluation set size: {len(eval_set)}')
     print(f'Test set size: {len(test_set)}')
 
