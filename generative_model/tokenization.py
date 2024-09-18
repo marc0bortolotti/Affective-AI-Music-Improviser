@@ -63,6 +63,16 @@ class Dictionary(object):
       self.counter.append(1)
     else:
       self.counter[self.word2idx[word]] += 1
+    
+  def remove_word(self, word):
+    if self.is_in_vocab(word):
+      idx = self.word2idx[word]
+      self.idx2word.pop(idx)
+      self.counter.pop(idx)
+      if idx < len(self.weights):
+        self.weights.pop(idx)
+        self.compute_weights()
+      self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
 
   def compute_weights(self):
     total = sum(self.counter)
@@ -137,6 +147,8 @@ class PrettyMidiTokenizer(object):
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
 
+  def initialize_vocab(self):
+    self.VOCAB = Dictionary()
 
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
