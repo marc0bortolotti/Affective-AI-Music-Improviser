@@ -30,7 +30,7 @@ LR_SCHEDULER = True
 EARLY_STOP_EPOCHS = 15
 GRADIENT_CLIP = 0.35
 EMBEDDING_SIZE = 512
-TOKENS_FREQUENCY_THRESHOLD = 10
+TOKENS_FREQUENCY_THRESHOLD = None
 SILENCE_TOKEN_WEIGHT = 0.01
 DATASET_SPLIT = [0.8, 0.1, 0.1]
 
@@ -261,6 +261,46 @@ def initialize_model():
     d = dilation = 2 ^ (n_levels - 1)
     '''
 
+    class CustomLoss(nn.Module):
+        def __init__(self, weight_ce=1.0, weight_penalty=1.0):
+            """
+            Custom loss function combining Cross Entropy loss and a penalty based
+            on the number of predictions equal to class 0.
+
+            Args:
+            - weight_ce: Weight for the Cross Entropy loss term.
+            - weight_penalty: Weight for the penalty term.
+            """
+            super(CustomLoss, self).__init__()
+            self.weight_ce = weight_ce
+            self.weight_penalty = weight_penalty
+            self.cross_entropy_loss = nn.CrossEntropyLoss()
+
+        def forward(self, outputs, targets):
+            """
+            Args:
+            - outputs: Model predictions (logits), shape (batch_size, num_classes)
+            - targets: Ground truth labels, shape (batch_size,)
+            
+            Returns:
+            - Combined loss (cross entropy + penalty)
+            """
+
+            # Cross Entropy Loss
+            ce_loss = self.cross_entropy_loss(outputs, targets)
+
+            # Get predicted class by taking argmax along the class dimension
+            predictions = torch.argmax(outputs, dim=1)
+
+            # Penalty: Number of predictions equal to class 0
+            zero_class_predictions = (predictions == 0).float().sum()
+
+            # Compute the total loss as a weighted sum
+            total_loss = self.weight_ce * ce_loss + self.weight_penalty * zero_class_predictions
+
+            return total_loss
+
+
     global SEED, INPUT_SIZE, EMBEDDING_SIZE, LEVELS, HIDDEN_UNITS, NUM_CHANNELS, OUTPUT_SIZE, LOSS_WEIGTHS
 
     SEED = 1111
@@ -297,11 +337,13 @@ def initialize_model():
 
     # balance the loss function by assigning a weight to each token related to its frequency
     LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
+
     # for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
     #     LOSS_WEIGTHS[i] = 1 - weigth
-    LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = SILENCE_TOKEN_WEIGHT
+    # LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = SILENCE_TOKEN_WEIGHT
         
-    criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
+    # criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
+    criterion = CustomLoss(weight_ce=1.0, weight_penalty=1.0)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
 
     return model, criterion, optimizer
@@ -446,9 +488,6 @@ def epoch_step(dataloader, mode):
             # update the weights
             optimizer.step()
 
-            if LR_SCHEDULER:
-                scheduler.step(loss)
-
         total_loss += loss.data.item()
 
         # update n_correct and n_total to calculate the accuracy
@@ -514,6 +553,10 @@ def train():
         if epoch > EARLY_STOP_EPOCHS:
             if min(train_losses[-EARLY_STOP_EPOCHS:]) > best_train_loss:
                 break
+
+        # Learning rate scheduler
+        if LR_SCHEDULER:
+            scheduler.step(train_loss)
 
         # print the loss and the progress
         elapsed = time.time() - start_time

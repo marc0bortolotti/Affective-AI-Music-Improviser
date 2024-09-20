@@ -6,7 +6,7 @@ from mido import MidiFile, MidiTrack, Message, MetaMessage
 
 
 BPM = 120
-TICKS_PER_BEAT = 12 # resolution of the MIDI file
+TICKS_PER_BEAT = 4 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
 VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'}
