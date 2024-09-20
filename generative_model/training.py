@@ -35,7 +35,7 @@ SILENCE_TOKEN_WEIGHT = 0.1
 DATASET_SPLIT = [0.7, 0.2, 0.1]
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_AUG_{1}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_AUG-{0}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 idx = 1
@@ -321,14 +321,6 @@ def save_model_config():
 
 def save_parameters():
 
-    # plot the losses over the epochs
-
-    plt.plot(train_losses, label='train')
-    plt.plot(eval_losses, label='eval')
-    plt.legend()
-    plt.savefig(os.path.join(RESULTS_PATH, 'losses.png'))
-    plt.clf()
-
     # save the vocabularies
     INPUT_TOK.VOCAB.save(os.path.join(RESULTS_PATH, 'input_vocab.txt'))
     OUTPUT_TOK.VOCAB.save(os.path.join(RESULTS_PATH, 'output_vocab.txt'))
@@ -369,13 +361,20 @@ def save_parameters():
 
 def save_results():
 
+    # plot the losses over the epochs
+    plt.plot(train_losses, label='train')
+    plt.plot(eval_losses, label='eval')
+    plt.legend()
+    plt.savefig(os.path.join(RESULTS_PATH, 'losses.png'))
+    plt.clf()
+
     with open(os.path.join(RESULTS_PATH, 'results.txt'), 'w') as f:
         f.write(f'-------------------RESULTS----------------\n')
         f.write(f'TRAIN_LOSSES: {best_train_loss}\n')
         f.write(f'BEST_EVAL_LOSS: {best_eval_loss}\n')
         f.write(f'TEST_LOSS: {test_loss}\n')
-        f.write(f'BEST_TRAIN_ACCURACY: {best_train_accuracy}\n')
-        f.write(f'BEST_EVAL_ACCURACY: {best_eval_accuracy}\n')
+        f.write(f'TRAIN_ACCURACY: {final_train_accuracy}\n')
+        f.write(f'EVAL_ACCURACY: {final_eval_accuracy}\n')
         f.write(f'TEST_ACCURACY: {test_accuracy}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
 
@@ -457,11 +456,11 @@ def train():
 
     MODEL_PATH = os.path.join(RESULTS_PATH, 'model_state_dict.pth')
 
-    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, best_train_accuracy, best_eval_accuracy
+    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, final_train_accuracy, final_eval_accuracy
     best_eval_loss = 1e8
     best_train_loss = 1e8
-    best_eval_accuracy = 0
-    best_train_accuracy = 0
+    final_train_accuracy = 0
+    final_eval_accuracy = 0
     best_model_epoch = 0
     eval_losses = []
     train_losses = []
@@ -486,20 +485,14 @@ def train():
         if eval_loss < best_eval_loss:
             # torch.save(model.state_dict(), MODEL_PATH)
             best_eval_loss = eval_loss
-            best_model_epoch = epoch
 
         if train_loss < best_train_loss:
             torch.save(model.state_dict(), MODEL_PATH)
             best_train_loss = train_loss
+            final_train_accuracy = train_accuracy
+            final_eval_accuracy = eval_accuracy
+            best_model_epoch = epoch
 
-        if eval_accuracy > best_eval_accuracy:
-            best_eval_accuracy = eval_accuracy
-        
-        if train_accuracy > best_train_accuracy:
-            best_train_accuracy = train_accuracy
-
-        # Anneal the learning rate if the validation loss plateaus
-        
         eval_losses.append(eval_loss)
         train_losses.append(train_loss)
 
@@ -511,8 +504,8 @@ def train():
         # print the loss and the progress
         elapsed = time.time() - start_time
         lr = optimizer.param_groups[0]['lr']
-        print('| epoch {:3d}/{:3d} | lr {:02.5f} | ms/epoch {:5.5f} | train_acc {:5.2f} | train_loss {:5.2f}' \
-                .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, train_loss))
+        print('| epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | train_loss {:5.2f} | eval_acc {:5.2f} | eval_loss {:5.2f} |' \
+                .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, train_loss, eval_accuracy, eval_loss))
 
 
     print('\n\n TRAINING FINISHED:\n\n\tBest Loss: {:5.2f}\tBest Model saved at epoch: {:3d} \n\n' \
