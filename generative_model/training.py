@@ -30,12 +30,12 @@ LR_SCHEDULER = False
 EARLY_STOP_EPOCHS = 15
 GRADIENT_CLIP = 0.35
 EMBEDDING_SIZE = 40
-TOKENS_FREQUENCY_THRESHOLD = 20
-SILENCE_TOKEN_WEIGHT = 0.1
+TOKENS_FREQUENCY_THRESHOLD = 5
+SILENCE_TOKEN_WEIGHT = 0.01
 DATASET_SPLIT = [0.7, 0.2, 0.1]
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_AUG-{0}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_tokFreq_{TOKENS_FREQUENCY_THRESHOLD}_silWeight_{SILENCE_TOKEN_WEIGHT}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -404,7 +404,7 @@ def epoch_step(dataloader, mode):
 
         # mask the last bar of the input data
         batch_size = data.size(0)
-        data_masked = torch.cat((data[:, :BAR_LENGTH*3], torch.ones([batch_size, BAR_LENGTH], dtype=torch.long, device = device)), dim = 1)
+        data_masked = torch.cat((data[:, :BAR_LENGTH*3], torch.zeros([batch_size, BAR_LENGTH], dtype=torch.long, device = device)), dim = 1)
 
         if FEEDBACK:
             input = torch.cat((data_masked, prev_output[:batch_size, :]), dim = 1)
