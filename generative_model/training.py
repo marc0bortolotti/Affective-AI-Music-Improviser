@@ -25,11 +25,11 @@ BATCH_SIZE = 16
 FEEDBACK = False
 EMPHASIZE_EEG = False
 DATA_AUGMENTATION = True
-LR_SCHEDULER = False
+LR_SCHEDULER = True
 
 EARLY_STOP_EPOCHS = 15
 GRADIENT_CLIP = 0.35
-EMBEDDING_SIZE = 128
+EMBEDDING_SIZE = 256
 TOKENS_FREQUENCY_THRESHOLD = 20
 SILENCE_TOKEN_WEIGHT = 0.01
 DATASET_SPLIT = [0.7, 0.2, 0.1]
@@ -372,7 +372,7 @@ def save_results():
 
     with open(os.path.join(RESULTS_PATH, 'results.txt'), 'w') as f:
         f.write(f'-------------------RESULTS----------------\n')
-        f.write(f'TRAIN_LOSSES: {best_train_loss}\n')
+        f.write(f'BEST_TRAIN_LOSS: {best_train_loss}\n')
         f.write(f'BEST_EVAL_LOSS: {best_eval_loss}\n')
         f.write(f'TEST_LOSS: {test_loss}\n')
         f.write(f'TRAIN_ACCURACY: {final_train_accuracy}\n')
