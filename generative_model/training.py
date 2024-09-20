@@ -22,15 +22,14 @@ EPOCHS = 1000 # 500
 LEARNING_RATE = 0.002 # 4
 BATCH_SIZE = 16 # 16
 
-TRAIN_MODEL = True
 FEEDBACK = False
 EMPHASIZE_EEG = False
 EARLY_STOP = True
-DATA_AUGMENTATION = True
+DATA_AUGMENTATION = False
 
 GRADIENT_CLIP = 0.35
 EMBEDDING_SIZE = 20
-TOKENS_FREQUENCY_THRESHOLD = 10
+TOKENS_FREQUENCY_THRESHOLD = 20
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
@@ -83,7 +82,7 @@ def update_sequences(freq_th = None):
 
     if freq_th is not None:
 
-        for tokenizer in [OUTPUT_TOK]:
+        for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
 
             original_vocab = tokenizer.VOCAB
 
@@ -102,7 +101,7 @@ def update_sequences(freq_th = None):
                     updated_vocab.add_word(word)
 
             # Verify that the sequences were updated
-            seq = tokenizer.sequences[10].copy()
+            seq = tokenizer.sequences[0].copy()
             seq = [original_vocab.idx2word[tok] for tok in seq]
             print(f'Initial sequence: {seq}')
 
@@ -121,7 +120,7 @@ def update_sequences(freq_th = None):
             tokenizer.VOCAB.compute_weights()
 
             # Verify that the sequences were updated
-            seq = tokenizer.sequences[10].copy()
+            seq = tokenizer.sequences[0].copy()
             seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
             print(f'Updated sequence: {seq}')
 
@@ -542,32 +541,32 @@ if __name__ == '__main__':
     # update the sequences
     update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
-    # # create the dataset
-    # train_set, eval_set, test_set = create_dataset()
-    # print(f'Train set size: {len(train_set)}')
-    # print(f'Evaluation set size: {len(eval_set)}')
-    # print(f'Test set size: {len(test_set)}')
+    # create the dataset
+    train_set, eval_set, test_set = create_dataset()
+    print(f'Train set size: {len(train_set)}')
+    print(f'Evaluation set size: {len(eval_set)}')
+    print(f'Test set size: {len(test_set)}')
 
-    # # augment the dataset
-    # if DATA_AUGMENTATION:
-    #     train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
-    #     print(f'Training set size after augmentation: {len(train_set_augmented)}')
-    # else:
-    #     train_set_augmented = train_set
+    # augment the dataset
+    if DATA_AUGMENTATION:
+        train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
+        print(f'Training set size after augmentation: {len(train_set_augmented)}')
+    else:
+        train_set_augmented = train_set
 
-    # # initialize the dataloaders
-    # print(f'Initializing the dataloaders...')
-    # global train_dataloader, eval_dataloader, test_dataloader
-    # train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set_augmented, eval_set, test_set)
+    # initialize the dataloaders
+    print(f'Initializing the dataloaders...')
+    global train_dataloader, eval_dataloader, test_dataloader
+    train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set_augmented, eval_set, test_set)
     
-    # # initialize the model
-    # print(f'Initializing the model...')
-    # global model, criterion, optimizer
-    # model, criterion, optimizer = initialize_model()
-    # print(f'Model size: {model_size(model)}')
+    # initialize the model
+    print(f'Initializing the model...')
+    global model, criterion, optimizer
+    model, criterion, optimizer = initialize_model()
+    print(f'Model size: {model_size(model)}')
 
-    # # train the model
-    # print(f'Training the model...')
-    # train('results/model_test')
+    # train the model
+    print(f'Training the model...')
+    train('results/model_test')
 
     

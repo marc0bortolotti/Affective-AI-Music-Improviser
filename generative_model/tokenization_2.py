@@ -579,8 +579,7 @@ class PrettyMidiTokenizer(object):
 
 if __name__ == '__main__':
   import os
-  # file_path = os.path.join(os.path.dirname(__file__), 'test/chords.mid')
-  file_path = os.path.join(os.path.dirname(__file__), 'dataset/melodies/melody_CONCENTRATED.mid')
+  file_path = os.path.join(os.path.dirname(__file__), 'test/chords.mid')
   save_path = os.path.join(os.path.dirname(__file__), 'test/chords_reconstructed_2.mid')
 
   tok = PrettyMidiTokenizer()
