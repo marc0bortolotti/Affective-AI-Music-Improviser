@@ -10,29 +10,38 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_sp
 import matplotlib.pyplot as plt
 import yaml
 import re
-from tokenization_2 import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN, Dictionary
+from tokenization import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN, Dictionary
 from model import TCN
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
-# MODEL PARAMETERS
-EPOCHS = 1000 # 500
-LEARNING_RATE = 0.002 # 4
-BATCH_SIZE = 16 # 16
+EPOCHS = 1000 
+LEARNING_RATE = 0.002 
+BATCH_SIZE = 16 
 
 FEEDBACK = False
 EMPHASIZE_EEG = False
-EARLY_STOP = True
 DATA_AUGMENTATION = False
+LR_SCHEDULER = False
 
+EARLY_STOP_EPOCHS = 15
 GRADIENT_CLIP = 0.35
-EMBEDDING_SIZE = 20
+EMBEDDING_SIZE = 40
 TOKENS_FREQUENCY_THRESHOLD = 20
+SILENCE_TOKEN_WEIGHT = 0.1
+DATASET_SPLIT = [0.7, 0.2, 0.1]
 
 DIRECTORY_PATH = os.path.dirname(__file__)
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_AUG_{1}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
+
+idx = 1
+while os.path.exists(RESULTS_PATH):
+    RESULTS_PATH += f'_{idx}'
+os.makedirs(RESULTS_PATH)
 
 def model_size(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -100,10 +109,10 @@ def update_sequences(freq_th = None):
                 if original_vocab.counter[original_vocab.word2idx[word]] > 0:
                     updated_vocab.add_word(word)
 
-            # Verify that the sequences were updated
-            seq = tokenizer.sequences[0].copy()
-            seq = [original_vocab.idx2word[tok] for tok in seq]
-            print(f'Initial sequence: {seq}')
+            # # Verify that the sequences were updated
+            # seq = tokenizer.sequences[0].copy()
+            # seq = [original_vocab.idx2word[tok] for tok in seq]
+            # print(f'Initial sequence: {seq}')
 
             # Update the sequences with the new vocab
             for seq in tokenizer.sequences:
@@ -119,10 +128,10 @@ def update_sequences(freq_th = None):
             tokenizer.VOCAB = updated_vocab
             tokenizer.VOCAB.compute_weights()
 
-            # Verify that the sequences were updated
-            seq = tokenizer.sequences[0].copy()
-            seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
-            print(f'Updated sequence: {seq}')
+            # # Verify that the sequences were updated
+            # seq = tokenizer.sequences[0].copy()
+            # seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
+            # print(f'Updated sequence: {seq}')
 
             # Verify that the vocab was updated
             print(f'Inintial number of tokens: {len(original_vocab)}')
@@ -288,12 +297,27 @@ def initialize_model():
     LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
     # for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
     #     LOSS_WEIGTHS[i] = 1 - weigth
-    LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = 0.01
+    LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = SILENCE_TOKEN_WEIGHT
         
     criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
 
     return model, criterion, optimizer
+
+def save_model_config():
+    data = {
+        'DATE': time.strftime("%Y%m%d-%H%M%S"),
+        'INPUT_SIZE': INPUT_SIZE,
+        'EMBEDDING_SIZE': EMBEDDING_SIZE,
+        'NUM_CHANNELS': NUM_CHANNELS,
+        'OUTPUT_SIZE': OUTPUT_SIZE,
+        'KERNEL_SIZE': 3
+
+    }
+
+    path = os.path.join(RESULTS_PATH, 'config.yaml')
+    with open(path, 'w') as file:
+        yaml.safe_dump(data, file)
 
 def save_parameters():
 
@@ -310,7 +334,7 @@ def save_parameters():
     OUTPUT_TOK.VOCAB.save(os.path.join(RESULTS_PATH, 'output_vocab.txt'))
 
      # save the model hyperparameters in a file txt
-    with open(os.path.join(RESULTS_PATH, 'model_hyperparameters.txt'), 'w') as f:
+    with open(os.path.join(RESULTS_PATH, 'model_parameters.txt'), 'w') as f:
 
         f.write(f'DATE: {time.strftime("%Y%m%d-%H%M%S")}\n\n')
 
@@ -320,17 +344,16 @@ def save_parameters():
         f.write(f'EVAL_SET_SIZE: {len(eval_set)}\n')
         f.write(f'TEST_SET_SIZE: {len(test_set)}\n\n')
 
-
         f.write(f'----------OPTIMIZATION PARAMETERS----------\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
-        f.write(f'EARLY STOPPING: {EARLY_STOP}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
+        f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
         f.write(f'DATA AUGMENTATION: {DATA_AUGMENTATION}\n')
+        f.write(f'EARLY STOP EPOCHS: {EARLY_STOP_EPOCHS}\n')
         f.write(f'LEARNING_RATE: {LEARNING_RATE}\n')
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
         f.write(f'EPOCHS: {EPOCHS}\n\n')
-
 
         f.write(f'------------MODEL PARAMETERS--------------\n')
         f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
@@ -344,7 +367,9 @@ def save_parameters():
         f.write(f'LOSS_WEIGTHS: {LOSS_WEIGTHS}\n\n')
 
 
+def save_results():
 
+    with open(os.path.join(RESULTS_PATH, 'results.txt'), 'w') as f:
         f.write(f'-------------------RESULTS----------------\n')
         f.write(f'TRAIN_LOSSES: {best_train_loss}\n')
         f.write(f'BEST_EVAL_LOSS: {best_eval_loss}\n')
@@ -353,19 +378,6 @@ def save_parameters():
         f.write(f'BEST_EVAL_ACCURACY: {best_eval_accuracy}\n')
         f.write(f'TEST_ACCURACY: {test_accuracy}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
-
-    data = {
-        'DATE': time.strftime("%Y%m%d-%H%M%S"),
-        'INPUT_SIZE': INPUT_SIZE,
-        'EMBEDDING_SIZE': EMBEDDING_SIZE,
-        'NUM_CHANNELS': NUM_CHANNELS,
-        'OUTPUT_SIZE': OUTPUT_SIZE,
-        'KERNEL_SIZE': 3
-    }
-
-    path = os.path.join(RESULTS_PATH, 'config.yaml')
-    with open(path, 'w') as file:
-        yaml.safe_dump(data, file)
 
 
 def epoch_step(dataloader, mode):
@@ -426,6 +438,9 @@ def epoch_step(dataloader, mode):
             # update the weights
             optimizer.step()
 
+            if LR_SCHEDULER:
+                scheduler.step(loss)
+
         total_loss += loss.data.item()
 
         # update n_correct and n_total to calculate the accuracy
@@ -433,27 +448,16 @@ def epoch_step(dataloader, mode):
         n_total += final_target.size(0)
 
     # calculate the accuracy
-    accuracy = n_correct / n_total
+    accuracy = 100 * n_correct / n_total
 
     return total_loss / len(dataloader), accuracy
 
 
-def train(results_path = None):
-
-    global RESULTS_PATH, MODEL_PATH
-    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, test_loss
-    global best_train_accuracy, best_eval_accuracy, test_accuracy
-
-    if results_path is None:
-        RESULTS_PATH = os.path.join('results', time.strftime("%Y%m%d_%H%M%S"))
-    else:
-        RESULTS_PATH = results_path
-    
-    if not os.path.exists(RESULTS_PATH):
-        os.makedirs(RESULTS_PATH)
+def train():
 
     MODEL_PATH = os.path.join(RESULTS_PATH, 'model_state_dict.pth')
 
+    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, best_train_accuracy, best_eval_accuracy
     best_eval_loss = 1e8
     best_train_loss = 1e8
     best_eval_accuracy = 0
@@ -461,9 +465,10 @@ def train(results_path = None):
     best_model_epoch = 0
     eval_losses = []
     train_losses = []
-    lr = LEARNING_RATE
 
-    writer = SummaryWriter()
+    global scheduler, writer
+    writer = SummaryWriter(RESULTS_PATH)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=10)
 
     for epoch in range(1, EPOCHS+1):
 
@@ -494,25 +499,18 @@ def train(results_path = None):
             best_train_accuracy = train_accuracy
 
         # Anneal the learning rate if the validation loss plateaus
-        if epoch > 5 and eval_loss >= max(train_losses[-5:]):
-            lr = lr / 2.
-            if lr < 0.000001:
-                lr = LEARNING_RATE
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
-
-
+        
         eval_losses.append(eval_loss)
         train_losses.append(train_loss)
 
         # Early stopping
-        if EARLY_STOP:
-          if epoch > 15:
-              if min(train_losses[-15:]) > best_train_loss:
-                  break
+        if epoch > EARLY_STOP_EPOCHS:
+            if min(train_losses[-EARLY_STOP_EPOCHS:]) > best_train_loss:
+                break
 
         # print the loss and the progress
         elapsed = time.time() - start_time
+        lr = optimizer.param_groups[0]['lr']
         print('| epoch {:3d}/{:3d} | lr {:02.5f} | ms/epoch {:5.5f} | train_acc {:5.2f} | train_loss {:5.2f}' \
                 .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, train_loss))
 
@@ -522,15 +520,16 @@ def train(results_path = None):
 
 
     # test the model
+    global test_loss, test_accuracy
     test_loss, test_accuracy = epoch_step(test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')
 
-    save_parameters()
-
     writer.flush()
     writer.close()
     
+
+
 
 if __name__ == '__main__':
 
@@ -542,31 +541,35 @@ if __name__ == '__main__':
     update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
-    train_set, eval_set, test_set = create_dataset()
+    train_set, eval_set, test_set = create_dataset(DATASET_SPLIT)
     print(f'Train set size: {len(train_set)}')
     print(f'Evaluation set size: {len(eval_set)}')
     print(f'Test set size: {len(test_set)}')
 
     # augment the dataset
     if DATA_AUGMENTATION:
-        train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
-        print(f'Training set size after augmentation: {len(train_set_augmented)}')
-    else:
-        train_set_augmented = train_set
+        train_set = data_augmentation_shift(train_set, [-2, -1, 1, 2])
+        print(f'Training set size after augmentation: {len(train_set)}')
 
     # initialize the dataloaders
     print(f'Initializing the dataloaders...')
     global train_dataloader, eval_dataloader, test_dataloader
-    train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set_augmented, eval_set, test_set)
+    train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
     
     # initialize the model
     print(f'Initializing the model...')
     global model, criterion, optimizer
     model, criterion, optimizer = initialize_model()
-    print(f'Model size: {model_size(model)}')
+    print(f'Model size: {model_size(model)}')   
+
+    # save the model configuration
+    save_model_config()
+    save_parameters()
 
     # train the model
     print(f'Training the model...')
-    train('results/model_test')
+    train()
 
+    # save the results
+    save_results()
     
