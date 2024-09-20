@@ -11,7 +11,6 @@ from PyQt5 import QtWidgets
 from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
 import sys
 
-
 # Set log levels
 mne.set_log_level(verbose='WARNING', return_old_level=False, add_frames=None)
 brainflow.BoardShim.set_log_level(3)
@@ -35,7 +34,7 @@ SAVE_SESSION = False
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/trained_models/model_test')
+MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/results/model_AUG-0_1')
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
@@ -44,7 +43,6 @@ if __name__ == "__main__":
     # Setup the application
     win = QtWidgets.QApplication([])
     dialog = SetupDialog()
-
     
     if dialog.exec_() == QtWidgets.QDialog.Accepted:
     
@@ -129,13 +127,13 @@ if __name__ == "__main__":
             # Close the application
             close_dialog = CustomDialog('Do you want to CLOSE the application?')
             if close_dialog.exec_() == 0:
-                app.close()
 
                 if SAVE_SESSION:
                     app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
                     app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
 
-                thread_app.join()
+                app.close()
+
         else:
             sys.exit()
 

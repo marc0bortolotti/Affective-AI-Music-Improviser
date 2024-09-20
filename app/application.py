@@ -85,11 +85,17 @@ def thread_function_eeg(name, app):
 def thread_function_midi(name, app):
     logging.info("Thread %s: starting", name)   
     if app.STATUS['SIMULATE_MIDI']:
+
+        SIMULATION_EVENT = threading.Event()
+        app.midi_in.set_simulation_event(SIMULATION_EVENT)
+
         while True:
             SYNCH_EVENT.wait()
-            SYNCH_EVENT.clear()
 
             app.midi_in.simulate()
+
+            SIMULATION_EVENT.wait()
+            SYNCH_EVENT.clear()
 
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
@@ -116,6 +122,7 @@ class AI_AffectiveMusicImproviser():
                         eeg_device_type,
                         window_duration,
                         model_dict,
+                        close_event,
                         parse_message=False):
         '''
         Parameters:
@@ -253,6 +260,8 @@ class AI_AffectiveMusicImproviser():
                 # Mask the last bar of the input data.
                 input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.ones([1, self.BAR_LENGTH], dtype=torch.long)),
                                     dim=1)
+                
+                logging.info(f"Input sequence: {input_data}")
 
                 # Make the prediction and flatten the output.
                 prediction = self.model(input_data.to(self.device))
@@ -278,6 +287,7 @@ class AI_AffectiveMusicImproviser():
 
                 # get only the last predicted bar
                 predicted_sequence = predicted_sequence[-self.BAR_LENGTH:]
+                logging.info(f"Generated sequence: {predicted_sequence}")
 
                 # save the hystory
                 self.hystory.append(tokens_buffer.copy())
