@@ -30,7 +30,7 @@ DATA_AUGMENTATION = True
 
 GRADIENT_CLIP = 0.35
 EMBEDDING_SIZE = 20
-TOKENS_FREQUENCY_THRESHOLD = 30
+TOKENS_FREQUENCY_THRESHOLD = 10
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
@@ -59,8 +59,8 @@ def tokenize_midi_files():
         else:
             raise Exception('Emotion not found in file name. Please add the emotion to the file name.')
 
-        in_seq = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
-        out_seq = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
+        _ = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
+        _ = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
 
         if len(INPUT_TOK.sequences) != len(OUTPUT_TOK.sequences):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
@@ -83,7 +83,7 @@ def update_sequences(freq_th = None):
 
     if freq_th is not None:
 
-        for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
+        for tokenizer in [OUTPUT_TOK]:
 
             original_vocab = tokenizer.VOCAB
 
@@ -102,7 +102,7 @@ def update_sequences(freq_th = None):
                     updated_vocab.add_word(word)
 
             # Verify that the sequences were updated
-            seq = tokenizer.sequences[0][:20].copy()
+            seq = tokenizer.sequences[10].copy()
             seq = [original_vocab.idx2word[tok] for tok in seq]
             print(f'Initial sequence: {seq}')
 
@@ -121,7 +121,7 @@ def update_sequences(freq_th = None):
             tokenizer.VOCAB.compute_weights()
 
             # Verify that the sequences were updated
-            seq = tokenizer.sequences[0][:20].copy()
+            seq = tokenizer.sequences[10].copy()
             seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
             print(f'Updated sequence: {seq}')
 
@@ -287,8 +287,9 @@ def initialize_model():
 
     # balance the loss function by assigning a weight to each token related to its frequency
     LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
-    for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
-        LOSS_WEIGTHS[i] = 1 - weigth
+    # for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
+    #     LOSS_WEIGTHS[i] = 1 - weigth
+    LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = 0.01
         
     criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)

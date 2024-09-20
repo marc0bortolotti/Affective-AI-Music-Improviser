@@ -589,5 +589,7 @@ if __name__ == '__main__':
 
   tok = PrettyMidiTokenizer()
   sequences, midi_df = tok.midi_to_tokens(file_path, update_vocab=True)
-  tokens = sequences[0]
-  mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'piano')
+
+  print(sequences)
+  # tokens = sequences[0]
+  # mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'piano')
