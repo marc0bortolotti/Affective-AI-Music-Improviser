@@ -1,6 +1,5 @@
 import glob
 import numpy as np
-import pandas as pd
 import os
 import time
 import torch
@@ -11,41 +10,33 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_sp
 import matplotlib.pyplot as plt
 import yaml
 import re
-from tokenization import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN
+from tokenization_2 import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN, Dictionary
 from model import TCN
-from tokenization import Dictionary
 from torch.utils.tensorboard import SummaryWriter
-from torcheval.metrics import MulticlassAccuracy
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(device)
-
-
+print('\n', device)
 
 # MODEL PARAMETERS
 EPOCHS = 1000 # 500
 LEARNING_RATE = 0.002 # 4
 BATCH_SIZE = 16 # 16
+
 TRAIN_MODEL = True
 FEEDBACK = False
 EMPHASIZE_EEG = False
 EARLY_STOP = True
+DATA_AUGMENTATION = True
+
+GRADIENT_CLIP = 0.35
+EMBEDDING_SIZE = 20
+TOKENS_FREQUENCY_THRESHOLD = 30
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 def model_size(model):
-    '''
-    Compute the number of parameters in the model.
-    '''
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-def load_model(model, path):
-    '''
-    Load the model from a file.
-    '''
-    model.load_state_dict(torch.load(path))
-    model.eval()
 
 def tokenize_midi_files():
 
@@ -68,8 +59,8 @@ def tokenize_midi_files():
         else:
             raise Exception('Emotion not found in file name. Please add the emotion to the file name.')
 
-        in_seq, in_df = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
-        out_seq, out_df = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
+        in_seq = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
+        out_seq = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
 
         if len(INPUT_TOK.sequences) != len(OUTPUT_TOK.sequences):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
@@ -86,57 +77,57 @@ def tokenize_midi_files():
     return INPUT_TOK, OUTPUT_TOK
 
 
-def update_sequences(INPUT_TOK, OUTPUT_TOK):
+def update_sequences(freq_th = None):
     
-    for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
+    global INPUT_TOK, OUTPUT_TOK
 
-        token_frequency_threshold = 0.001 / 100
-        original_vocab = tokenizer.VOCAB
-        tokenizer.VOCAB.compute_weights()
+    if freq_th is not None:
 
-        # Remove tokens that appear less than # times in the dataset
-        for idx, weigth in enumerate(original_vocab.weights):
-            if weigth < token_frequency_threshold:
-                original_vocab.counter[idx] = 0
+        for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
 
-        # Create a new vocab with the updated tokens
-        updated_vocab = Dictionary()
-        updated_vocab.add_word(SILENCE_TOKEN)
-        updated_vocab.add_word(BCI_TOKENS[0])
-        updated_vocab.add_word(BCI_TOKENS[1])
-        for word in original_vocab.word2idx.keys():
-            if original_vocab.counter[original_vocab.word2idx[word]] > 0:
-                updated_vocab.add_word(word)
+            original_vocab = tokenizer.VOCAB
 
-        # Verify that the sequences were updated
-        seq = tokenizer.sequences[0][:20].copy()
-        seq = [original_vocab.idx2word[tok] for tok in seq]
-        print(f'Initial sequence: {seq}')
+            # Remove tokens that appear less than # times in the dataset
+            for idx, count in enumerate(original_vocab.counter):
+                if count < freq_th:
+                    original_vocab.counter[idx] = 0
 
-        # Update the sequences with the new vocab
-        for seq in tokenizer.sequences:
-            for i, tok in enumerate(seq):
-                if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
-                    seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
-                    updated_vocab.add_word(SILENCE_TOKEN)
-                else:
-                    word = original_vocab.idx2word[tok]
-                    seq[i] = updated_vocab.word2idx[word]
+            # Create a new vocab with the updated tokens
+            updated_vocab = Dictionary()
+            updated_vocab.add_word(SILENCE_TOKEN)
+            updated_vocab.add_word(BCI_TOKENS[0])
+            updated_vocab.add_word(BCI_TOKENS[1])
+            for word in original_vocab.word2idx.keys():
+                if original_vocab.counter[original_vocab.word2idx[word]] > 0:
                     updated_vocab.add_word(word)
-        
-        tokenizer.VOCAB = updated_vocab
-        tokenizer.VOCAB.compute_weights()
 
-        # Verify that the sequences were updated
-        seq = tokenizer.sequences[0][:20].copy()
-        seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
-        print(f'Updated sequence: {seq}')
+            # Verify that the sequences were updated
+            seq = tokenizer.sequences[0][:20].copy()
+            seq = [original_vocab.idx2word[tok] for tok in seq]
+            print(f'Initial sequence: {seq}')
 
-        # Verify that the vocab was updated
-        print(f'Inintial number of tokens: {len(original_vocab)}')
-        print(f'Final number of tokens: {len(tokenizer.VOCAB)}\n')
+            # Update the sequences with the new vocab
+            for seq in tokenizer.sequences:
+                for i, tok in enumerate(seq):
+                    if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
+                        seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
+                        updated_vocab.add_word(SILENCE_TOKEN)
+                    else:
+                        word = original_vocab.idx2word[tok]
+                        seq[i] = updated_vocab.word2idx[word]
+                        updated_vocab.add_word(word)
+            
+            tokenizer.VOCAB = updated_vocab
+            tokenizer.VOCAB.compute_weights()
 
-    return INPUT_TOK, OUTPUT_TOK
+            # Verify that the sequences were updated
+            seq = tokenizer.sequences[0][:20].copy()
+            seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
+            print(f'Updated sequence: {seq}')
+
+            # Verify that the vocab was updated
+            print(f'Inintial number of tokens: {len(original_vocab)}')
+            print(f'Final number of tokens: {len(tokenizer.VOCAB)}\n')
     
 
 def create_dataset(split = [0.7, 0.2, 0.1]):
@@ -276,17 +267,11 @@ def initialize_model():
         LEVELS = 7
         HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH # 192
 
-    EMBEDDING_SIZE = 20 # size of word embeddings -> Embedding() is used to encode input token into [192, 20] real value vectors (see model.py)
     NUM_CHANNELS = [HIDDEN_UNITS] * (LEVELS - 1) + [EMBEDDING_SIZE] # [192, 192, 192, 192, 192, 192, 20]
-
-    # balance the loss function by assigning a weight to each token related to its frequency
-    LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
-    for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
-        LOSS_WEIGTHS[i] = 1 - weigth
 
     # create the model
     model = TCN(input_size = INPUT_SIZE,
-                embedding_size = EMBEDDING_SIZE,
+                embedding_size = EMBEDDING_SIZE, # Embedding layer is used to encode input token into real value vectors
                 output_size = OUTPUT_SIZE,
                 num_channels = NUM_CHANNELS,
                 emphasize_eeg = EMPHASIZE_EEG,
@@ -297,7 +282,14 @@ def initialize_model():
 
     model.to(device)
 
-    # May use adaptive softmax to speed up training
+    global MODEL_SIZE
+    MODEL_SIZE = model_size(model)
+
+    # balance the loss function by assigning a weight to each token related to its frequency
+    LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
+    for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
+        LOSS_WEIGTHS[i] = 1 - weigth
+        
     criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
 
@@ -334,12 +326,14 @@ def save_parameters():
         f.write(f'FEEDBACK: {FEEDBACK}\n')
         f.write(f'EARLY STOPPING: {EARLY_STOP}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
+        f.write(f'DATA AUGMENTATION: {DATA_AUGMENTATION}\n')
         f.write(f'LEARNING_RATE: {LEARNING_RATE}\n')
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
         f.write(f'EPOCHS: {EPOCHS}\n\n')
 
 
         f.write(f'------------MODEL PARAMETERS--------------\n')
+        f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
         f.write(f'SEED: {SEED}\n')
         f.write(f'INPUT_SIZE: {INPUT_SIZE}\n')
         f.write(f'EMBEDDING_SIZE: {EMBEDDING_SIZE}\n')
@@ -385,10 +379,10 @@ def epoch_step(dataloader, mode):
         model.eval() # disable dropout
 
     total_loss = 0
-    accuracy.reset()
+    n_correct = 0
+    n_total = 0
     BAR_LENGTH = INPUT_TOK.BAR_LENGTH
-    global GRADIENT_CLIP
-    GRADIENT_CLIP = 0.35
+    
 
     # iterate over the training data
     for batch_idx, (data, targets) in enumerate(dataloader):
@@ -418,8 +412,6 @@ def epoch_step(dataloader, mode):
         final_target = targets.contiguous().view(-1)
         final_output = output.contiguous().view(-1, OUTPUT_SIZE)
 
-        accuracy.update(final_output, final_target)
-
         # calculate the loss
         loss = criterion(final_output, final_target)
 
@@ -436,12 +428,19 @@ def epoch_step(dataloader, mode):
 
         total_loss += loss.data.item()
 
-    return total_loss / len(dataloader), accuracy.compute()
+        # update n_correct and n_total to calculate the accuracy
+        n_correct += torch.sum(torch.argmax(final_output, 1) == final_target).item()
+        n_total += final_target.size(0)
+
+    # calculate the accuracy
+    accuracy = n_correct / n_total
+
+    return total_loss / len(dataloader), accuracy
 
 
 def train(results_path = None):
 
-    global RESULTS_PATH, MODEL_PATH, accuracy
+    global RESULTS_PATH, MODEL_PATH
     global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, test_loss
     global best_train_accuracy, best_eval_accuracy, test_accuracy
 
@@ -463,7 +462,6 @@ def train(results_path = None):
     eval_losses = []
     train_losses = []
     lr = LEARNING_RATE
-    accuracy = MulticlassAccuracy()
 
     writer = SummaryWriter()
 
@@ -536,26 +534,30 @@ def train(results_path = None):
 
 if __name__ == '__main__':
 
-#     # tokenize the midi files
-#     global INPUT_TOK, OUTPUT_TOK
-#     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
+    # tokenize the midi files
+    global INPUT_TOK, OUTPUT_TOK
+    INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
-#     # update the sequences
-#     # INPUT_TOK, OUTPUT_TOK = update_sequences(INPUT_TOK, OUTPUT_TOK)
+    # update the sequences
+    update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
-#     # create the dataset
-#     train_set, eval_set, test_set = create_dataset()
-#     print(f'Train set size: {len(train_set)}')
-#     print(f'Evaluation set size: {len(eval_set)}')
-#     print(f'Test set size: {len(test_set)}')
+    # # create the dataset
+    # train_set, eval_set, test_set = create_dataset()
+    # print(f'Train set size: {len(train_set)}')
+    # print(f'Evaluation set size: {len(eval_set)}')
+    # print(f'Test set size: {len(test_set)}')
 
-#     # augment the dataset
-#     # train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
-#     # print(f'Training set size after augmentation: {len(train_set_augmented)}')
+    # # augment the dataset
+    # if DATA_AUGMENTATION:
+    #     train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
+    #     print(f'Training set size after augmentation: {len(train_set_augmented)}')
+    # else:
+    #     train_set_augmented = train_set
 
-#     # initialize the dataloaders
-#     print(f'Initializing the dataloaders...')
-#     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
+    # # initialize the dataloaders
+    # print(f'Initializing the dataloaders...')
+    # global train_dataloader, eval_dataloader, test_dataloader
+    # train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set_augmented, eval_set, test_set)
     
     # # initialize the model
     # print(f'Initializing the model...')
@@ -567,37 +569,4 @@ if __name__ == '__main__':
     # print(f'Training the model...')
     # train('results/model_test')
 
-    model_dict = 'trained_models/model'
-
-    weights_path = os.path.join(model_dict, 'model_state_dict.pth')
-    input_vocab_path = os.path.join(model_dict, 'input_vocab.txt')
-    output_vocab_path = os.path.join(model_dict, 'output_vocab.txt')
-
-    INPUT_TOK = PrettyMidiTokenizer()
-    INPUT_TOK.load_vocab(input_vocab_path)
-
-    OUTPUT_TOK = PrettyMidiTokenizer()
-    OUTPUT_TOK.load_vocab(output_vocab_path)
-
-    config_path = os.path.join(model_dict, 'config.yaml')
-    with open(config_path, 'r') as file:
-        param = yaml.safe_load(file)
-        EMBEDDING_SIZE = param['EMBEDDING_SIZE']
-        NUM_CHANNELS = param['NUM_CHANNELS']
-        INPUT_SIZE = param['INPUT_SIZE']
-        OUTPUT_SIZE = param['OUTPUT_SIZE']
-        KERNEL_SIZE = param['KERNEL_SIZE']
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = TCN(input_size = INPUT_SIZE,
-                embedding_size = EMBEDDING_SIZE, 
-                output_size = OUTPUT_SIZE, 
-                num_channels = NUM_CHANNELS, 
-                kernel_size = KERNEL_SIZE) 
     
-    model.load_state_dict(torch.load(weights_path, map_location = device))
-    model.eval()
-    model.to(device)
-
-
-    print('Model size: ', model_size(model))

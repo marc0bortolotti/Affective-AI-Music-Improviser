@@ -299,64 +299,49 @@ class PrettyMidiTokenizer(object):
     print(f'Processing MIDI file: {filename}')
     if emotion_token is not None:
       print(f'Emotion token: {emotion_token}')
-    print('Creating notes dataframe...')
-    notes_df = self.midi_to_df(midi_path, instrument=instrument)
 
-    print('\nConverting notes to tokens...')
+    pm = pretty_midi.PrettyMIDI(midi_path)
+    sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
     
-    # split notes into bars and convert notes ticks into a time serie of tokens 
-    bars_time_series = []
-    bar_ids = notes_df['bar'].unique()
-    for bar_id in bar_ids:
-      print(f"Processing bar: {bar_id}/{len(bar_ids)}", end="\r")
-      bar_df = notes_df[notes_df['bar'] == bar_id]
-      bar_df = bar_df.reset_index(drop=True)
-
-      # convert note ticks into a time serie of strings 
-      bar_time_serie = bar_time_serie = np.empty((self.BAR_LENGTH), dtype=object)
-      bar_time_serie[:] = SILENCE_TOKEN
-      for note_id in range(len(bar_df)):
-        pitch = str(bar_df.loc[note_id, 'pitch'])
-        start = bar_df.loc[note_id, 'start']
-        end = bar_df.loc[note_id, 'end']
-        velocity = bar_df.loc[note_id, 'velocity']
-        bar_time_serie = self.note_to_string(bar_time_serie, pitch, velocity, start, end)
-      bars_time_series.append(bar_time_serie)
-
-    # flat bars and create vocabulary of unique tokens
-    tokens = np.concatenate(bars_time_series)
-
+    # create a sequence of string tokens
+    token_sequence = np.empty((self.BAR_LENGTH), dtype=object)
+    token_sequence[:] = SILENCE_TOKEN
+    for idx, note in enumerate(sorted_notes):
+      print(f"Processing note: {idx}/{len(sorted_notes)}", end="\r")
+      pitch = note.pitch
+      velocity = note.velocity
+      start = self.convert_time_to_ticks(note.start)
+      end = self.convert_time_to_ticks(note.end)
+      if instrument == 'drum':
+        end = start + 1
+      token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end)
+      
     # update the vocabulary if necessary
     if update_vocab:
       for i in range(0, len(tokens)):
         self.VOCAB.add_word(tokens[i])
 
-    # create the sequences of tokens for the model 
+    # convert string tokens into integer tokens
+    for i in range(len(token_sequence)):
+      if self.VOCAB.is_in_vocab(token_sequence[i]):
+        token_sequence[i] = self.VOCAB.word2idx[token_sequence[i]] 
+      else: 
+        token_sequence[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
+
     sequences = []
-    stop_index = len(tokens) - self.SEQ_LENGTH
-    seq_len = self.SEQ_LENGTH
- 
-    if stop_index <= 0:
-      stop_index = 1
-      seq_len = len(tokens)
-      
-    print(f"\nCreating sequences of tokens...")
-    for idx in range(0, stop_index, self.BAR_LENGTH):
-      print(f"Processing sequence: {idx}/{stop_index}", end="\r")
-      seq = tokens[idx:(idx+seq_len)].copy() # NB: copy is necessary to avoid modifying the original array
 
-      # remove the last token add the BCI token at the beginning
+    for i in range(0, len(token_sequence), self.SEQ_LENGTH):
+      print(f"Processing sequence: {i}/{len(token_sequence)}", end="\r")
+
+      if i + self.SEQ_LENGTH > len(token_sequence):
+        # pad the sequence with silence tokens
+        sequence = np.concatenate((token_sequence[i:], np.array([SILENCE_TOKEN] * (self.SEQ_LENGTH - len(sequence)))))
+      else:
+        sequence = token_sequence[i:i+self.SEQ_LENGTH]
+
       if emotion_token is not None:
-        seq = np.concatenate(([emotion_token], seq[:-1])) 
-
-      # convert string tokens into integer tokens
-      for i in range(len(seq)):
-        if self.VOCAB.is_in_vocab(seq[i]):
-          seq[i] = self.VOCAB.word2idx[seq[i]] 
-        else:
-          seq[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
-
-      sequences.append(seq)
+        sequence = np.concatenate(([emotion_token], sequence[:-1]))
+      sequences.append(sequence)
 
     # concatenate the sequences if necessary
     if update_sequences: 
@@ -364,7 +349,7 @@ class PrettyMidiTokenizer(object):
 
     print('\nDone!')       
 
-    return sequences, notes_df
+    return sequences
   
   def tokens_to_notes_df(self, sequence, ticks_filter = 0):
     '''
