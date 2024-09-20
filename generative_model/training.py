@@ -38,9 +38,11 @@ DIRECTORY_PATH = os.path.dirname(__file__)
 RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_AUG-{0}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
+# create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
     RESULTS_PATH += f'_{idx}'
+    idx += 1
 os.makedirs(RESULTS_PATH)
 
 def model_size(model):

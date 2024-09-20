@@ -48,11 +48,11 @@ class SetupDialog(QtWidgets.QDialog):
         self.instrument_input_combo = QtWidgets.QComboBox(self)
         self.instrument_input_combo.addItems([port for port in input_ports])
         self.instrument_input_combo.addItems([SIMULATE_INSTRUMENT])
-        self.instrument_input_combo.setCurrentText('Drum In Port 3')
+        self.instrument_input_combo.setCurrentText(SIMULATE_INSTRUMENT)
 
         self.instrument_output_combo = QtWidgets.QComboBox(self)
         self.instrument_output_combo.addItems([port for port in output_ports])
-        self.instrument_output_combo.setCurrentText('Drum Out Port 1')
+        self.instrument_output_combo.setCurrentText(output_ports[2])
 
         # self.melody_rec_combo = QtWidgets.QComboBox(self)
         # self.melody_rec_combo.addItems([port for port in output_ports])
@@ -60,7 +60,7 @@ class SetupDialog(QtWidgets.QDialog):
 
         self.melody_play_combo = QtWidgets.QComboBox(self)
         self.melody_play_combo.addItems([port for port in output_ports])
-        self.melody_play_combo.setCurrentText('Bass Out Port Playing 3')
+        self.melody_play_combo.setCurrentText(output_ports[3])
 
         # Add OK and Cancel buttons
         self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)
