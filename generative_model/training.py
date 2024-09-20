@@ -20,7 +20,7 @@ print('\n', device)
 
 EPOCHS = 1000 
 LEARNING_RATE = 0.002 
-BATCH_SIZE = 16 
+BATCH_SIZE = 32 
 
 FEEDBACK = False
 EMPHASIZE_EEG = False
@@ -29,13 +29,13 @@ LR_SCHEDULER = True
 
 EARLY_STOP_EPOCHS = 15
 GRADIENT_CLIP = 0.35
-EMBEDDING_SIZE = 256
-TOKENS_FREQUENCY_THRESHOLD = 20
+EMBEDDING_SIZE = 512
+TOKENS_FREQUENCY_THRESHOLD = 10
 SILENCE_TOKEN_WEIGHT = 0.01
-DATASET_SPLIT = [0.7, 0.2, 0.1]
+DATASET_SPLIT = [0.8, 0.1, 0.1]
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_aug_{1}_sil_{SILENCE_TOKEN_WEIGHT}_freq_{TOKENS_FREQUENCY_THRESHOLD}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_{time.strftime("%Y%m%d-%H%M%S")}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -370,6 +370,13 @@ def save_results():
     plt.savefig(os.path.join(RESULTS_PATH, 'losses.png'))
     plt.clf()
 
+    # plot the accuracies over the epochs
+    plt.plot(train_accuracies, label='train')
+    plt.plot(eval_accuracies, label='eval')
+    plt.legend()
+    plt.savefig(os.path.join(RESULTS_PATH, 'accuracies.png'))
+    plt.clf()
+
     with open(os.path.join(RESULTS_PATH, 'results.txt'), 'w') as f:
         f.write(f'-------------------RESULTS----------------\n')
         f.write(f'BEST_TRAIN_LOSS: {best_train_loss}\n')
@@ -458,7 +465,8 @@ def train():
 
     MODEL_PATH = os.path.join(RESULTS_PATH, 'model_state_dict.pth')
 
-    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses, final_train_accuracy, final_eval_accuracy
+    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses
+    global train_accuracies, eval_accuracies, final_train_accuracy, final_eval_accuracy
     best_eval_loss = 1e8
     best_train_loss = 1e8
     final_train_accuracy = 0
@@ -466,6 +474,8 @@ def train():
     best_model_epoch = 0
     eval_losses = []
     train_losses = []
+    train_accuracies = []
+    eval_accuracies = []
 
     global scheduler, writer
     writer = SummaryWriter(RESULTS_PATH)
@@ -497,6 +507,8 @@ def train():
 
         eval_losses.append(eval_loss)
         train_losses.append(train_loss)
+        train_accuracies.append(train_accuracy)
+        eval_accuracies.append(eval_accuracy)
 
         # Early stopping
         if epoch > EARLY_STOP_EPOCHS:
