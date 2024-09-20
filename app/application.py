@@ -224,7 +224,7 @@ class AI_AffectiveMusicImproviser():
             SYNCH_EVENT.clear()
 
             if generated_track is not None:
-                self.midi_out_rec.send_midi_to_reaper(generated_track)
+                self.midi_out_play.send_midi_to_reaper(generated_track)
 
             start_time = time.time()
 

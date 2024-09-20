@@ -543,7 +543,7 @@ class PrettyMidiTokenizer(object):
       if duration > self.BAR_DURATION:
         break
 
-      elif velocity > VELOCITY_TOKENS['pp']:
+      elif velocity > 40:
         start = self.convert_time_to_ticks(duration)
         step = 0
 
