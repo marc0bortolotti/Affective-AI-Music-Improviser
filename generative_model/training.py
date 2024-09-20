@@ -23,9 +23,9 @@ print(device)
 
 
 # MODEL PARAMETERS
-EPOCHS = 500 # 500
+EPOCHS = 1000 # 500
 LEARNING_RATE = 0.002 # 4
-BATCH_SIZE = 32 # 16
+BATCH_SIZE = 16 # 16
 TRAIN_MODEL = True
 FEEDBACK = False
 EMPHASIZE_EEG = False
@@ -34,6 +34,18 @@ EARLY_STOP = True
 DIRECTORY_PATH = os.path.dirname(__file__)
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
+def model_size(model):
+    '''
+    Compute the number of parameters in the model.
+    '''
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def load_model(model, path):
+    '''
+    Load the model from a file.
+    '''
+    model.load_state_dict(torch.load(path))
+    model.eval()
 
 def tokenize_midi_files():
 
@@ -524,32 +536,68 @@ def train(results_path = None):
 
 if __name__ == '__main__':
 
-    # tokenize the midi files
-    global INPUT_TOK, OUTPUT_TOK
-    INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
+#     # tokenize the midi files
+#     global INPUT_TOK, OUTPUT_TOK
+#     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
-    # update the sequences
-    INPUT_TOK, OUTPUT_TOK = update_sequences(INPUT_TOK, OUTPUT_TOK)
+#     # update the sequences
+#     # INPUT_TOK, OUTPUT_TOK = update_sequences(INPUT_TOK, OUTPUT_TOK)
 
-    # create the dataset
-    train_set, eval_set, test_set = create_dataset()
-    print(f'Train set size: {len(train_set)}')
-    print(f'Evaluation set size: {len(eval_set)}')
-    print(f'Test set size: {len(test_set)}')
+#     # create the dataset
+#     train_set, eval_set, test_set = create_dataset()
+#     print(f'Train set size: {len(train_set)}')
+#     print(f'Evaluation set size: {len(eval_set)}')
+#     print(f'Test set size: {len(test_set)}')
 
-    # augment the dataset
-    train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
-    print(f'Training set size after augmentation: {len(train_set_augmented)}')
+#     # augment the dataset
+#     # train_set_augmented = data_augmentation_shift(train_set, [-2, -1, 1, 2])
+#     # print(f'Training set size after augmentation: {len(train_set_augmented)}')
 
-    # initialize the dataloaders
-    print(f'Initializing the dataloaders...')
-    train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set_augmented, eval_set, test_set)
+#     # initialize the dataloaders
+#     print(f'Initializing the dataloaders...')
+#     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
     
-    # initialize the model
-    print(f'Initializing the model...')
-    global model, criterion, optimizer
-    model, criterion, optimizer = initialize_model()
+    # # initialize the model
+    # print(f'Initializing the model...')
+    # global model, criterion, optimizer
+    # model, criterion, optimizer = initialize_model()
+    # print(f'Model size: {model_size(model)}')
 
-    # train the model
-    print(f'Training the model...')
-    train('results/model_test')
+    # # train the model
+    # print(f'Training the model...')
+    # train('results/model_test')
+
+    model_dict = 'trained_models/model'
+
+    weights_path = os.path.join(model_dict, 'model_state_dict.pth')
+    input_vocab_path = os.path.join(model_dict, 'input_vocab.txt')
+    output_vocab_path = os.path.join(model_dict, 'output_vocab.txt')
+
+    INPUT_TOK = PrettyMidiTokenizer()
+    INPUT_TOK.load_vocab(input_vocab_path)
+
+    OUTPUT_TOK = PrettyMidiTokenizer()
+    OUTPUT_TOK.load_vocab(output_vocab_path)
+
+    config_path = os.path.join(model_dict, 'config.yaml')
+    with open(config_path, 'r') as file:
+        param = yaml.safe_load(file)
+        EMBEDDING_SIZE = param['EMBEDDING_SIZE']
+        NUM_CHANNELS = param['NUM_CHANNELS']
+        INPUT_SIZE = param['INPUT_SIZE']
+        OUTPUT_SIZE = param['OUTPUT_SIZE']
+        KERNEL_SIZE = param['KERNEL_SIZE']
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = TCN(input_size = INPUT_SIZE,
+                embedding_size = EMBEDDING_SIZE, 
+                output_size = OUTPUT_SIZE, 
+                num_channels = NUM_CHANNELS, 
+                kernel_size = KERNEL_SIZE) 
+    
+    model.load_state_dict(torch.load(weights_path, map_location = device))
+    model.eval()
+    model.to(device)
+
+
+    print('Model size: ', model_size(model))

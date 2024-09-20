@@ -35,7 +35,7 @@ SAVE_SESSION = False
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/trained_models/model')
+MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/results/model_test_1')
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
