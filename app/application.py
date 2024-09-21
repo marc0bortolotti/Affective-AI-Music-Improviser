@@ -86,8 +86,8 @@ def thread_function_midi(name, app):
     logging.info("Thread %s: starting", name)   
     if app.STATUS['SIMULATE_MIDI']:
 
-        SIMULATION_EVENT = threading.Event()
-        app.midi_in.set_simulation_event(SIMULATION_EVENT)
+        # SIMULATION_EVENT = threading.Event()
+        # app.midi_in.set_simulation_event(SIMULATION_EVENT)
 
         while True:
             SYNCH_EVENT.wait()
@@ -290,7 +290,7 @@ class AI_AffectiveMusicImproviser():
                 self.hystory.append(predicted_sequence)
 
                 # Convert the predicted sequence to MIDI.
-                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=2)
+                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=0)
 
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)

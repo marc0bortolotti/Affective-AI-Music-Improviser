@@ -39,6 +39,10 @@ class CustomSlider{
                     .setColor(color(0))
                     .setFont(createFont("Arial", 14));   
   }
+  
+  void setValue(float value){
+    slider.setValue(value);
+  }
    
   float getValue(){
     return slider.getValue();
@@ -47,8 +51,15 @@ class CustomSlider{
   void updateValueLabel(float value){
     labelYPosition = map(slider.getValue(), slider.getMin(), slider.getMax(), slider.getPosition()[1] + slider.getHeight(), slider.getPosition()[1]);
     // Update the label's position to follow the slider handle
-    valueLabel.setPosition(slider.getPosition()[0] + slider.getWidth() + 10, labelYPosition);  // Adjust the x-position as needed
+    valueLabel.setPosition(slider.getPosition()[0] + slider.getWidth(), labelYPosition - 6);  // Adjust the x-position as needed
     // Display the logarithmic value
     valueLabel.setText(nf(value, 1, 2));
+  }
+  
+  void drawMarker(float value){
+    float onePos = map(value, slider.getMin(), slider.getMax(), slider.getPosition()[1] + slider.getHeight(), slider.getPosition()[1]);
+    stroke(0);
+    strokeWeight(2);  
+    line(slider.getPosition()[0] + slider.getWidth(), onePos, slider.getPosition()[0] + slider.getWidth() + 10, onePos);
   }
 }
