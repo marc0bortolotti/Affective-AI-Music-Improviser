@@ -147,6 +147,17 @@ class PrettyMidiTokenizer(object):
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
 
+  def set_ticks_per_beat(self, ticks_per_beat):
+    self.TICKS_PER_BEAT = ticks_per_beat
+    self.BAR_LENGTH = self.BEATS_PER_BAR * self.TICKS_PER_BEAT
+    self.BAR_DURATION_IN_TICKS = self.convert_time_to_ticks(self.BAR_DURATION)
+
+  def set_bpm(self, bpm):
+    self.BPM = bpm
+    self.BEAT_DURATION = 60 / self.BPM
+    self.BAR_DURATION = self.BEAT_DURATION * self.BEATS_PER_BAR
+    self.TEMPO = int(self.BEAT_DURATION * 1000000)
+
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
     self.VOCAB.load(path)

@@ -27,11 +27,14 @@ EMPHASIZE_EEG = False
 DATA_AUGMENTATION = True
 LR_SCHEDULER = True
 
+TICKS_PER_BEAT = 4
 EARLY_STOP_EPOCHS = 15
 GRADIENT_CLIP = 0.35
 EMBEDDING_SIZE = 512
 TOKENS_FREQUENCY_THRESHOLD = None
 SILENCE_TOKEN_WEIGHT = 0.01
+CROSS_ENTROPY_WEIGHT = 1.0
+PENALTY_WEIGHT = 3.0
 DATASET_SPLIT = [0.8, 0.1, 0.1]
 
 DIRECTORY_PATH = os.path.dirname(__file__)
@@ -55,6 +58,9 @@ def tokenize_midi_files():
 
     INPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK = PrettyMidiTokenizer()
+
+    INPUT_TOK.set_ticks_per_beat(TICKS_PER_BEAT)
+    OUTPUT_TOK.set_ticks_per_beat(TICKS_PER_BEAT)
 
     for i, (in_file, out_file) in enumerate(zip(input_filenames, output_filenames)):
 
@@ -294,6 +300,10 @@ def initialize_model():
 
             # Penalty: Number of predictions equal to class 0
             zero_class_predictions = (predictions == 0).float().sum()
+            total_predictions = predictions.size(0)
+
+            # Normalize the penalty term
+            zero_class_predictions = zero_class_predictions / total_predictions
 
             # Compute the total loss as a weighted sum
             total_loss = self.weight_ce * ce_loss + self.weight_penalty * zero_class_predictions
@@ -337,13 +347,13 @@ def initialize_model():
 
     # balance the loss function by assigning a weight to each token related to its frequency
     LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
+    LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = SILENCE_TOKEN_WEIGHT
 
     # for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
     #     LOSS_WEIGTHS[i] = 1 - weigth
-    # LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = SILENCE_TOKEN_WEIGHT
         
     # criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
-    criterion = CustomLoss(weight_ce=1.0, weight_penalty=1.0)
+    criterion = CustomLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
 
     return model, criterion, optimizer
@@ -370,7 +380,7 @@ def save_parameters():
     OUTPUT_TOK.VOCAB.save(os.path.join(RESULTS_PATH, 'output_vocab.txt'))
 
      # save the model hyperparameters in a file txt
-    with open(os.path.join(RESULTS_PATH, 'model_parameters.txt'), 'w') as f:
+    with open(os.path.join(RESULTS_PATH, 'parameters.txt'), 'w') as f:
 
         f.write(f'DATE: {time.strftime("%Y%m%d-%H%M%S")}\n\n')
 
@@ -391,6 +401,11 @@ def save_parameters():
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
         f.write(f'EPOCHS: {EPOCHS}\n\n')
 
+        f.write(f'------------TOKENIZATION PARAMETERS--------------\n')
+        f.write(f'TICKS_PER_BEAT: {TICKS_PER_BEAT}\n')
+        f.write(f'TOKENS_FREQUENCY_THRESHOLD: {TOKENS_FREQUENCY_THRESHOLD}\n')
+        f.write(f'SILENCE_TOKEN_WEIGHT: {SILENCE_TOKEN_WEIGHT}\n')
+
         f.write(f'------------MODEL PARAMETERS--------------\n')
         f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
         f.write(f'SEED: {SEED}\n')
@@ -401,6 +416,8 @@ def save_parameters():
         f.write(f'NUM_CHANNELS: {NUM_CHANNELS}\n')
         f.write(f'OUTPUT_SIZE: {OUTPUT_SIZE}\n')
         f.write(f'LOSS_WEIGTHS: {LOSS_WEIGTHS}\n\n')
+        f.write(f'ENTROPY_WEIGHT: {CROSS_ENTROPY_WEIGHT}\n')
+        f.write(f'PENALTY_WEIGHT: {PENALTY_WEIGHT}\n')
 
 
 def save_results():
