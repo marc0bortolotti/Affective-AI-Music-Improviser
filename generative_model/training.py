@@ -20,7 +20,7 @@ print('\n', device)
 
 EPOCHS = 1000 
 LEARNING_RATE = 0.002 
-BATCH_SIZE = 32 
+BATCH_SIZE = 64 
 
 FEEDBACK = False
 EMPHASIZE_EEG = False
