@@ -94,9 +94,6 @@ def thread_function_midi(name, app):
 
             app.midi_in.simulate()
 
-            SIMULATION_EVENT.wait()
-            SYNCH_EVENT.clear()
-
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
                 break
@@ -122,7 +119,6 @@ class AI_AffectiveMusicImproviser():
                         eeg_device_type,
                         window_duration,
                         model_dict,
-                        close_event,
                         parse_message=False):
         '''
         Parameters:
