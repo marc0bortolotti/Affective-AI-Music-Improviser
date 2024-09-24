@@ -230,6 +230,9 @@ class AI_AffectiveMusicImproviser():
 
         softmax = torch.nn.Softmax(dim=1)
 
+        # initialize the target tensor
+        tgt = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (self.SEQ_LENGTH, 1)) 
+
         while True:
 
             SYNCH_EVENT.wait()
@@ -269,7 +272,7 @@ class AI_AffectiveMusicImproviser():
                 input_data = input_data.to(self.device)
 
                 # Make the prediction and flatten the output.
-                prediction = self.model(input_data)
+                prediction = self.model(input_data, tgt)
                 prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                 # Get the probability distribution of the prediction by applying the softmax function and the temperature.
@@ -286,6 +289,10 @@ class AI_AffectiveMusicImproviser():
 
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
+
+                # concatenate the predicted tokens to the target tensor and remove the first bar
+                tgt = torch.cat((tgt, predicted_tokens.unsqueeze(1)), dim=0)
+                tgt = tgt[-self.SEQ_LENGTH:]
 
                 # Get the predicted sequence.
                 predicted_sequence = predicted_tokens.cpu().numpy().tolist()
