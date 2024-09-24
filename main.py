@@ -34,7 +34,8 @@ SAVE_SESSION = False
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/results/model_20240921-120237')
+MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/results/model_20240921-120237')
+MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'architectures/transformer.py')
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
