@@ -34,7 +34,7 @@ SAVE_SESSION = False
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/results/model_AUG-0_1')
+MODEL_DICT = os.path.join(PROJECT_PATH, 'generative_model/results/model_20240921-120237')
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
