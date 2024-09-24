@@ -19,26 +19,26 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002
-BATCH_SIZE = 128
+LEARNING_RATE = 0.0001
+BATCH_SIZE = 64 # 64
 
-USE_EEG = True
-FEEDBACK = False
-EMPHASIZE_EEG = False
-DATA_AUGMENTATION = True
-LR_SCHEDULER = True
+USE_EEG = True # use the EEG data to condition the model
+FEEDBACK = False # use the feedback mechanism in the model
+EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
+DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
+LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 4
+TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 128
-TOKENS_FREQUENCY_THRESHOLD = None
-SILENCE_TOKEN_WEIGHT = 0.01
-CROSS_ENTROPY_WEIGHT = 1.0
-PENALTY_WEIGHT = 3.0
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
+SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
+CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
+PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
 
-GRADIENT_CLIP = 0.35
-DATASET_SPLIT = [0.8, 0.1, 0.1]
-EARLY_STOP_EPOCHS = 15
-LR_PATIENCE = 10
+GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
+DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
+EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
+LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_{time.strftime("%Y%m%d-%H%M%S")}')
@@ -450,6 +450,9 @@ def save_results():
         f.write(f'TRAIN_ACCURACY: {final_train_accuracy}\n')
         f.write(f'EVAL_ACCURACY: {final_eval_accuracy}\n')
         f.write(f'TEST_ACCURACY: {test_accuracy}\n')
+        f.write(f'TRAIN_PERPLEXITY: {final_train_perplexity}\n')    
+        f.write(f'EVAL_PERPLEXITY: {final_eval_perplexity}\n')
+        f.write(f'TEST_PERPLEXITY: {test_perplexity}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
 
 
@@ -609,8 +612,8 @@ def train():
 
 
     # test the model
-    global test_loss, test_accuracy
-    test_loss, test_accuracy = epoch_step(test_dataloader, 'eval')
+    global test_loss, test_accuracy, test_perplexity
+    test_loss, test_accuracy, test_perplexity = epoch_step(test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')
 
