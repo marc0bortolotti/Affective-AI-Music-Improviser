@@ -19,23 +19,26 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 
-BATCH_SIZE = 64 
+LEARNING_RATE = 0.002 # 0.002
+BATCH_SIZE = 64 # 64
 
-FEEDBACK = False
-EMPHASIZE_EEG = False
-DATA_AUGMENTATION = True
-LR_SCHEDULER = True
+USE_EEG = True # use the EEG data to condition the model
+FEEDBACK = False # use the feedback mechanism in the model
+EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
+DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
+LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 4
-EARLY_STOP_EPOCHS = 15
-GRADIENT_CLIP = 0.35
+TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 512
-TOKENS_FREQUENCY_THRESHOLD = None
-SILENCE_TOKEN_WEIGHT = 0.01
-CROSS_ENTROPY_WEIGHT = 1.0
-PENALTY_WEIGHT = 3.0
-DATASET_SPLIT = [0.8, 0.1, 0.1]
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
+SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
+CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
+PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
+
+GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
+DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
+EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
+LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_{time.strftime("%Y%m%d-%H%M%S")}')
@@ -68,12 +71,15 @@ def tokenize_midi_files():
         out_file_name = os.path.basename(out_file)
         print(f'\n{i + 1}: {in_file_name} -> {out_file_name}')
 
-        if 'RELAXED' in in_file_name:
-            emotion_token = BCI_TOKENS[0]
-        elif 'CONCENTRATED' in in_file_name:
-            emotion_token = BCI_TOKENS[1]
+        if USE_EEG:
+            if 'RELAXED' in in_file_name:
+                emotion_token = BCI_TOKENS[0]
+            elif 'CONCENTRATED' in in_file_name:
+                emotion_token = BCI_TOKENS[1]
+            else:
+                raise Exception('Emotion not found in file name. Please add the emotion to the file name.')
         else:
-            raise Exception('Emotion not found in file name. Please add the emotion to the file name.')
+            emotion_token = None
 
         _ = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
         _ = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
@@ -102,25 +108,20 @@ def update_sequences(freq_th = None):
         for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
 
             original_vocab = tokenizer.VOCAB
+            original_vocab.compute_weights()
 
             # Remove tokens that appear less than # times in the dataset
             for idx, count in enumerate(original_vocab.counter):
-                if count < freq_th:
+                if original_vocab.idx2word[idx] in BCI_TOKENS.values(): 
+                    pass
+                elif count < freq_th:
                     original_vocab.counter[idx] = 0
 
             # Create a new vocab with the updated tokens
             updated_vocab = Dictionary()
-            updated_vocab.add_word(SILENCE_TOKEN)
-            updated_vocab.add_word(BCI_TOKENS[0])
-            updated_vocab.add_word(BCI_TOKENS[1])
             for word in original_vocab.word2idx.keys():
                 if original_vocab.counter[original_vocab.word2idx[word]] > 0:
                     updated_vocab.add_word(word)
-
-            # # Verify that the sequences were updated
-            # seq = tokenizer.sequences[0].copy()
-            # seq = [original_vocab.idx2word[tok] for tok in seq]
-            # print(f'Initial sequence: {seq}')
 
             # Update the sequences with the new vocab
             for seq in tokenizer.sequences:
@@ -136,12 +137,9 @@ def update_sequences(freq_th = None):
             tokenizer.VOCAB = updated_vocab
             tokenizer.VOCAB.compute_weights()
 
-            # # Verify that the sequences were updated
-            # seq = tokenizer.sequences[0].copy()
-            # seq = [tokenizer.VOCAB.idx2word[tok] for tok in seq]
-            # print(f'Updated sequence: {seq}')
-
             # Verify that the vocab was updated
+            print(f'Initial silence token weigth: {original_vocab.weights[original_vocab.word2idx[SILENCE_TOKEN]]}')
+            print(f'Final silence token weigth:{tokenizer.VOCAB.weights[tokenizer.VOCAB.word2idx[SILENCE_TOKEN]]}')
             print(f'Inintial number of tokens: {len(original_vocab)}')
             print(f'Final number of tokens: {len(tokenizer.VOCAB)}\n')
     
@@ -397,6 +395,7 @@ def save_parameters():
         f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
         f.write(f'DATA AUGMENTATION: {DATA_AUGMENTATION}\n')
         f.write(f'EARLY STOP EPOCHS: {EARLY_STOP_EPOCHS}\n')
+        f.write(f'USE_EEG: {USE_EEG}\n')
         f.write(f'LEARNING_RATE: {LEARNING_RATE}\n')
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
         f.write(f'EPOCHS: {EPOCHS}\n\n')
@@ -436,6 +435,13 @@ def save_results():
     plt.savefig(os.path.join(RESULTS_PATH, 'accuracies.png'))
     plt.clf()
 
+    # plot the perplexities over the epochs
+    plt.plot(train_perplexities, label='train')
+    plt.plot(eval_perplexities, label='eval')
+    plt.legend()
+    plt.savefig(os.path.join(RESULTS_PATH, 'perplexities.png'))
+    plt.clf()
+
     with open(os.path.join(RESULTS_PATH, 'results.txt'), 'w') as f:
         f.write(f'-------------------RESULTS----------------\n')
         f.write(f'BEST_TRAIN_LOSS: {best_train_loss}\n')
@@ -444,6 +450,9 @@ def save_results():
         f.write(f'TRAIN_ACCURACY: {final_train_accuracy}\n')
         f.write(f'EVAL_ACCURACY: {final_eval_accuracy}\n')
         f.write(f'TEST_ACCURACY: {test_accuracy}\n')
+        f.write(f'TRAIN_PERPLEXITY: {final_train_perplexity}\n')    
+        f.write(f'EVAL_PERPLEXITY: {final_eval_perplexity}\n')
+        f.write(f'TEST_PERPLEXITY: {test_perplexity}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
 
 
@@ -513,8 +522,10 @@ def epoch_step(dataloader, mode):
 
     # calculate the accuracy
     accuracy = 100 * n_correct / n_total
+    avg_loss = total_loss / len(dataloader)
+    perplexity = torch.exp(torch.tensor(avg_loss))
 
-    return total_loss / len(dataloader), accuracy
+    return avg_loss, accuracy, perplexity
 
 
 def train():
@@ -523,31 +534,39 @@ def train():
 
     global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses
     global train_accuracies, eval_accuracies, final_train_accuracy, final_eval_accuracy
+    global train_perplexities, eval_perplexities, final_train_perplexity, final_eval_perplexity
+
     best_eval_loss = 1e8
     best_train_loss = 1e8
     final_train_accuracy = 0
     final_eval_accuracy = 0
+    final_train_perplexity = 0
+    final_eval_perplexity = 0
     best_model_epoch = 0
     eval_losses = []
     train_losses = []
     train_accuracies = []
     eval_accuracies = []
+    train_perplexities = []
+    eval_perplexities = []
 
     global scheduler, writer
     writer = SummaryWriter(RESULTS_PATH)
-    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=10)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
 
     for epoch in range(1, EPOCHS+1):
 
         start_time = time.time()
 
-        train_loss, train_accuracy = epoch_step(train_dataloader, 'train')
+        train_loss, train_accuracy, train_perplexity = epoch_step(train_dataloader, 'train')
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Accuracy/train', train_accuracy, epoch)
+        writer.add_scalar('Perplexity/train', train_perplexity, epoch)
 
-        eval_loss, eval_accuracy = epoch_step(eval_dataloader, 'eval')
+        eval_loss, eval_accuracy, eval_perplexity = epoch_step(eval_dataloader, 'eval')
         writer.add_scalar('Loss/eval', eval_loss, epoch)
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
+        writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
         # Save the model if the validation loss is the best we've seen so far.
         if eval_loss < best_eval_loss:
@@ -559,12 +578,17 @@ def train():
             best_train_loss = train_loss
             final_train_accuracy = train_accuracy
             final_eval_accuracy = eval_accuracy
+            final_train_perplexity = train_perplexity
+            final_eval_perplexity = eval_perplexity
             best_model_epoch = epoch
 
         eval_losses.append(eval_loss)
         train_losses.append(train_loss)
         train_accuracies.append(train_accuracy)
         eval_accuracies.append(eval_accuracy)
+        train_perplexities.append(train_perplexity)
+        eval_perplexities.append(eval_perplexity)
+
 
         # Early stopping
         if epoch > EARLY_STOP_EPOCHS:
@@ -578,8 +602,9 @@ def train():
         # print the loss and the progress
         elapsed = time.time() - start_time
         lr = optimizer.param_groups[0]['lr']
-        print('| epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | train_loss {:5.2f} | eval_acc {:5.2f} | eval_loss {:5.2f} |' \
-                .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, train_loss, eval_accuracy, eval_loss))
+        print('| epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | eval_acc {:5.2f} | train_loss {:5.2f} | eval_loss {:5.2f} |' \
+              'train_perp {:5.2f} | eval_perp {:5.2f}' \
+                .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
 
 
     print('\n\n TRAINING FINISHED:\n\n\tBest Loss: {:5.2f}\tBest Model saved at epoch: {:3d} \n\n' \
@@ -587,8 +612,8 @@ def train():
 
 
     # test the model
-    global test_loss, test_accuracy
-    test_loss, test_accuracy = epoch_step(test_dataloader, 'eval')
+    global test_loss, test_accuracy, test_perplexity
+    test_loss, test_accuracy, test_perplexity = epoch_step(test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')
 
@@ -634,6 +659,7 @@ if __name__ == '__main__':
     save_parameters()
 
     # train the model
+    time.sleep(5)
     print(f'Training the model...')
     train()
 

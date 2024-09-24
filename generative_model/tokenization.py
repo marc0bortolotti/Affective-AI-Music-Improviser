@@ -322,7 +322,7 @@ class PrettyMidiTokenizer(object):
     token_sequence = np.empty((tokens_len), dtype=object)
     token_sequence[:] = SILENCE_TOKEN
     for idx, note in enumerate(sorted_notes):
-      print(f"Processing note: {idx}/{len(sorted_notes)}", end="\r")
+      print(f"Processing note: {idx+1}/{len(sorted_notes)}", end="\r")
       pitch = note.pitch
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
@@ -362,6 +362,7 @@ class PrettyMidiTokenizer(object):
       if emotion_token is not None:
         emotion_token_id = self.VOCAB.word2idx[emotion_token]
         sequence = np.concatenate(([emotion_token_id], sequence[:-1]))
+        
       sequences.append(sequence)
 
     # concatenate the sequences if necessary
