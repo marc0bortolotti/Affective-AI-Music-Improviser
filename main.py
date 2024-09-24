@@ -34,8 +34,9 @@ SAVE_SESSION = False
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/results/model_20240921-120237')
-MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'architectures/transformer.py')
+MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/model_20240924-183123')
+MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'generative_model/architectures/transformer.py')
+MODEL_MODULE_NAME = 'TransformerModel'
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
@@ -62,7 +63,9 @@ if __name__ == "__main__":
                                             # setup_parameters['MELODY_MIDI_REC_PORT_NAME'], 
                                             setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
                                             WINDOW_DURATION, 
-                                            MODEL_DICT,
+                                            MODEL_PARAM_PATH,
+                                            MODEL_MODULE_PATH,
+                                            MODEL_MODULE_NAME,
                                             parse_message=True)
 
         # Set the simulation mode

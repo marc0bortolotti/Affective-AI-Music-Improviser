@@ -37,10 +37,17 @@ class TransformerModel(nn.Module):
         
         # Linear layer to map the output to vocabulary size for predictions
         self.fc_out = nn.Linear(d_model, vocab_size[1])
+
+        self.max_seq_length = max_seq_length
     
     def forward(self, src, tgt, src_mask=None, tgt_mask=None, src_padding_mask=None, tgt_padding_mask=None, memory_key_padding_mask=None):
         # Embed the source and target sequences
         src = self.positional_encoding(self.src_embedding(src))
+
+        if tgt is None:
+            # Generate a tensor of zeros or a fixed token shape.
+            tgt = torch.zeros(src.size(0), self.max_seq_length, dtype=torch.long).to(src.device) 
+        
         tgt = self.positional_encoding(self.tgt_embedding(tgt))
         
         # Pass through the Transformer

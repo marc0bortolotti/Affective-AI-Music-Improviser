@@ -28,15 +28,15 @@ TICKS_PER_BEAT = 12  # quantization of a beat
 '''----------------------------------------------'''
 
 
-def load_model(model_param_path, architecture_file_path, class_name):
+def load_model(model_param_path, model_module_path, model_module_name):
 
     '''
     Load the model from the model dictionary.
 
     Parameters:
     - model_param_path: path to the model parameters (weights, vocabularies, config)
-    - architecture_file_path: path to the architecture file definition
-    - class_name: name of the model architecture to load
+    - model_module_path: path to the model module
+    - model_module_name: name of the model class
 
     '''
 
@@ -50,14 +50,14 @@ def load_model(model_param_path, architecture_file_path, class_name):
     OUTPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK.load_vocab(output_vocab_path)
 
-    directory, architecture_filename = os.path.split(architecture_file_path)
+    directory, architecture_filename = os.path.split(model_module_path)
     architecture_module_name = architecture_filename.replace('.py', '')
     sys.path.append(directory)
     architecture_module = importlib.import_module(architecture_module_name)
 
     config_path = os.path.join(model_param_path, 'config.yaml')
     with open(config_path, 'r') as file:
-        model_class = getattr(architecture_module, class_name)
+        model_class = getattr(architecture_module, model_module_name)
         params = yaml.safe_load(file)
         model = model_class(**params)
 
@@ -124,7 +124,9 @@ class AI_AffectiveMusicImproviser():
                         # generation_record_port_name,
                         eeg_device_type,
                         window_duration,
-                        model_dict,
+                        model_param_path,
+                        model_module_path,
+                        model_module_name,
                         parse_message=False):
         '''
         Parameters:
@@ -159,12 +161,13 @@ class AI_AffectiveMusicImproviser():
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
         # AI-MODEL
-        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_dict)
+        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_module_name)
         self.model = model
         self.device = device
         self.INPUT_TOK = INPUT_TOK
         self.OUTPUT_TOK = OUTPUT_TOK
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
+        self.SEQ_LENGTH = OUTPUT_TOK.SEQ_LENGTH
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
@@ -262,11 +265,11 @@ class AI_AffectiveMusicImproviser():
                 # Mask the last bar of the input data.
                 input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.ones([1, self.BAR_LENGTH], dtype=torch.long)),
                                     dim=1)
-                
-                logging.info(f"Input sequence: {input_data}")
+            
+                input_data = input_data.to(self.device)
 
                 # Make the prediction and flatten the output.
-                prediction = self.model(input_data.to(self.device))
+                prediction = self.model(input_data)
                 prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                 # Get the probability distribution of the prediction by applying the softmax function and the temperature.

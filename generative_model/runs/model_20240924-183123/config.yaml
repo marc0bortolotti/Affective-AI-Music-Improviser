@@ -1,11 +1,10 @@
-DATE: 20240924-183127
-DIM_FEEDFORWARD: 2048
-DROPOUT: 0.1
-EMBEDDING_SIZE: 512
-MAX_SEQ_LENGTH: 64
-NUM_DECODER_LAYERS: 6
-NUM_ENCODER_LAYERS: 6
-NUM_HEADS: 8
-VOCAB_SIZE:
+dim_feedforward: 2048
+dropout: 0.1
+d_model: 512
+max_seq_length: 64
+num_decoder_layers: 6
+num_encoder_layers: 6
+nhead: 8
+vocab_size:
 - 877
 - 16447
