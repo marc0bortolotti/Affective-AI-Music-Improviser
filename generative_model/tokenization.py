@@ -9,8 +9,8 @@ BPM = 120
 TICKS_PER_BEAT = 4 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
-VELOCITY_TOKENS = {40:'p', 100:'f'} # {40:'pp', 60:'p', 90:'f', 110:'ff'}
-NOTE_START_TOKEN = '' # 'S'
+VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'} # {40:'p', 100:'f'} 
+NOTE_START_TOKEN = 'S' # 'S'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import yaml
 import re
 from tokenization import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN, Dictionary
-from model import TCN
+from transformer import TransformerModel
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 
@@ -30,7 +30,7 @@ LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate 
 
 TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 512
-TOKENS_FREQUENCY_THRESHOLD = 2 # remove tokens that appear less than # times in the dataset
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -309,34 +309,29 @@ def initialize_model():
             return total_loss
 
 
-    global SEED, INPUT_SIZE, EMBEDDING_SIZE, LEVELS, HIDDEN_UNITS, NUM_CHANNELS, OUTPUT_SIZE, LOSS_WEIGTHS
+    global SEED, INPUT_SIZE, EMBEDDING_SIZE, OUTPUT_SIZE, LOSS_WEIGTHS
 
     SEED = 1111
     torch.manual_seed(SEED)
 
+    INPUT_SIZE = len(INPUT_TOK.VOCAB) 
     OUTPUT_SIZE = len(OUTPUT_TOK.VOCAB)
 
-    if FEEDBACK:
-        INPUT_SIZE = len(INPUT_TOK.VOCAB) + OUTPUT_SIZE
-        LEVELS = 8
-        HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH * 2 # 192 * 2 = 384
-    else:
-        INPUT_SIZE = len(INPUT_TOK.VOCAB)
-        LEVELS = 7
-        HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH # 192
-
-    NUM_CHANNELS = [HIDDEN_UNITS] * (LEVELS - 1) + [EMBEDDING_SIZE] # [192, 192, 192, 192, 192, 192, 20]
+    print(f'Input size: {INPUT_SIZE}')
+    print(f'Output size: {OUTPUT_SIZE}')
+    
 
     # create the model
-    model = TCN(input_size = INPUT_SIZE,
-                embedding_size = EMBEDDING_SIZE, # Embedding layer is used to encode input token into real value vectors
-                output_size = OUTPUT_SIZE,
-                num_channels = NUM_CHANNELS,
-                emphasize_eeg = EMPHASIZE_EEG,
-                dropout = 0.45,
-                emb_dropout = 0.25,
-                kernel_size = 3,
-                tied_weights = False) # tie encoder and decoder weights (legare)
+    model = TransformerModel(
+        vocab_size = [INPUT_SIZE, OUTPUT_SIZE],
+        d_model = EMBEDDING_SIZE, 
+        nhead = 8, # Number of attention heads in the multi-head attention mechanism
+        num_encoder_layers = 6,
+        num_decoder_layers = 6,
+        dim_feedforward = 4 * EMBEDDING_SIZE,
+        max_seq_length = INPUT_TOK.SEQ_LENGTH,
+        dropout = 0.1
+    )
 
     model.to(device)
 
@@ -361,7 +356,6 @@ def save_model_config():
         'DATE': time.strftime("%Y%m%d-%H%M%S"),
         'INPUT_SIZE': INPUT_SIZE,
         'EMBEDDING_SIZE': EMBEDDING_SIZE,
-        'NUM_CHANNELS': NUM_CHANNELS,
         'OUTPUT_SIZE': OUTPUT_SIZE,
         'KERNEL_SIZE': 3
 
@@ -410,9 +404,6 @@ def save_parameters():
         f.write(f'SEED: {SEED}\n')
         f.write(f'INPUT_SIZE: {INPUT_SIZE}\n')
         f.write(f'EMBEDDING_SIZE: {EMBEDDING_SIZE}\n')
-        f.write(f'LEVELS: {LEVELS}\n')
-        f.write(f'HIDDEN_UNITS: {HIDDEN_UNITS}\n')
-        f.write(f'NUM_CHANNELS: {NUM_CHANNELS}\n')
         f.write(f'OUTPUT_SIZE: {OUTPUT_SIZE}\n')
         f.write(f'LOSS_WEIGTHS: {LOSS_WEIGTHS}\n\n')
         f.write(f'ENTROPY_WEIGHT: {CROSS_ENTROPY_WEIGHT}\n')
@@ -490,7 +481,7 @@ def epoch_step(dataloader, mode):
         optimizer.zero_grad()
 
         # make the prediction
-        output = model(input)[:, :INPUT_TOK.SEQ_LENGTH]
+        output = model(input, targets)[:, :INPUT_TOK.SEQ_LENGTH]
         prev_output = torch.argmax(output, 2)# batch, seq_len (hidden units), vocab_size
 
         # flatten the output sequence
