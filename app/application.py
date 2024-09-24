@@ -3,7 +3,6 @@ import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG
 from EEG.eeg_device import EEG_Device
-from generative_model.model import TCN
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 import torch
 import numpy as np
@@ -12,7 +11,8 @@ import os
 import logging
 import time
 import yaml
-
+import importlib
+import sys
 
 '''---------- CONNECTION PARAMETERS ------------'''
 LOCAL_HOST = "127.0.0.1"
@@ -28,12 +28,21 @@ TICKS_PER_BEAT = 12  # quantization of a beat
 '''----------------------------------------------'''
 
 
+def load_model(model_param_path, architecture_file_path, class_name):
 
-def load_model(model_dict):
+    '''
+    Load the model from the model dictionary.
 
-    weights_path = os.path.join(model_dict, 'model_state_dict.pth')
-    input_vocab_path = os.path.join(model_dict, 'input_vocab.txt')
-    output_vocab_path = os.path.join(model_dict, 'output_vocab.txt')
+    Parameters:
+    - model_param_path: path to the model parameters (weights, vocabularies, config)
+    - architecture_file_path: path to the architecture file definition
+    - class_name: name of the model architecture to load
+
+    '''
+
+    weights_path = os.path.join(model_param_path, 'model_state_dict.pth')
+    input_vocab_path = os.path.join(model_param_path, 'input_vocab.txt')
+    output_vocab_path = os.path.join(model_param_path, 'output_vocab.txt')
 
     INPUT_TOK = PrettyMidiTokenizer()
     INPUT_TOK.load_vocab(input_vocab_path)
@@ -41,21 +50,18 @@ def load_model(model_dict):
     OUTPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK.load_vocab(output_vocab_path)
 
-    config_path = os.path.join(model_dict, 'config.yaml')
+    directory, architecture_filename = os.path.split(architecture_file_path)
+    architecture_module_name = architecture_filename.replace('.py', '')
+    sys.path.append(directory)
+    architecture_module = importlib.import_module(architecture_module_name)
+
+    config_path = os.path.join(model_param_path, 'config.yaml')
     with open(config_path, 'r') as file:
-        param = yaml.safe_load(file)
-        EMBEDDING_SIZE = param['EMBEDDING_SIZE']
-        NUM_CHANNELS = param['NUM_CHANNELS']
-        INPUT_SIZE = param['INPUT_SIZE']
-        OUTPUT_SIZE = param['OUTPUT_SIZE']
-        KERNEL_SIZE = param['KERNEL_SIZE']
+        model_class = getattr(architecture_module, class_name)
+        params = yaml.safe_load(file)
+        model = model_class(**params)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = TCN(input_size = INPUT_SIZE,
-                embedding_size = EMBEDDING_SIZE, 
-                output_size = OUTPUT_SIZE, 
-                num_channels = NUM_CHANNELS, 
-                kernel_size = KERNEL_SIZE) 
     
     model.load_state_dict(torch.load(weights_path, map_location = device))
     model.eval()
