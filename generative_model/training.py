@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import yaml
 import re
 from tokenization import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN, Dictionary
-from model import TCN
+from architectures.transformer import TransformerModel
+from architectures.tcn import TCN   
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 
@@ -19,8 +20,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 # 0.002
+LEARNING_RATE = 0.00002 # 0.002
 BATCH_SIZE = 64 # 64
+
+ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN}
+MODEL = ARCHITECTURES['transformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
@@ -29,8 +33,8 @@ DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
 TICKS_PER_BEAT = 4 
-EMBEDDING_SIZE = 512
-TOKENS_FREQUENCY_THRESHOLD = 2 # remove tokens that appear less than # times in the dataset
+EMBEDDING_SIZE = 512 
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -41,7 +45,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'results/model_{time.strftime("%Y%m%d-%H%M%S")}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/model_{time.strftime("%Y%m%d-%H%M%S")}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -308,36 +312,53 @@ def initialize_model():
 
             return total_loss
 
-
     global SEED, INPUT_SIZE, EMBEDDING_SIZE, LEVELS, HIDDEN_UNITS, NUM_CHANNELS, OUTPUT_SIZE, LOSS_WEIGTHS
 
     SEED = 1111
     torch.manual_seed(SEED)
 
+    INPUT_SIZE = len(INPUT_TOK.VOCAB)
     OUTPUT_SIZE = len(OUTPUT_TOK.VOCAB)
 
-    if FEEDBACK:
-        INPUT_SIZE = len(INPUT_TOK.VOCAB) + OUTPUT_SIZE
-        LEVELS = 8
-        HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH * 2 # 192 * 2 = 384
+    if MODEL == TCN:
+        if FEEDBACK:
+            INPUT_SIZE = len(INPUT_TOK.VOCAB) + OUTPUT_SIZE
+            LEVELS = 8
+            HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH * 2 # 192 * 2 = 384
+        else:
+            LEVELS = 7
+            HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH # 192
+
+        NUM_CHANNELS = [HIDDEN_UNITS] * (LEVELS - 1) + [EMBEDDING_SIZE] # [192, 192, 192, 192, 192, 192, 20]
+
+        global PARAMS
+        PARAMS = {  'input_size' : INPUT_SIZE,
+                    'output_size' : OUTPUT_SIZE,
+                    'embedding_size' : EMBEDDING_SIZE,
+                    'num_channels' : NUM_CHANNELS,
+                    'emphasize_eeg' : EMPHASIZE_EEG,
+                    'dropout' : 0.45,
+                    'emb_dropout' : 0.25,
+                    'kernel_size' : 3,
+                    'tied_weights' : False
+                }
+        
+    elif MODEL == TransformerModel:
+        PARAMS = {  'vocab_size' : [INPUT_SIZE, OUTPUT_SIZE],
+                    'd_model' : EMBEDDING_SIZE,
+                    'nhead' : 8,
+                    'num_encoder_layers' : 6,
+                    'num_decoder_layers' : 6,
+                    'dim_feedforward' : 4 * EMBEDDING_SIZE,
+                    'max_seq_length' : INPUT_TOK.SEQ_LENGTH,
+                    'dropout' : 0.1
+                }
+        
     else:
-        INPUT_SIZE = len(INPUT_TOK.VOCAB)
-        LEVELS = 7
-        HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH # 192
-
-    NUM_CHANNELS = [HIDDEN_UNITS] * (LEVELS - 1) + [EMBEDDING_SIZE] # [192, 192, 192, 192, 192, 192, 20]
-
+        raise Exception('Model not found.')
+        
     # create the model
-    model = TCN(input_size = INPUT_SIZE,
-                embedding_size = EMBEDDING_SIZE, # Embedding layer is used to encode input token into real value vectors
-                output_size = OUTPUT_SIZE,
-                num_channels = NUM_CHANNELS,
-                emphasize_eeg = EMPHASIZE_EEG,
-                dropout = 0.45,
-                emb_dropout = 0.25,
-                kernel_size = 3,
-                tied_weights = False) # tie encoder and decoder weights (legare)
-
+    model = MODEL(**PARAMS)
     model.to(device)
 
     global MODEL_SIZE
@@ -357,19 +378,10 @@ def initialize_model():
     return model, criterion, optimizer
 
 def save_model_config():
-    data = {
-        'DATE': time.strftime("%Y%m%d-%H%M%S"),
-        'INPUT_SIZE': INPUT_SIZE,
-        'EMBEDDING_SIZE': EMBEDDING_SIZE,
-        'NUM_CHANNELS': NUM_CHANNELS,
-        'OUTPUT_SIZE': OUTPUT_SIZE,
-        'KERNEL_SIZE': 3
-
-    }
-
+    global PARAMS
     path = os.path.join(RESULTS_PATH, 'config.yaml')
     with open(path, 'w') as file:
-        yaml.safe_dump(data, file)
+        yaml.safe_dump(PARAMS, file)
 
 def save_parameters():
 
@@ -388,6 +400,9 @@ def save_parameters():
         f.write(f'EVAL_SET_SIZE: {len(eval_set)}\n')
         f.write(f'TEST_SET_SIZE: {len(test_set)}\n\n')
 
+        f.write(f'-----------------MODEL------------------\n')
+        f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
+
         f.write(f'----------OPTIMIZATION PARAMETERS----------\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
@@ -396,6 +411,8 @@ def save_parameters():
         f.write(f'DATA AUGMENTATION: {DATA_AUGMENTATION}\n')
         f.write(f'EARLY STOP EPOCHS: {EARLY_STOP_EPOCHS}\n')
         f.write(f'USE_EEG: {USE_EEG}\n')
+        f.write(f'ENTROPY_WEIGHT: {CROSS_ENTROPY_WEIGHT}\n')
+        f.write(f'PENALTY_WEIGHT: {PENALTY_WEIGHT}\n')
         f.write(f'LEARNING_RATE: {LEARNING_RATE}\n')
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
         f.write(f'EPOCHS: {EPOCHS}\n\n')
@@ -403,20 +420,7 @@ def save_parameters():
         f.write(f'------------TOKENIZATION PARAMETERS--------------\n')
         f.write(f'TICKS_PER_BEAT: {TICKS_PER_BEAT}\n')
         f.write(f'TOKENS_FREQUENCY_THRESHOLD: {TOKENS_FREQUENCY_THRESHOLD}\n')
-        f.write(f'SILENCE_TOKEN_WEIGHT: {SILENCE_TOKEN_WEIGHT}\n')
-
-        f.write(f'------------MODEL PARAMETERS--------------\n')
-        f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
-        f.write(f'SEED: {SEED}\n')
-        f.write(f'INPUT_SIZE: {INPUT_SIZE}\n')
-        f.write(f'EMBEDDING_SIZE: {EMBEDDING_SIZE}\n')
-        f.write(f'LEVELS: {LEVELS}\n')
-        f.write(f'HIDDEN_UNITS: {HIDDEN_UNITS}\n')
-        f.write(f'NUM_CHANNELS: {NUM_CHANNELS}\n')
-        f.write(f'OUTPUT_SIZE: {OUTPUT_SIZE}\n')
-        f.write(f'LOSS_WEIGTHS: {LOSS_WEIGTHS}\n\n')
-        f.write(f'ENTROPY_WEIGHT: {CROSS_ENTROPY_WEIGHT}\n')
-        f.write(f'PENALTY_WEIGHT: {PENALTY_WEIGHT}\n')
+        f.write(f'SILENCE_TOKEN_WEIGHT: {SILENCE_TOKEN_WEIGHT}\n')        
 
 
 def save_results():
@@ -458,8 +462,7 @@ def save_results():
 
 def epoch_step(dataloader, mode):
 
-    if FEEDBACK:
-        prev_output = torch.zeros([BATCH_SIZE, INPUT_TOK.SEQ_LENGTH], dtype=torch.long, device=device)
+    prev_output = torch.zeros([BATCH_SIZE, INPUT_TOK.SEQ_LENGTH], dtype=torch.long, device=device)
 
     if mode == 'train':
         model.train()
@@ -471,7 +474,6 @@ def epoch_step(dataloader, mode):
     n_total = 0
     BAR_LENGTH = INPUT_TOK.BAR_LENGTH
     
-
     # iterate over the training data
     for batch_idx, (data, targets) in enumerate(dataloader):
 
@@ -490,7 +492,8 @@ def epoch_step(dataloader, mode):
         optimizer.zero_grad()
 
         # make the prediction
-        output = model(input)[:, :INPUT_TOK.SEQ_LENGTH]
+        prev_output = prev_output[:batch_size, :]
+        output = model(input, prev_output)[:, :INPUT_TOK.SEQ_LENGTH]
         prev_output = torch.argmax(output, 2)# batch, seq_len (hidden units), vocab_size
 
         # flatten the output sequence

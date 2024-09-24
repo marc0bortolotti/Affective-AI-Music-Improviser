@@ -40,7 +40,7 @@ class TransformerModel(nn.Module):
 
         self.max_seq_length = max_seq_length
     
-    def forward(self, src, tgt, src_mask=None, tgt_mask=None, src_padding_mask=None, tgt_padding_mask=None, memory_key_padding_mask=None):
+    def forward(self, src, tgt=None, src_mask=None, tgt_mask=None, src_padding_mask=None, tgt_padding_mask=None, memory_key_padding_mask=None):
         # Embed the source and target sequences
         src = self.positional_encoding(self.src_embedding(src))
 
