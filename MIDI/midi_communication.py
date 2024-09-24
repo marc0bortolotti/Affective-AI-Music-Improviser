@@ -79,7 +79,7 @@ class MIDI_Input:
 
     def simulate(self, path=None):
 
-        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/drum_rock_relax.mid')
+        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/rithm_CONCENTRATED.mid')
 
         def thread_function(path):
             mid = mido.MidiFile(path)

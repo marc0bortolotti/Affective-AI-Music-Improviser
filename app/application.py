@@ -95,10 +95,13 @@ def thread_function_midi(name, app):
         # SIMULATION_EVENT = threading.Event()
         # app.midi_in.set_simulation_event(SIMULATION_EVENT)
 
-        while True:
+        a = 0
+        while a<1:
             SYNCH_EVENT.wait()
 
             app.midi_in.simulate()
+
+            a += 1
 
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
@@ -231,7 +234,7 @@ class AI_AffectiveMusicImproviser():
         softmax = torch.nn.Softmax(dim=1)
 
         # initialize the target tensor
-        tgt = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (self.SEQ_LENGTH, 1)) 
+        tgt = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (1, self.SEQ_LENGTH))
 
         while True:
 
@@ -266,9 +269,10 @@ class AI_AffectiveMusicImproviser():
                 input_data = input_data.unsqueeze(0)
 
                 # Mask the last bar of the input data.
-                input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.ones([1, self.BAR_LENGTH], dtype=torch.long)),
-                                    dim=1)
-            
+                input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.zeros([1, self.BAR_LENGTH], dtype=torch.long)), dim=1)
+        
+                # Move the tensor to the device.
+                tgt = tgt.to(self.device)
                 input_data = input_data.to(self.device)
 
                 # Make the prediction and flatten the output.
@@ -291,8 +295,9 @@ class AI_AffectiveMusicImproviser():
                 predicted_tokens = torch.argmax(prediction, 1)
 
                 # concatenate the predicted tokens to the target tensor and remove the first bar
-                tgt = torch.cat((tgt, predicted_tokens.unsqueeze(1)), dim=0)
-                tgt = tgt[-self.SEQ_LENGTH:]
+                tgt = torch.cat((tgt, predicted_tokens.unsqueeze(0)), dim=1)
+                tgt = tgt[:, -self.SEQ_LENGTH:]
+                print(tgt)
 
                 # Get the predicted sequence.
                 predicted_sequence = predicted_tokens.cpu().numpy().tolist()
