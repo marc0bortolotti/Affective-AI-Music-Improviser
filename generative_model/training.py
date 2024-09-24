@@ -19,7 +19,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.002 # 0.002
 BATCH_SIZE = 64 # 64
 
 USE_EEG = True # use the EEG data to condition the model
@@ -29,7 +29,7 @@ DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
 TICKS_PER_BEAT = 4 
-EMBEDDING_SIZE = 128
+EMBEDDING_SIZE = 512
 TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
