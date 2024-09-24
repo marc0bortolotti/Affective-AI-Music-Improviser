@@ -435,6 +435,13 @@ def save_results():
     plt.savefig(os.path.join(RESULTS_PATH, 'accuracies.png'))
     plt.clf()
 
+    # plot the perplexities over the epochs
+    plt.plot(train_perplexities, label='train')
+    plt.plot(eval_perplexities, label='eval')
+    plt.legend()
+    plt.savefig(os.path.join(RESULTS_PATH, 'perplexities.png'))
+    plt.clf()
+
     with open(os.path.join(RESULTS_PATH, 'results.txt'), 'w') as f:
         f.write(f'-------------------RESULTS----------------\n')
         f.write(f'BEST_TRAIN_LOSS: {best_train_loss}\n')
@@ -551,10 +558,12 @@ def train():
         train_loss, train_accuracy, train_perplexity = epoch_step(train_dataloader, 'train')
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Accuracy/train', train_accuracy, epoch)
+        writer.add_scalar('Perplexity/train', train_perplexity, epoch)
 
         eval_loss, eval_accuracy, eval_perplexity = epoch_step(eval_dataloader, 'eval')
         writer.add_scalar('Loss/eval', eval_loss, epoch)
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
+        writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
         # Save the model if the validation loss is the best we've seen so far.
         if eval_loss < best_eval_loss:
