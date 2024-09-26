@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
@@ -24,7 +24,7 @@ LEARNING_RATE = 0.00001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['musicTransformer']
+MODEL = ARCHITECTURES['tcn']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = True # use the feedback mechanism in the model
@@ -240,27 +240,30 @@ def epoch_step(dataloader, mode):
     n_total = 0
     
     # iterate over the training data
-    for batch_idx, (input, targets) in enumerate(dataloader):
+    for batch_idx, (input, target) in enumerate(dataloader):
 
         batch_idx += 1
 
+        # add mask to the input last bar
+        input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)), dim = 1)
+
         # move the input and the target to the device
         input = input.to(device)
-        targets = targets.to(device)
+        target = target.to(device)
 
         # reset model gradients to zero
         optimizer.zero_grad()
 
         # Forward pass
         if 'Transformer' in str(MODEL):
-            tgt_input = targets[:, : - OUTPUT_TOK.BAR_LENGTH]
-            targets = targets[:, OUTPUT_TOK.BAR_LENGTH :]
-            output = model(input, tgt_input)
+            shifted_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
+            target = target[:, OUTPUT_TOK.BAR_LENGTH :]
+            output = model(input, shifted_target) 
         else:
             output = model(input)
 
         # reshape the output and the target to calculate the loss (flatten the sequences)
-        target = targets.reshape(-1) # the size -1 is inferred from other dimensions
+        target = target.reshape(-1) # the size -1 is inferred from other dimensions
         output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
 
         # calculate the loss

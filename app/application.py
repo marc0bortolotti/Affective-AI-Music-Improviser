@@ -28,7 +28,7 @@ TICKS_PER_BEAT = 12  # quantization of a beat
 '''----------------------------------------------'''
 
 
-def load_model(model_param_path, model_module_path, model_module_name):
+def load_model(model_param_path, model_module_path, model_class_name):
 
     '''
     Load the model from the model dictionary.
@@ -57,7 +57,7 @@ def load_model(model_param_path, model_module_path, model_module_name):
 
     config_path = os.path.join(model_param_path, 'config.yaml')
     with open(config_path, 'r') as file:
-        model_class = getattr(architecture_module, model_module_name)
+        model_class = getattr(architecture_module, model_class_name)
         params = yaml.safe_load(file)
         model = model_class(**params)
 
@@ -129,7 +129,7 @@ class AI_AffectiveMusicImproviser():
                         window_duration,
                         model_param_path,
                         model_module_path,
-                        model_module_name,
+                        model_class_name,
                         parse_message=False):
         '''
         Parameters:
@@ -164,7 +164,8 @@ class AI_AffectiveMusicImproviser():
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
         # AI-MODEL
-        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_module_name)
+        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_class_name)
+        self.model_class_name = model_class_name
         self.model = model
         self.device = device
         self.INPUT_TOK = INPUT_TOK
@@ -234,7 +235,7 @@ class AI_AffectiveMusicImproviser():
         softmax = torch.nn.Softmax(dim=1)
 
         # initialize the target tensor
-        tgt = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (1, self.SEQ_LENGTH))
+        last_prediction = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (1, 3 * self.BAR_LENGTH)).to(self.device)
 
         while True:
 
@@ -265,11 +266,17 @@ class AI_AffectiveMusicImproviser():
                 # Convert the tokens to tensor
                 input_data = torch.LongTensor(input_data)
 
+                # add mask to the input data
+                input_data = torch.cat((input_data, torch.zeros(self.BAR_LENGTH, dtype=torch.long)))
+
                 # Add the batch dimension.
                 input_data = input_data.unsqueeze(0).to(self.device)
 
                 # Make the prediction 
-                prediction = self.model(input_data, tgt)
+                if 'Transformer' in self.model_class_name:
+                    prediction = self.model(input_data, last_prediction)
+                else:
+                    prediction = self.model(input_data)
 
                 # Remove the batch dimension.
                 prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
@@ -280,12 +287,14 @@ class AI_AffectiveMusicImproviser():
                 prediction = softmax(prediction)
 
                 # Get the predicted tokens.
-                predicted_tokens = torch.argmax(prediction, 1)
+                predicted_tokens = torch.argmax(prediction, 1) [-self.BAR_LENGTH:]
 
-                # Get the predicted sequence and get only the last predicted bar
-                predicted_sequence = predicted_tokens.cpu().numpy().tolist()[-self.BAR_LENGTH:]
-                predicted_sequence = predicted_sequence[-self.BAR_LENGTH:]
-                logging.info(f"Generated sequence: {predicted_sequence}")
+                # Update the last prediction
+                last_prediction = torch.cat((last_prediction[:, self.BAR_LENGTH:], predicted_tokens.unsqueeze(0)), dim=1)
+
+                # Convert the predicted tokens to a list.
+                predicted_tokens = predicted_tokens.cpu().numpy().tolist()
+                logging.info(f"Generated sequence: {predicted_tokens}")
 
                 # Get the confidence of the prediction withouth the temperature contribution.
                 confidence = torch.mean(torch.max(prediction, 1)[0]).item() # torch.max returns a tuple (values, indices)
@@ -293,10 +302,10 @@ class AI_AffectiveMusicImproviser():
 
                 # save the hystory
                 self.hystory.append(tokens_buffer.copy())
-                self.hystory.append(predicted_sequence)
+                self.hystory.append(predicted_tokens)
 
                 # Convert the predicted sequence to MIDI.
-                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=0)
+                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_tokens, ticks_filter=0)
 
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)
