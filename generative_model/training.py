@@ -20,11 +20,11 @@ device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00002 # 0.002
+LEARNING_RATE = 0.00001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['transformer']
+MODEL = ARCHITECTURES['musicTransformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = True # use the feedback mechanism in the model
@@ -75,6 +75,15 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
                     'num_decoder_layers': 6,
                     'dim_feedforward': 4 * EMBEDDING_SIZE,
                     'max_seq_length': INPUT_TOK.SEQ_LENGTH
+                }
+    elif MODEL == MusicTransformer:
+        PARAMS = {  'in_vocab_size': len(INPUT_TOK.VOCAB),
+                    'out_vocab_size': len(OUTPUT_TOK.VOCAB),
+                    'embedding_dim': EMBEDDING_SIZE,
+                    'nhead': 8,
+                    'num_layers': 6,
+                    'seq_length': INPUT_TOK.SEQ_LENGTH,
+                    'output_length': OUTPUT_TOK.BAR_LENGTH
                 }
     else:
         raise Exception('Model not found')
@@ -244,8 +253,8 @@ def epoch_step(dataloader, mode):
 
         # Forward pass
         if 'Transformer' in str(MODEL):
-            tgt_input = targets[:, :-1]
-            targets = targets[:, 1:]
+            tgt_input = targets[:, : - OUTPUT_TOK.BAR_LENGTH]
+            targets = targets[:, OUTPUT_TOK.BAR_LENGTH :]
             output = model(input, tgt_input)
         else:
             output = model(input)

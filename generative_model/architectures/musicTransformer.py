@@ -23,21 +23,34 @@ def generate_dummy_data(num_sequences=10000, seq_length=48, output_length=16):
 
 # Transformer Model for Music Generation
 class MusicTransformer(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, nhead, num_layers, seq_length, output_length):
+    def __init__(self, in_vocab_size, out_vocab_size, embedding_dim, nhead, num_layers, seq_length, output_length):
         super(MusicTransformer, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.in_embedding = nn.Embedding(in_vocab_size, embedding_dim)
+        self.out_embedding = nn.Embedding(out_vocab_size, embedding_dim)
         self.pos_encoder = nn.Parameter(torch.zeros(1, seq_length + output_length, embedding_dim))
         self.transformer = nn.Transformer(d_model=embedding_dim, nhead=nhead, num_encoder_layers=num_layers, num_decoder_layers=num_layers)
-        self.fc_out = nn.Linear(embedding_dim, vocab_size)
+        self.fc_out = nn.Linear(embedding_dim, out_vocab_size)
         self.softmax = nn.Softmax(dim=-1)
         
         # Class variable to store predictions
         self.predictions = None
 
+        self.PARAMS = { 'in_vocab_size' : in_vocab_size,
+                          'out_vocab_size' : out_vocab_size,
+                          'embedding_dim' : embedding_dim,
+                          'nhead' : nhead,
+                          'num_layers' : num_layers,
+                          'seq_length' : seq_length,
+                          'output_length' : output_length
+                        }
+
+    def size(self): 
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
     def forward(self, src, tgt):
         # Embed and add positional encoding
-        src = self.embedding(src) + self.pos_encoder[:, :src.size(1), :]
-        tgt = self.embedding(tgt) + self.pos_encoder[:, :tgt.size(1), :]
+        src = self.in_embedding(src) + self.pos_encoder[:, :src.size(1), :]
+        tgt = self.out_embedding(tgt) + self.pos_encoder[:, :tgt.size(1), :]
         
         # Transformer expects input in (sequence_length, batch_size, embed_dim) format
         src = src.permute(1, 0, 2)  # (seq_length, batch_size, embedding_dim)
