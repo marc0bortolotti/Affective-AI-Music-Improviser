@@ -18,12 +18,23 @@ class PositionalEncoding(nn.Module):
         return x
 
 class TransformerModel(nn.Module):
-    def __init__(self, vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length, dropout=0.1):
+    def __init__(self, input_size, output_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length, dropout=0.1):
         super(TransformerModel, self).__init__()
+
+        self.PARAMS = { 'input_size' : input_size,
+                        'output_size' : output_size,
+                        'd_model' : d_model, # Embedding dimension and model size
+                        'nhead' : nhead, # Number of attention heads
+                        'num_encoder_layers' : num_encoder_layers,
+                        'num_decoder_layers' : num_decoder_layers,
+                        'dim_feedforward' : dim_feedforward,
+                        'max_seq_length' : max_seq_length,
+                        'dropout' : dropout,
+                    }
         
         # Embedding layers for input and output sequences
-        self.src_embedding = nn.Embedding(vocab_size[0], d_model)
-        self.tgt_embedding = nn.Embedding(vocab_size[1], d_model)
+        self.src_embedding = nn.Embedding(input_size, d_model)
+        self.tgt_embedding = nn.Embedding(output_size, d_model)
         
         # Positional encoding
         self.positional_encoding = PositionalEncoding(d_model, max_len=max_seq_length)
@@ -36,9 +47,12 @@ class TransformerModel(nn.Module):
                                           dropout=dropout)
         
         # Linear layer to map the output to vocabulary size for predictions
-        self.fc_out = nn.Linear(d_model, vocab_size[1])
+        self.fc_out = nn.Linear(d_model, output_size)
 
         self.max_seq_length = max_seq_length
+
+    def size(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
     def forward(self, src, tgt=None, src_mask=None, tgt_mask=None, src_padding_mask=None, tgt_padding_mask=None, memory_key_padding_mask=None):
         # Embed the source and target sequences

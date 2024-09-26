@@ -15,19 +15,21 @@ from architectures.transformer import TransformerModel
 from architectures.tcn import TCN   
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
+from data_augmentation import data_augmentation_shift
+from losses import CrossEntropyWithPenaltyLoss
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00002 # 0.002
+LEARNING_RATE = 0.002 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN}
-MODEL = ARCHITECTURES['transformer']
+MODEL = ARCHITECTURES['tcn']
 
 USE_EEG = True # use the EEG data to condition the model
-FEEDBACK = False # use the feedback mechanism in the model
+FEEDBACK = True # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
@@ -54,9 +56,6 @@ while os.path.exists(RESULTS_PATH):
     RESULTS_PATH += f'_{idx}'
     idx += 1
 os.makedirs(RESULTS_PATH)
-
-def model_size(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def tokenize_midi_files():
 
@@ -102,149 +101,6 @@ def tokenize_midi_files():
 
     return INPUT_TOK, OUTPUT_TOK
 
-
-def update_sequences(freq_th = None):
-    
-    global INPUT_TOK, OUTPUT_TOK
-
-    if freq_th is not None:
-
-        for tokenizer in [INPUT_TOK, OUTPUT_TOK]:
-
-            original_vocab = tokenizer.VOCAB
-            original_vocab.compute_weights()
-
-            # Remove tokens that appear less than # times in the dataset
-            for idx, count in enumerate(original_vocab.counter):
-                if original_vocab.idx2word[idx] in BCI_TOKENS.values(): 
-                    pass
-                elif count < freq_th:
-                    original_vocab.counter[idx] = 0
-
-            # Create a new vocab with the updated tokens
-            updated_vocab = Dictionary()
-            for word in original_vocab.word2idx.keys():
-                if original_vocab.counter[original_vocab.word2idx[word]] > 0:
-                    updated_vocab.add_word(word)
-
-            # Update the sequences with the new vocab
-            for seq in tokenizer.sequences:
-                for i, tok in enumerate(seq):
-                    if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
-                        seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
-                        updated_vocab.add_word(SILENCE_TOKEN)
-                    else:
-                        word = original_vocab.idx2word[tok]
-                        seq[i] = updated_vocab.word2idx[word]
-                        updated_vocab.add_word(word)
-            
-            tokenizer.VOCAB = updated_vocab
-            tokenizer.VOCAB.compute_weights()
-
-            # Verify that the vocab was updated
-            print(f'Initial silence token weigth: {original_vocab.weights[original_vocab.word2idx[SILENCE_TOKEN]]}')
-            print(f'Final silence token weigth:{tokenizer.VOCAB.weights[tokenizer.VOCAB.word2idx[SILENCE_TOKEN]]}')
-            print(f'Inintial number of tokens: {len(original_vocab)}')
-            print(f'Final number of tokens: {len(tokenizer.VOCAB)}\n')
-    
-
-def create_dataset(split = [0.7, 0.2, 0.1]):
-    dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences).to(device),
-                            torch.LongTensor(OUTPUT_TOK.sequences).to(device))
-
-    # Split the dataset into training, evaluation and test sets
-    train_set, eval_set, test_set = random_split(dataset, split)
-
-    return train_set, eval_set, test_set
-
-def data_augmentation_shift(dataset, shifts):
-    '''
-    Shifts the sequences by a number of ticks to create new sequences.
-    '''
-    augmented_input_sequences = []
-    output_sequences = []
-
-    for ticks in shifts:
-        for input_sequence, ouput_sequence in dataset:
-            input_sequence = input_sequence.cpu().numpy().copy()
-
-            # remove the first token since it is the emotion token
-            emotion_token = input_sequence[0]
-            input_sequence = input_sequence[1:]
-
-            # shift the sequence
-            new_input_sequence = np.roll(input_sequence, ticks)
-
-            # add the emotion token back to the sequence
-            new_input_sequence = np.concatenate(([emotion_token], new_input_sequence))
-
-            # add the new sequence to the augmented sequences
-            augmented_input_sequences.append(new_input_sequence)
-            output_sequences.append(ouput_sequence.cpu().numpy().copy())
-    
-    augmented_dataset = TensorDataset(torch.LongTensor(augmented_input_sequences).to(device), 
-                                      torch.LongTensor(output_sequences).to(device))
-    
-    # Concatenate the original and the augmented dataset
-    concatenated_dataset = torch.utils.data.ConcatDataset([dataset, augmented_dataset])
-
-    return concatenated_dataset
-
-
-def data_augmentation_transposition(dataset, transpositions, probability=0.5):
-    '''
-    Transpose the sequences by a number of semitones to create new sequences.
-
-    Parameters:
-    - transpositions: a list of integers representing the number of semitones to transpose the sequences.
-
-    NB: The transposition is done by adding the number of semitones to the pitch of each note in the sequence.
-    '''
-
-    input_sequences = []
-    augmented_output_sequences = []
-
-    for transposition in transpositions:
-        for input_sequence, ouput_sequence in dataset:
-
-            input_sequence = input_sequence.cpu().numpy().copy()
-            new_ouput_sequence = ouput_sequence.cpu().numpy().copy()
-
-            for i in range(len(new_ouput_sequence)):
-
-                token = ouput_sequence[i]
-                word = OUTPUT_TOK.VOCAB.idx2word[token]
-
-                # check if the token is a note
-                if word != SILENCE_TOKEN and word != BCI_TOKENS['relaxed'] and word != BCI_TOKENS['concentrated']:
-
-                    # extract all the pitches from the token 
-                    pitches = re.findall(r'\d+', word) # NB: pitches is a string list
-
-                    # transpose pitch in the token with a probability
-                    for pitch in pitches:
-                        if np.random.rand() < probability:
-                            new_pitch = str(int(pitch) + transposition)
-                            word = word.replace(pitch, new_pitch)
-
-                    # add the new token to the vocabulary
-                    OUTPUT_TOK.VOCAB.add_word(word) 
-
-                    # update the sequence with the new token
-                    new_ouput_sequence[i] = OUTPUT_TOK.VOCAB.word2idx[word]
-            
-            # update sequence with the new tokens
-            input_sequences.append(input_sequence)
-            augmented_output_sequences.append(new_ouput_sequence)
-
-    augmented_dataset = TensorDataset(torch.LongTensor(input_sequences).to(device), 
-                                      torch.LongTensor(augmented_output_sequences).to(device))
-    
-    # Concatenate the original and the augmented dataset
-    concatenated_dataset = torch.utils.data.ConcatDataset([dataset, augmented_dataset])
-
-    return concatenated_dataset
-
 def initialize_dataset(train_set, eval_set, test_set):
 
     # Create the dataloaders
@@ -259,131 +115,38 @@ def initialize_dataset(train_set, eval_set, test_set):
 
     return train_dataloader, eval_dataloader, test_dataloader
 
-
-def initialize_model():
-
-    '''
-    IMPORTANT:
-    to cover all the sequence of tokens k * d must be >= hidden units (see the paper)
-    k = kernel_size
-    d = dilation = 2 ^ (n_levels - 1)
-    '''
-
-    class CustomLoss(nn.Module):
-        def __init__(self, weight_ce=1.0, weight_penalty=1.0):
-            """
-            Custom loss function combining Cross Entropy loss and a penalty based
-            on the number of predictions equal to class 0.
-
-            Args:
-            - weight_ce: Weight for the Cross Entropy loss term.
-            - weight_penalty: Weight for the penalty term.
-            """
-            super(CustomLoss, self).__init__()
-            self.weight_ce = weight_ce
-            self.weight_penalty = weight_penalty
-            self.cross_entropy_loss = nn.CrossEntropyLoss()
-
-        def forward(self, outputs, targets):
-            """
-            Args:
-            - outputs: Model predictions (logits), shape (batch_size, num_classes)
-            - targets: Ground truth labels, shape (batch_size,)
-            
-            Returns:
-            - Combined loss (cross entropy + penalty)
-            """
-
-            # Cross Entropy Loss
-            ce_loss = self.cross_entropy_loss(outputs, targets)
-
-            # Get predicted class by taking argmax along the class dimension
-            predictions = torch.argmax(outputs, dim=1)
-
-            # Penalty: Number of predictions equal to class 0
-            zero_class_predictions = (predictions == 0).float().sum()
-            total_predictions = predictions.size(0)
-
-            # Normalize the penalty term
-            zero_class_predictions = zero_class_predictions / total_predictions
-
-            # Compute the total loss as a weighted sum
-            total_loss = self.weight_ce * ce_loss + self.weight_penalty * zero_class_predictions
-
-            return total_loss
-
-    global SEED, INPUT_SIZE, EMBEDDING_SIZE, LEVELS, HIDDEN_UNITS, NUM_CHANNELS, OUTPUT_SIZE, LOSS_WEIGTHS
-
-    SEED = 1111
-    torch.manual_seed(SEED)
-
-    INPUT_SIZE = len(INPUT_TOK.VOCAB)
-    OUTPUT_SIZE = len(OUTPUT_TOK.VOCAB)
+def initialize_model(INPUT_TOK, OUTPUT_TOK):
 
     if MODEL == TCN:
-        if FEEDBACK:
-            INPUT_SIZE = len(INPUT_TOK.VOCAB) + OUTPUT_SIZE
-            LEVELS = 8
-            HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH * 2 # 192 * 2 = 384
-        else:
-            LEVELS = 7
-            HIDDEN_UNITS = INPUT_TOK.SEQ_LENGTH # 192
-
-        NUM_CHANNELS = [HIDDEN_UNITS] * (LEVELS - 1) + [EMBEDDING_SIZE] # [192, 192, 192, 192, 192, 192, 20]
-
-        global PARAMS
-        PARAMS = {  'input_size' : INPUT_SIZE,
-                    'output_size' : OUTPUT_SIZE,
-                    'embedding_size' : EMBEDDING_SIZE,
-                    'num_channels' : NUM_CHANNELS,
-                    'emphasize_eeg' : EMPHASIZE_EEG,
-                    'dropout' : 0.45,
-                    'emb_dropout' : 0.25,
-                    'kernel_size' : 3,
-                    'tied_weights' : False
+        PARAMS = {  'input_size': len(INPUT_TOK.VOCAB), 
+                    'embedding_size': EMBEDDING_SIZE,
+                    'output_size': len(OUTPUT_TOK.VOCAB), 
+                    'hidden_units': INPUT_TOK.SEQ_LENGTH,
+                    'emphasize_eeg': EMPHASIZE_EEG,
+                    'feedback': FEEDBACK,
                 }
-        
     elif MODEL == TransformerModel:
-        PARAMS = {  'vocab_size' : [INPUT_SIZE, OUTPUT_SIZE],
-                    'd_model' : EMBEDDING_SIZE,
-                    'nhead' : 8,
-                    'num_encoder_layers' : 6,
-                    'num_decoder_layers' : 6,
-                    'dim_feedforward' : 4 * EMBEDDING_SIZE,
-                    'max_seq_length' : INPUT_TOK.SEQ_LENGTH,
-                    'dropout' : 0.1
+        PARAMS = {  'input_size': len(INPUT_TOK.VOCAB),
+                    'output_size': len(OUTPUT_TOK.VOCAB),
+                    'embed_size': EMBEDDING_SIZE,
+                    'nhead': 8,
+                    'num_encoder_layers': 6,
+                    'num_decoder_layers': 6,
+                    'dim_feedforward': 4 * EMBEDDING_SIZE,
+                    'seq_max_length': INPUT_TOK.SEQ_LENGTH
                 }
-        
     else:
-        raise Exception('Model not found.')
-        
-    # create the model
-    model = MODEL(**PARAMS)
-    model.to(device)
+        raise Exception('Model not found')
 
-    global MODEL_SIZE
-    MODEL_SIZE = model_size(model)
+    model = MODEL(PARAMS).to(device)
+    return model
 
-    # balance the loss function by assigning a weight to each token related to its frequency
-    LOSS_WEIGTHS = torch.ones([OUTPUT_SIZE], dtype=torch.float, device = device)
-    LOSS_WEIGTHS[OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] = SILENCE_TOKEN_WEIGHT
-
-    # for i, weigth in enumerate(OUTPUT_TOK.VOCAB.weights):
-    #     LOSS_WEIGTHS[i] = 1 - weigth
-        
-    # criterion = nn.CrossEntropyLoss(weight = LOSS_WEIGTHS)
-    criterion = CustomLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
-    optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
-
-    return model, criterion, optimizer
-
-def save_model_config():
-    global PARAMS
+def save_model_config(model):
     path = os.path.join(RESULTS_PATH, 'config.yaml')
     with open(path, 'w') as file:
-        yaml.safe_dump(PARAMS, file)
+        yaml.safe_dump(model.PARAMS, file)
 
-def save_parameters():
+def save_parameters(INPUT_TOK, OUTPUT_TOK):
 
     # save the vocabularies
     INPUT_TOK.VOCAB.save(os.path.join(RESULTS_PATH, 'input_vocab.txt'))
@@ -422,9 +185,7 @@ def save_parameters():
         f.write(f'TOKENS_FREQUENCY_THRESHOLD: {TOKENS_FREQUENCY_THRESHOLD}\n')
         f.write(f'SILENCE_TOKEN_WEIGHT: {SILENCE_TOKEN_WEIGHT}\n')        
 
-
 def save_results():
-
     # plot the losses over the epochs
     plt.plot(train_losses, label='train')
     plt.plot(eval_losses, label='eval')
@@ -458,8 +219,7 @@ def save_results():
         f.write(f'EVAL_PERPLEXITY: {final_eval_perplexity}\n')
         f.write(f'TEST_PERPLEXITY: {test_perplexity}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
-
-
+        
 def epoch_step(dataloader, mode):
 
     prev_output = torch.zeros([BATCH_SIZE, INPUT_TOK.SEQ_LENGTH], dtype=torch.long, device=device)
@@ -491,9 +251,20 @@ def epoch_step(dataloader, mode):
         # reset model gradients to zero
         optimizer.zero_grad()
 
+        tgt_input = targets[:, :-1]
+        tgt_output = targets[:, 1:]
+
+        # Forward pass
+        output = model(input, tgt_input)
+
+        # Reshape output and target to fit into the loss function
+        output = output.reshape(-1, OUTPUT_VOCAB_SIZE)
+        tgt_output = tgt_output.reshape(-1)
+
         # make the prediction
-        prev_output = prev_output[:batch_size, :]
-        output = model(input, prev_output)[:, :INPUT_TOK.SEQ_LENGTH]
+        output = model(input)[:, :INPUT_TOK.SEQ_LENGTH]
+
+        
         prev_output = torch.argmax(output, 2)# batch, seq_len (hidden units), vocab_size
 
         # flatten the output sequence
@@ -501,7 +272,7 @@ def epoch_step(dataloader, mode):
         # NB: contiguous() is used to make sure the tensor is stored in a contiguous chunk of memory, necessary for view() to work
 
         final_target = targets.contiguous().view(-1)
-        final_output = output.contiguous().view(-1, OUTPUT_SIZE)
+        final_output = output.contiguous().view(-1, len(OUTPUT_TOK.VOCAB))
 
         # calculate the loss
         loss = criterion(final_output, final_target)
@@ -533,11 +304,10 @@ def epoch_step(dataloader, mode):
 
 def train():
 
-    MODEL_PATH = os.path.join(RESULTS_PATH, 'model_state_dict.pth')
+    global best_eval_loss, best_train_loss, final_train_accuracy, final_eval_accuracy, final_train_perplexity, final_eval_perplexity, best_model_epoch
+    global eval_losses, train_losses, train_accuracies, eval_accuracies, train_perplexities, eval_perplexities
 
-    global best_eval_loss, best_train_loss, best_model_epoch, train_losses, eval_losses
-    global train_accuracies, eval_accuracies, final_train_accuracy, final_eval_accuracy
-    global train_perplexities, eval_perplexities, final_train_perplexity, final_eval_perplexity
+    MODEL_PATH = os.path.join(RESULTS_PATH, 'model_state_dict.pth')
 
     best_eval_loss = 1e8
     best_train_loss = 1e8
@@ -553,7 +323,6 @@ def train():
     train_perplexities = []
     eval_perplexities = []
 
-    global scheduler, writer
     writer = SummaryWriter(RESULTS_PATH)
     scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
 
@@ -619,24 +388,26 @@ def train():
     test_loss, test_accuracy, test_perplexity = epoch_step(test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')
+    print(f'TEST PERPLEXITY: {test_perplexity}\n\n')
 
     writer.flush()
     writer.close()
-    
-
-
 
 if __name__ == '__main__':
 
     # tokenize the midi files
-    global INPUT_TOK, OUTPUT_TOK
     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
     # update the sequences
-    update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
-    train_set, eval_set, test_set = create_dataset(DATASET_SPLIT)
+    dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences).to(device),
+                            torch.LongTensor(OUTPUT_TOK.sequences).to(device))
+
+    # Split the dataset into training, evaluation and test sets
+    train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
     print(f'Train set size: {len(train_set)}')
     print(f'Evaluation set size: {len(eval_set)}')
     print(f'Test set size: {len(test_set)}')
@@ -653,13 +424,16 @@ if __name__ == '__main__':
     
     # initialize the model
     print(f'Initializing the model...')
-    global model, criterion, optimizer
-    model, criterion, optimizer = initialize_model()
-    print(f'Model size: {model_size(model)}')   
+    model = initialize_model()
+    criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
+    optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
+    global MODEL_SIZE
+    MODEL_SIZE = model.size
+    print(f'Model size: {MODEL_SIZE}')   
 
     # save the model configuration
-    save_model_config()
-    save_parameters()
+    save_model_config(model)
+    save_parameters(INPUT_TOK, OUTPUT_TOK)
 
     # train the model
     time.sleep(5)

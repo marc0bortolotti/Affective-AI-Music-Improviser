@@ -521,6 +521,45 @@ class PrettyMidiTokenizer(object):
       print(f'MIDI file saved at {out_file_path}')
 
     return mid
+  
+  def update_sequences(self, count_th = None):
+    if count_th is not None:
+
+      original_vocab = self.VOCAB
+      original_vocab.compute_weights()
+
+      # Remove tokens that appear less than # times in the dataset
+      for idx, count in enumerate(original_vocab.counter):
+          if original_vocab.idx2word[idx] in BCI_TOKENS.values(): 
+              pass
+          elif count < count_th:
+              original_vocab.counter[idx] = 0
+
+      # Create a new vocab with the updated tokens
+      updated_vocab = Dictionary()
+      for word in original_vocab.word2idx.keys():
+          if original_vocab.counter[original_vocab.word2idx[word]] > 0:
+              updated_vocab.add_word(word)
+
+      # Update the sequences with the new vocab
+      for seq in self.sequences:
+          for i, tok in enumerate(seq):
+              if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
+                  seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
+                  updated_vocab.add_word(SILENCE_TOKEN)
+              else:
+                  word = original_vocab.idx2word[tok]
+                  seq[i] = updated_vocab.word2idx[word]
+                  updated_vocab.add_word(word)
+      
+      self.VOCAB = updated_vocab
+      self.VOCAB.compute_weights()
+
+      # Verify that the vocab was updated
+      print(f'Initial silence token weigth: {original_vocab.weights[original_vocab.word2idx[SILENCE_TOKEN]]}')
+      print(f'Final silence token weigth:{self.VOCAB.weights[self.VOCAB.word2idx[SILENCE_TOKEN]]}')
+      print(f'Inintial number of tokens: {len(original_vocab)}')
+      print(f'Final number of tokens: {len(self.VOCAB)}\n')
 
   def real_time_tokenization(self, notes, emotion_token = None, instrument = 'drum'):
     '''

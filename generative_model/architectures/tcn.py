@@ -1,14 +1,46 @@
 import torch
 from torch import nn
 from torch.nn.utils import weight_norm
+from math import log2
 
+'''
+    IMPORTANT:
+    to cover all the sequence of tokens k * d must be >= hidden units (see the paper)
+    k = kernel_size
+    d = dilation = 2 ^ (n_levels - 1)
+
+    so levels = log2(hidden_units / kernel_size + 1) + 1
+    '''
 
 class TCN(nn.Module):
 
-    def __init__(self, input_size, embedding_size, output_size, num_channels, emphasize_eeg=False, 
-                 kernel_size=2, dropout=0.3, emb_dropout=0.1, tied_weights=False):
+    def __init__(self, input_size, embedding_size, output_size, hidden_units, emphasize_eeg=False, feedback=False,
+                 levels = None, kernel_size=3, dropout=0.45, emb_dropout=0.25, tied_weights=False):
         
         super(TCN, self).__init__()
+
+        if levels is None:
+            levels = int(log2(hidden_units / kernel_size + 1) + 1)
+
+        if feedback:
+            input_size += output_size
+            levels += 1
+            hidden_units *= 2 
+        
+        num_channels = [hidden_units] * (levels - 1) + [embedding_size] # [192, 192, 192, 192, 192, 192, 20]
+
+        self.PARAMS = { 'input_size' : input_size,
+                        'output_size' : output_size,
+                        'embedding_size' : embedding_size,
+                        'levels' : levels,
+                        'emphasize_eeg' : emphasize_eeg,
+                        'hidden_units' : hidden_units,
+                        'feedback' : feedback,
+                        'dropout' : dropout,
+                        'emb_dropout' : emb_dropout,
+                        'kernel_size' : kernel_size,
+                        'tied_weights' : tied_weights
+                    }
 
         if emphasize_eeg:
             self.encoder = nn.Embedding(input_size, embedding_size, padding_idx=0) # padding_idx is the index of the token to ignore in weight updates
@@ -30,6 +62,9 @@ class TCN(nn.Module):
         self.emphasize_eeg = emphasize_eeg
         self.init_weights()
 
+    def size(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
     def init_weights(self):
         self.encoder.weight.data.normal_(0, 0.01)
         self.decoder.bias.data.fill_(0)
@@ -45,8 +80,6 @@ class TCN(nn.Module):
         y = self.tcn(emb.transpose(1, 2)).transpose(1, 2)
         y = self.decoder(y)
         return y.contiguous()
-
-
 
 
 class Chomp1d(nn.Module):
@@ -107,3 +140,8 @@ class TemporalConvNet(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+
+
+
+
+    
