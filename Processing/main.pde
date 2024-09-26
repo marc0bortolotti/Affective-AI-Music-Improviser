@@ -20,6 +20,8 @@ void setup() {
   cp5_confidence = new ControlP5(this);
   
   temperatureSlider = new CustomSlider(cp5_temperature, "temperature", "TEMPERATURE", width * 7/8, height * 1/8, -7.0, 15.0, 0.0);
+  temperatureSlider.updateValueLabel(1.0);
+  
   if (confidenceSliderOn){
     confidenceSlider = new CustomSlider(cp5_confidence, "confidence", "CONFIDENCE", width * 7/8, height * 5/8, 0.0, 1.0, 0.1);
   }
@@ -35,11 +37,10 @@ void draw() {
   if (newTemperature != temperature) {
     temperature = newTemperature;
     oscClientServer.sendOSCMessage("/temperature", temperature);
-    
   }
-  temperatureSlider.updateValueLabel(temperature);
   
   if (confidenceSliderOn){
+    confidenceSlider.setValue(confidence);
     confidenceSlider.updateValueLabel(confidence);  
   }
   

@@ -1,9 +1,8 @@
 import threading
 import logging
-from midi.midi_communication import MIDI_Input, MIDI_Output
-from osc.osc_connection import Server_OSC, Client_OSC, REC_MSG
-from eeg.eeg_device import EEG_Device
-from generative_model.model import TCN
+from MIDI.midi_communication import MIDI_Input, MIDI_Output
+from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG
+from EEG.eeg_device import EEG_Device
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 import torch
 import numpy as np
@@ -12,7 +11,8 @@ import os
 import logging
 import time
 import yaml
-
+import importlib
+import sys
 
 '''---------- CONNECTION PARAMETERS ------------'''
 LOCAL_HOST = "127.0.0.1"
@@ -28,12 +28,21 @@ TICKS_PER_BEAT = 12  # quantization of a beat
 '''----------------------------------------------'''
 
 
+def load_model(model_param_path, model_module_path, model_module_name):
 
-def load_model(model_dict):
+    '''
+    Load the model from the model dictionary.
 
-    weights_path = os.path.join(model_dict, 'model_state_dict.pth')
-    input_vocab_path = os.path.join(model_dict, 'input_vocab.txt')
-    output_vocab_path = os.path.join(model_dict, 'output_vocab.txt')
+    Parameters:
+    - model_param_path: path to the model parameters (weights, vocabularies, config)
+    - model_module_path: path to the model module
+    - model_module_name: name of the model class
+
+    '''
+
+    weights_path = os.path.join(model_param_path, 'model_state_dict.pth')
+    input_vocab_path = os.path.join(model_param_path, 'input_vocab.txt')
+    output_vocab_path = os.path.join(model_param_path, 'output_vocab.txt')
 
     INPUT_TOK = PrettyMidiTokenizer()
     INPUT_TOK.load_vocab(input_vocab_path)
@@ -41,21 +50,18 @@ def load_model(model_dict):
     OUTPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK.load_vocab(output_vocab_path)
 
-    config_path = os.path.join(model_dict, 'config.yaml')
+    directory, architecture_filename = os.path.split(model_module_path)
+    architecture_module_name = architecture_filename.replace('.py', '')
+    sys.path.append(directory)
+    architecture_module = importlib.import_module(architecture_module_name)
+
+    config_path = os.path.join(model_param_path, 'config.yaml')
     with open(config_path, 'r') as file:
-        param = yaml.safe_load(file)
-        EMBEDDING_SIZE = param['EMBEDDING_SIZE']
-        NUM_CHANNELS = param['NUM_CHANNELS']
-        INPUT_SIZE = param['INPUT_SIZE']
-        OUTPUT_SIZE = param['OUTPUT_SIZE']
-        KERNEL_SIZE = param['KERNEL_SIZE']
+        model_class = getattr(architecture_module, model_module_name)
+        params = yaml.safe_load(file)
+        model = model_class(**params)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = TCN(input_size = INPUT_SIZE,
-                embedding_size = EMBEDDING_SIZE, 
-                output_size = OUTPUT_SIZE, 
-                num_channels = NUM_CHANNELS, 
-                kernel_size = KERNEL_SIZE) 
     
     model.load_state_dict(torch.load(weights_path, map_location = device))
     model.eval()
@@ -85,11 +91,17 @@ def thread_function_eeg(name, app):
 def thread_function_midi(name, app):
     logging.info("Thread %s: starting", name)   
     if app.STATUS['SIMULATE_MIDI']:
-        while True:
+
+        # SIMULATION_EVENT = threading.Event()
+        # app.midi_in.set_simulation_event(SIMULATION_EVENT)
+
+        a = 0
+        while a<1:
             SYNCH_EVENT.wait()
-            SYNCH_EVENT.clear()
 
             app.midi_in.simulate()
+
+            a += 1
 
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
@@ -115,7 +127,9 @@ class AI_AffectiveMusicImproviser():
                         # generation_record_port_name,
                         eeg_device_type,
                         window_duration,
-                        model_dict,
+                        model_param_path,
+                        model_module_path,
+                        model_module_name,
                         parse_message=False):
         '''
         Parameters:
@@ -150,12 +164,13 @@ class AI_AffectiveMusicImproviser():
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
         # AI-MODEL
-        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_dict)
+        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_module_name)
         self.model = model
         self.device = device
         self.INPUT_TOK = INPUT_TOK
         self.OUTPUT_TOK = OUTPUT_TOK
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
+        self.SEQ_LENGTH = OUTPUT_TOK.SEQ_LENGTH
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
@@ -218,13 +233,16 @@ class AI_AffectiveMusicImproviser():
 
         softmax = torch.nn.Softmax(dim=1)
 
+        # initialize the target tensor
+        tgt = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (1, self.SEQ_LENGTH))
+
         while True:
 
             SYNCH_EVENT.wait()
             SYNCH_EVENT.clear()
 
             if generated_track is not None:
-                self.midi_out_rec.send_midi_to_reaper(generated_track)
+                self.midi_out_play.send_midi_to_reaper(generated_track)
 
             start_time = time.time()
 
@@ -239,7 +257,7 @@ class AI_AffectiveMusicImproviser():
                 tokens = self.INPUT_TOK.real_time_tokenization(notes, self.get_last_eeg_classification(), 'drum')
                 tokens_buffer.append(tokens)
 
-            # if the buffer is full (3 bars), make the prediction
+            # if the buffer is full (4 bars), make the prediction
             if len(tokens_buffer) == 3:
                 # Flatten the tokens buffer
                 input_data = np.array(tokens_buffer, dtype=np.int32).flatten()
@@ -248,43 +266,37 @@ class AI_AffectiveMusicImproviser():
                 input_data = torch.LongTensor(input_data)
 
                 # Add the batch dimension.
-                input_data = input_data.unsqueeze(0)
+                input_data = input_data.unsqueeze(0).to(self.device)
 
-                # Mask the last bar of the input data.
-                input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.ones([1, self.BAR_LENGTH], dtype=torch.long)),
-                                    dim=1)
+                # Make the prediction 
+                prediction = self.model(input_data, tgt)
 
-                # Make the prediction and flatten the output.
-                prediction = self.model(input_data.to(self.device))
+                # Remove the batch dimension.
                 prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                 # Get the probability distribution of the prediction by applying the softmax function and the temperature.
-                prediction_no_temperature = prediction
-                prediction_no_temperature = softmax(prediction_no_temperature)
-
                 temperature = self.osc_server.get_temperature()
                 prediction = prediction / temperature
                 prediction = softmax(prediction)
 
-                # Get the confidence of the prediction withouth the temperature contribution.
-                confidence = torch.mean(torch.max(prediction_no_temperature, 1)[0]).item() # torch.max returns a tuple (values, indices)
-                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
-
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
 
-                # Get the predicted sequence.
-                predicted_sequence = predicted_tokens.cpu().numpy().tolist()
-
-                # get only the last predicted bar
+                # Get the predicted sequence and get only the last predicted bar
+                predicted_sequence = predicted_tokens.cpu().numpy().tolist()[-self.BAR_LENGTH:]
                 predicted_sequence = predicted_sequence[-self.BAR_LENGTH:]
+                logging.info(f"Generated sequence: {predicted_sequence}")
+
+                # Get the confidence of the prediction withouth the temperature contribution.
+                confidence = torch.mean(torch.max(prediction, 1)[0]).item() # torch.max returns a tuple (values, indices)
+                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
 
                 # save the hystory
                 self.hystory.append(tokens_buffer.copy())
                 self.hystory.append(predicted_sequence)
 
                 # Convert the predicted sequence to MIDI.
-                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=2)
+                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_sequence, ticks_filter=0)
 
                 # remove the first bar from the tokens buffer
                 tokens_buffer.pop(0)

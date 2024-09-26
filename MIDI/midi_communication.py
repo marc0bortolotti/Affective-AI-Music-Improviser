@@ -43,6 +43,7 @@ class MIDI_Input:
         self.exit = False
         self.parse_message = parse_message
         self.midi_simulation_port = None
+        self.simulation_event = None
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -73,9 +74,12 @@ class MIDI_Input:
         self.midi_out_port.close_port()
         self.midi_simulation_port = mido.open_output(midi_simulation_port)
 
+    def set_simulation_event(self, event):
+        self.simulation_event = event
+
     def simulate(self, path=None):
 
-        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks\drum_rock_relax.mid')
+        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/rithm_CONCENTRATED.mid')
 
         def thread_function(path):
             mid = mido.MidiFile(path)
@@ -83,6 +87,10 @@ class MIDI_Input:
                 if not msg.is_meta and msg.type != 'control_change':
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
                     self.midi_simulation_port.send(msg)
+                if self.exit:
+                    break   
+            if self.simulation_event is not None:
+                self.simulation_event.set()
 
         thread = threading.Thread(target=thread_function, args=(path,))
         thread.start()
