@@ -12,76 +12,6 @@ from math import log2
     so levels = log2(hidden_units / kernel_size + 1) + 1
     '''
 
-class TCN(nn.Module):
-
-    def __init__(self, input_size, embedding_size, output_size, hidden_units, emphasize_eeg=False, feedback=False,
-                 levels = None, kernel_size=3, dropout=0.45, emb_dropout=0.25, tied_weights=False):
-        
-        super(TCN, self).__init__()
-
-        if levels is None:
-            levels = int(log2(hidden_units / kernel_size + 1) + 1)
-
-        if feedback:
-            input_size += output_size
-            levels += 1
-            hidden_units *= 2 
-        
-        num_channels = [hidden_units] * (levels - 1) + [embedding_size] # [192, 192, 192, 192, 192, 192, 20]
-
-        self.PARAMS = { 'input_size' : input_size,
-                        'output_size' : output_size,
-                        'embedding_size' : embedding_size,
-                        'levels' : levels,
-                        'emphasize_eeg' : emphasize_eeg,
-                        'hidden_units' : hidden_units,
-                        'feedback' : feedback,
-                        'dropout' : dropout,
-                        'emb_dropout' : emb_dropout,
-                        'kernel_size' : kernel_size,
-                        'tied_weights' : tied_weights
-                    }
-
-        if emphasize_eeg:
-            self.encoder = nn.Embedding(input_size, embedding_size, padding_idx=0) # padding_idx is the index of the token to ignore in weight updates
-        else:
-            self.encoder = nn.Embedding(input_size, embedding_size)
-
-        self.tcn = TemporalConvNet(embedding_size, num_channels, kernel_size, dropout=dropout)
-
-        self.decoder = nn.Linear(num_channels[-1], output_size)
-
-        if tied_weights:
-            if num_channels[-1] != embedding_size:
-                raise ValueError('When using the tied flag, nhid must be equal to emsize')
-            self.decoder.weight = self.encoder.weight
-            print("Weight tied")
-            
-        self.drop = nn.Dropout(emb_dropout)
-        self.emb_dropout = emb_dropout
-        self.emphasize_eeg = emphasize_eeg
-        self.init_weights()
-
-    def size(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-    def init_weights(self):
-        self.encoder.weight.data.normal_(0, 0.01)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.normal_(0, 0.01)
-
-        if self.emphasize_eeg:
-            with torch.no_grad():
-                self.encoder.weight[0] = torch.ones(self.encoder.weight[0].shape)*0.1
-
-    def forward(self, input, eeg_class=None):
-        """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""
-        emb = self.drop(self.encoder(input))
-        y = self.tcn(emb.transpose(1, 2)).transpose(1, 2)
-        y = self.decoder(y)
-        return y.contiguous()
-
-
 class Chomp1d(nn.Module):
     def __init__(self, chomp_size):
         super(Chomp1d, self).__init__()
@@ -142,6 +72,107 @@ class TemporalConvNet(nn.Module):
         return self.network(x)
 
 
+class TCN(nn.Module):
 
+    def __init__(self, input_vocab_size, embedding_size, output_vocab_size, hidden_units, seq_length, emphasize_eeg=False, feedback=False,
+                 levels = None, kernel_size=3, dropout=0.45, emb_dropout=0.25, tied_weights=False):
+        
+        super(TCN, self).__init__()
+
+        self.feedback = feedback
+        self.prev_output = None
+        self.seq_length = seq_length
+        self.bar_length = int(self.seq_length / 4)
+
+        if levels is None:
+            levels = int(log2(hidden_units / kernel_size + 1) + 1)
+
+        if feedback:
+            input_vocab_size += output_vocab_size
+            levels += 1
+            hidden_units *= 2 
+        
+        num_channels = [hidden_units] * (levels - 1) + [embedding_size] # [192, 192, 192, 192, 192, 192, 20]
+
+        self.PARAMS = { 'input_vocab_size' : input_vocab_size,
+                        'output_vocab_size' : output_vocab_size,
+                        'embedding_size' : embedding_size,
+                        'levels' : levels,
+                        'emphasize_eeg' : emphasize_eeg,
+                        'hidden_units' : hidden_units,
+                        'feedback' : feedback,
+                        'dropout' : dropout,
+                        'emb_dropout' : emb_dropout,
+                        'kernel_size' : kernel_size,
+                        'tied_weights' : tied_weights,
+                        'seq_length' : seq_length
+                    }
+
+        if emphasize_eeg:
+            self.encoder = nn.Embedding(input_vocab_size, embedding_size, padding_idx=0) # padding_idx is the index of the token to ignore in weight updates
+        else:
+            self.encoder = nn.Embedding(input_vocab_size, embedding_size)
+
+        self.tcn = TemporalConvNet(embedding_size, num_channels, kernel_size, dropout=dropout)
+
+        self.decoder = nn.Linear(num_channels[-1], output_vocab_size)
+
+        if tied_weights:
+            if num_channels[-1] != embedding_size:
+                raise ValueError('When using the tied flag, nhid must be equal to emsize')
+            self.decoder.weight = self.encoder.weight
+            print("Weight tied")
+            
+        self.drop = nn.Dropout(emb_dropout)
+        self.emb_dropout = emb_dropout
+        self.emphasize_eeg = emphasize_eeg
+        self.init_weights()
+
+    def size(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def init_weights(self):
+        self.encoder.weight.data.normal_(0, 0.01)
+        self.decoder.bias.data.fill_(0)
+        self.decoder.weight.data.normal_(0, 0.01)
+
+        if self.emphasize_eeg:
+            with torch.no_grad():
+                self.encoder.weight[0] = torch.ones(self.encoder.weight[0].shape)*0.1
+
+    def forward(self, input):
+        """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""
+
+        # add mask to the last bar
+        input_masked = torch.cat((input[:, :self.bar_length*3], torch.zeros([input.size(0), self.bar_length], dtype=torch.long, device = input.device)), dim = 1)
+
+        # if feedback is enabled, concatenate the previous output to the input
+        if self.feedback:
+
+            # initialize the previous output if it is the first iteration
+            if self.prev_output is None:
+                self.prev_output = torch.zeros([input.size(0), input.size(1)], dtype=torch.long, device = input.device)
+            
+            # get the minimum batch size between the input and the previous output
+            min_batch = min(input.size(0), self.prev_output.size(0))
+
+            # concatenate the previous output to the input
+            input_masked = torch.cat((input_masked[:min_batch, :], self.prev_output[:min_batch, :]), dim = 1)
+
+        # add embeddings and apply dropout
+        emb = self.drop(self.encoder(input))
+
+        # apply TCN
+        y = self.tcn(emb.transpose(1, 2)).transpose(1, 2)
+
+        # apply linear layer
+        y = self.decoder(y)
+
+        # save the output for feedback
+        if self.feedback:
+            self.prev_output = torch.argmax(y, dim = 2)
+            y = y[:, :self.seq_length]
+
+        return y
 
     

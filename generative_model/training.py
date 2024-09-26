@@ -1,32 +1,30 @@
 import glob
-import numpy as np
 import os
 import time
 import torch
-import torch.nn as nn
 from torch import optim
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_split
 import matplotlib.pyplot as plt
 import yaml
-import re
-from tokenization import PrettyMidiTokenizer, BCI_TOKENS, SILENCE_TOKEN, Dictionary
+from tokenization import PrettyMidiTokenizer, BCI_TOKENS
 from architectures.transformer import TransformerModel
+from architectures.musicTransformer import MusicTransformer
 from architectures.tcn import TCN   
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 # 0.002
+LEARNING_RATE = 0.00002 # 0.002
 BATCH_SIZE = 64 # 64
 
-ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN}
-MODEL = ARCHITECTURES['tcn']
+ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
+MODEL = ARCHITECTURES['transformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = True # use the feedback mechanism in the model
@@ -56,6 +54,33 @@ while os.path.exists(RESULTS_PATH):
     RESULTS_PATH += f'_{idx}'
     idx += 1
 os.makedirs(RESULTS_PATH)
+
+def initialize_model(INPUT_TOK, OUTPUT_TOK):
+
+    if MODEL == TCN:
+        PARAMS = {  'input_vocab_size': len(INPUT_TOK.VOCAB), 
+                    'embedding_size': EMBEDDING_SIZE,
+                    'output_vocab_size': len(OUTPUT_TOK.VOCAB), 
+                    'hidden_units': INPUT_TOK.SEQ_LENGTH,
+                    'emphasize_eeg': EMPHASIZE_EEG,
+                    'feedback': FEEDBACK,
+                    'seq_length': INPUT_TOK.SEQ_LENGTH
+                }
+    elif MODEL == TransformerModel:
+        PARAMS = {  'input_vocab_size': len(INPUT_TOK.VOCAB),
+                    'output_vocab_size': len(OUTPUT_TOK.VOCAB),
+                    'd_model': EMBEDDING_SIZE,
+                    'nhead': 8,
+                    'num_encoder_layers': 6,
+                    'num_decoder_layers': 6,
+                    'dim_feedforward': 4 * EMBEDDING_SIZE,
+                    'max_seq_length': INPUT_TOK.SEQ_LENGTH
+                }
+    else:
+        raise Exception('Model not found')
+
+    model = MODEL(**PARAMS).to(device)
+    return model
 
 def tokenize_midi_files():
 
@@ -114,32 +139,6 @@ def initialize_dataset(train_set, eval_set, test_set):
     test_dataloader = DataLoader(test_set, sampler=test_sampler, batch_size=BATCH_SIZE)
 
     return train_dataloader, eval_dataloader, test_dataloader
-
-def initialize_model(INPUT_TOK, OUTPUT_TOK):
-
-    if MODEL == TCN:
-        PARAMS = {  'input_size': len(INPUT_TOK.VOCAB), 
-                    'embedding_size': EMBEDDING_SIZE,
-                    'output_size': len(OUTPUT_TOK.VOCAB), 
-                    'hidden_units': INPUT_TOK.SEQ_LENGTH,
-                    'emphasize_eeg': EMPHASIZE_EEG,
-                    'feedback': FEEDBACK,
-                }
-    elif MODEL == TransformerModel:
-        PARAMS = {  'input_size': len(INPUT_TOK.VOCAB),
-                    'output_size': len(OUTPUT_TOK.VOCAB),
-                    'embed_size': EMBEDDING_SIZE,
-                    'nhead': 8,
-                    'num_encoder_layers': 6,
-                    'num_decoder_layers': 6,
-                    'dim_feedforward': 4 * EMBEDDING_SIZE,
-                    'seq_max_length': INPUT_TOK.SEQ_LENGTH
-                }
-    else:
-        raise Exception('Model not found')
-
-    model = MODEL(PARAMS).to(device)
-    return model
 
 def save_model_config(model):
     path = os.path.join(RESULTS_PATH, 'config.yaml')
@@ -222,8 +221,6 @@ def save_results():
         
 def epoch_step(dataloader, mode):
 
-    prev_output = torch.zeros([BATCH_SIZE, INPUT_TOK.SEQ_LENGTH], dtype=torch.long, device=device)
-
     if mode == 'train':
         model.train()
     else:
@@ -232,50 +229,33 @@ def epoch_step(dataloader, mode):
     total_loss = 0
     n_correct = 0
     n_total = 0
-    BAR_LENGTH = INPUT_TOK.BAR_LENGTH
     
     # iterate over the training data
-    for batch_idx, (data, targets) in enumerate(dataloader):
+    for batch_idx, (input, targets) in enumerate(dataloader):
 
         batch_idx += 1
 
-        # mask the last bar of the input data
-        batch_size = data.size(0)
-        data_masked = torch.cat((data[:, :BAR_LENGTH*3], torch.zeros([batch_size, BAR_LENGTH], dtype=torch.long, device = device)), dim = 1)
-
-        if FEEDBACK:
-            input = torch.cat((data_masked, prev_output[:batch_size, :]), dim = 1)
-        else:
-            input = data_masked
+        # move the input and the target to the device
+        input = input.to(device)
+        targets = targets.to(device)
 
         # reset model gradients to zero
         optimizer.zero_grad()
 
-        tgt_input = targets[:, :-1]
-        tgt_output = targets[:, 1:]
-
         # Forward pass
-        output = model(input, tgt_input)
+        if 'Transformer' in str(MODEL):
+            tgt_input = targets[:, :-1]
+            targets = targets[:, 1:]
+            output = model(input, tgt_input)
+        else:
+            output = model(input)
 
-        # Reshape output and target to fit into the loss function
-        output = output.reshape(-1, OUTPUT_VOCAB_SIZE)
-        tgt_output = tgt_output.reshape(-1)
-
-        # make the prediction
-        output = model(input)[:, :INPUT_TOK.SEQ_LENGTH]
-
-        
-        prev_output = torch.argmax(output, 2)# batch, seq_len (hidden units), vocab_size
-
-        # flatten the output sequence
-        # NB: the size -1 is inferred from other dimensions
-        # NB: contiguous() is used to make sure the tensor is stored in a contiguous chunk of memory, necessary for view() to work
-
-        final_target = targets.contiguous().view(-1)
-        final_output = output.contiguous().view(-1, len(OUTPUT_TOK.VOCAB))
+        # reshape the output and the target to calculate the loss (flatten the sequences)
+        target = targets.reshape(-1) # the size -1 is inferred from other dimensions
+        output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
 
         # calculate the loss
-        loss = criterion(final_output, final_target)
+        loss = criterion(output, target)
 
         if mode == 'train':
             # calculate the gradients
@@ -291,8 +271,8 @@ def epoch_step(dataloader, mode):
         total_loss += loss.data.item()
 
         # update n_correct and n_total to calculate the accuracy
-        n_correct += torch.sum(torch.argmax(final_output, 1) == final_target).item()
-        n_total += final_target.size(0)
+        n_correct += torch.sum(torch.argmax(output, 1) == target).item()
+        n_total += target.size(0)
 
     # calculate the accuracy
     accuracy = 100 * n_correct / n_total
@@ -361,7 +341,6 @@ def train():
         train_perplexities.append(train_perplexity)
         eval_perplexities.append(eval_perplexity)
 
-
         # Early stopping
         if epoch > EARLY_STOP_EPOCHS:
             if min(train_losses[-EARLY_STOP_EPOCHS:]) > best_train_loss:
@@ -378,10 +357,8 @@ def train():
               'train_perp {:5.2f} | eval_perp {:5.2f}' \
                 .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
 
-
     print('\n\n TRAINING FINISHED:\n\n\tBest Loss: {:5.2f}\tBest Model saved at epoch: {:3d} \n\n' \
             .format(best_eval_loss, best_model_epoch))
-
 
     # test the model
     global test_loss, test_accuracy, test_perplexity
@@ -403,8 +380,8 @@ if __name__ == '__main__':
     OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
-    dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences).to(device),
-                            torch.LongTensor(OUTPUT_TOK.sequences).to(device))
+    dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
+                            torch.LongTensor(OUTPUT_TOK.sequences))
 
     # Split the dataset into training, evaluation and test sets
     train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
@@ -421,14 +398,14 @@ if __name__ == '__main__':
     print(f'Initializing the dataloaders...')
     global train_dataloader, eval_dataloader, test_dataloader
     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
-    
+
     # initialize the model
     print(f'Initializing the model...')
-    model = initialize_model()
+    model = initialize_model(INPUT_TOK, OUTPUT_TOK)
     criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
     global MODEL_SIZE
-    MODEL_SIZE = model.size
+    MODEL_SIZE = model.size()
     print(f'Model size: {MODEL_SIZE}')   
 
     # save the model configuration

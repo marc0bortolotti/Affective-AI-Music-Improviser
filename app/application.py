@@ -257,7 +257,7 @@ class AI_AffectiveMusicImproviser():
                 tokens = self.INPUT_TOK.real_time_tokenization(notes, self.get_last_eeg_classification(), 'drum')
                 tokens_buffer.append(tokens)
 
-            # if the buffer is full (3 bars), make the prediction
+            # if the buffer is full (4 bars), make the prediction
             if len(tokens_buffer) == 3:
                 # Flatten the tokens buffer
                 input_data = np.array(tokens_buffer, dtype=np.int32).flatten()
@@ -266,45 +266,30 @@ class AI_AffectiveMusicImproviser():
                 input_data = torch.LongTensor(input_data)
 
                 # Add the batch dimension.
-                input_data = input_data.unsqueeze(0)
+                input_data = input_data.unsqueeze(0).to(self.device)
 
-                # Mask the last bar of the input data.
-                input_data = torch.cat((input_data[:, :self.BAR_LENGTH * 3], torch.zeros([1, self.BAR_LENGTH], dtype=torch.long)), dim=1)
-        
-                # Move the tensor to the device.
-                tgt = tgt.to(self.device)
-                input_data = input_data.to(self.device)
-
-                # Make the prediction and flatten the output.
+                # Make the prediction 
                 prediction = self.model(input_data, tgt)
+
+                # Remove the batch dimension.
                 prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                 # Get the probability distribution of the prediction by applying the softmax function and the temperature.
-                prediction_no_temperature = prediction
-                prediction_no_temperature = softmax(prediction_no_temperature)
-
                 temperature = self.osc_server.get_temperature()
                 prediction = prediction / temperature
                 prediction = softmax(prediction)
 
-                # Get the confidence of the prediction withouth the temperature contribution.
-                confidence = torch.mean(torch.max(prediction_no_temperature, 1)[0]).item() # torch.max returns a tuple (values, indices)
-                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
-
                 # Get the predicted tokens.
                 predicted_tokens = torch.argmax(prediction, 1)
 
-                # concatenate the predicted tokens to the target tensor and remove the first bar
-                tgt = torch.cat((tgt, predicted_tokens.unsqueeze(0)), dim=1)
-                tgt = tgt[:, -self.SEQ_LENGTH:]
-                print(tgt)
-
-                # Get the predicted sequence.
-                predicted_sequence = predicted_tokens.cpu().numpy().tolist()
-
-                # get only the last predicted bar
+                # Get the predicted sequence and get only the last predicted bar
+                predicted_sequence = predicted_tokens.cpu().numpy().tolist()[-self.BAR_LENGTH:]
                 predicted_sequence = predicted_sequence[-self.BAR_LENGTH:]
                 logging.info(f"Generated sequence: {predicted_sequence}")
+
+                # Get the confidence of the prediction withouth the temperature contribution.
+                confidence = torch.mean(torch.max(prediction, 1)[0]).item() # torch.max returns a tuple (values, indices)
+                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
 
                 # save the hystory
                 self.hystory.append(tokens_buffer.copy())

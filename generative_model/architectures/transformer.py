@@ -18,11 +18,11 @@ class PositionalEncoding(nn.Module):
         return x
 
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length, dropout=0.1):
+    def __init__(self, input_vocab_size, output_vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length, dropout=0.1):
         super(TransformerModel, self).__init__()
 
-        self.PARAMS = { 'input_size' : input_size,
-                        'output_size' : output_size,
+        self.PARAMS = { 'input_vocab_size' : input_vocab_size,
+                        'output_vocab_size' : output_vocab_size,
                         'd_model' : d_model, # Embedding dimension and model size
                         'nhead' : nhead, # Number of attention heads
                         'num_encoder_layers' : num_encoder_layers,
@@ -33,8 +33,8 @@ class TransformerModel(nn.Module):
                     }
         
         # Embedding layers for input and output sequences
-        self.src_embedding = nn.Embedding(input_size, d_model)
-        self.tgt_embedding = nn.Embedding(output_size, d_model)
+        self.src_embedding = nn.Embedding(input_vocab_size, d_model)
+        self.tgt_embedding = nn.Embedding(output_vocab_size, d_model)
         
         # Positional encoding
         self.positional_encoding = PositionalEncoding(d_model, max_len=max_seq_length)
@@ -47,7 +47,7 @@ class TransformerModel(nn.Module):
                                           dropout=dropout)
         
         # Linear layer to map the output to vocabulary size for predictions
-        self.fc_out = nn.Linear(d_model, output_size)
+        self.fc_out = nn.Linear(d_model, output_vocab_size)
 
         self.max_seq_length = max_seq_length
 
@@ -63,6 +63,10 @@ class TransformerModel(nn.Module):
             tgt = torch.zeros(src.size(0), self.max_seq_length, dtype=torch.long).to(src.device) 
         
         tgt = self.positional_encoding(self.tgt_embedding(tgt))
+
+        # Transformer expects input in (sequence_length, batch_size, embed_dim) format, we got (batch_size, sequence_length, embed_dim)
+        src = src.permute(1, 0, 2)
+        tgt = tgt.permute(1, 0, 2)
         
         # Pass through the Transformer
         output = self.transformer(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask,
@@ -71,43 +75,6 @@ class TransformerModel(nn.Module):
                                   memory_key_padding_mask=memory_key_padding_mask)
         
         # Final linear layer to project to the vocab size
-        return self.fc_out(output)
+        y = self.fc_out(output)
 
-# Helper function to generate a square subsequent mask for target sequence (used in decoding to avoid peeking at future tokens)
-def generate_square_subsequent_mask(sz):
-    mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-    return mask
-
-if __name__ == '__main__':
-
-    import time
-
-    # Example usage
-    vocab_size = [877, 16447]        # Vocabulary size for input/output sequences
-    d_model = 512             # Embedding dimension and model size
-    nhead = 8                 # Number of attention heads
-    num_encoder_layers = 6    # Number of encoder layers
-    num_decoder_layers = 6    # Number of decoder layers
-    dim_feedforward = 2048    # Feedforward network dimension
-    max_seq_length = 64      # Max sequence length
-    dropout = 0.1             # Dropout rate
-
-    # Create the model
-    model = TransformerModel(vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length, dropout)
-
-    # Example source and target sequences (batch size = 32, sequence length = 100)
-    src = torch.randint(0, vocab_size[0], (max_seq_length, 32))  # Source: (sequence length, batch size)
-    tgt = torch.randint(0, vocab_size[1], (max_seq_length, 32))  # Target: (sequence length, batch size)
-
-    # Generate target mask to prevent looking at future tokens
-    tgt_mask = generate_square_subsequent_mask(max_seq_length)
-
-    # Forward pass through the model
-    start = time.time()
-    output = model(src, tgt, tgt_mask=tgt_mask)
-    print("Time taken for forward pass: ", time.time() - start)
-    print(output.shape)  # Output: (sequence length, batch size, vocab_size)
-
-    # print the total dimension of the model
-    print(sum(p.numel() for p in model.parameters()))
+        return y

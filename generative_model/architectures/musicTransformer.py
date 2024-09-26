@@ -1,154 +1,126 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-
-# Define the Transformer-based model
-class MusicTransformer(nn.Module):
-    def __init__(self, input_vocab_size, output_vocab_size, embed_size, num_heads, num_layers, forward_expansion, dropout, max_length):
-        super(MusicTransformer, self).__init__()
-
-        self.encoder_embedding = nn.Embedding(input_vocab_size, embed_size)
-        self.decoder_embedding = nn.Embedding(output_vocab_size, embed_size)
-        self.positional_encoding = nn.Parameter(torch.zeros(1, max_length, embed_size))
-
-        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_size, nhead=num_heads, dim_feedforward=forward_expansion * embed_size)
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
-        decoder_layer = nn.TransformerDecoderLayer(d_model=embed_size, nhead=num_heads, dim_feedforward=forward_expansion * embed_size)
-        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-
-        self.fc_out = nn.Linear(embed_size, output_vocab_size)
-
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, src, tgt):
-        # src: (batch_size, src_seq_len)
-        # tgt: (batch_size, tgt_seq_len)
-        
-        # Add embeddings and positional encodings to source and target sequences
-        src_emb = self.dropout(self.encoder_embedding(src) + self.positional_encoding[:, :src.size(1), :])
-        tgt_emb = self.dropout(self.decoder_embedding(tgt) + self.positional_encoding[:, :tgt.size(1), :])
-
-        # Encoder
-        memory = self.encoder(src_emb)
-
-        # Decoder
-        out = self.decoder(tgt_emb, memory)
-
-        # Final output layer
-        output = self.fc_out(out)
-
-        return output
-
-# Example Dataset for Music Tokens
-class MusicDataset(Dataset):
-    def __init__(self, src_sequences, tgt_sequences):
-        self.src_sequences = src_sequences
-        self.tgt_sequences = tgt_sequences
-
-    def __len__(self):
-        return len(self.src_sequences)
-
-    def __getitem__(self, idx):
-        return torch.tensor(self.src_sequences[idx], dtype=torch.long), torch.tensor(self.tgt_sequences[idx], dtype=torch.long)
+import numpy as np
 
 # Hyperparameters
-INPUT_VOCAB_SIZE = 877  # Source instrument vocabulary size
-OUTPUT_VOCAB_SIZE = 16000  # Target instrument vocabulary size
-EMBED_SIZE = 512
-NUM_HEADS = 8
-NUM_LAYERS = 6
-FORWARD_EXPANSION = 4
-DROPOUT = 0.1
-MAX_LENGTH = 512  # Maximum sequence length
-BATCH_SIZE = 32
-EPOCHS = 20
-LEARNING_RATE = 0.001
+vocab_size = 128  # Assuming 128 possible tokens (e.g., MIDI notes)
+embedding_dim = 256
+nhead = 8  # Number of heads in the multi-head attention
+num_layers = 6  # Number of Transformer layers
+seq_length = 48  # 3 bars * 16 tokens/bar = 48 input tokens
+output_length = 16  # Predict the next 16 tokens (next bar)
+batch_size = 32
+epochs = 100
+learning_rate = 0.001
 
-# Generate synthetic dataset (for illustration purposes, in practice you'd use real music data)
-def generate_synthetic_music_data(num_samples, seq_length, vocab_size):
-    return [[torch.randint(0, vocab_size, (seq_length,)).tolist() for _ in range(num_samples)]]
+# Sample data generator (for demonstration)
+def generate_dummy_data(num_sequences=10000, seq_length=48, output_length=16):
+    data = np.random.randint(0, vocab_size, (num_sequences, seq_length + output_length))
+    inputs = data[:, :seq_length]
+    targets = data[:, seq_length:]
+    return torch.LongTensor(inputs), torch.LongTensor(targets)
 
-# For demonstration, we are creating 12000 sequences of source and target tokens
-NUM_SEQUENCES = 12000
-SEQUENCE_LENGTH = 100  # Assuming sequences are of length 100
+# Transformer Model for Music Generation
+class MusicTransformer(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, nhead, num_layers, seq_length, output_length):
+        super(MusicTransformer, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.pos_encoder = nn.Parameter(torch.zeros(1, seq_length + output_length, embedding_dim))
+        self.transformer = nn.Transformer(d_model=embedding_dim, nhead=nhead, num_encoder_layers=num_layers, num_decoder_layers=num_layers)
+        self.fc_out = nn.Linear(embedding_dim, vocab_size)
+        self.softmax = nn.Softmax(dim=-1)
+        
+        # Class variable to store predictions
+        self.predictions = None
 
-src_sequences = generate_synthetic_music_data(NUM_SEQUENCES, SEQUENCE_LENGTH, INPUT_VOCAB_SIZE)[0]
-tgt_sequences = generate_synthetic_music_data(NUM_SEQUENCES, SEQUENCE_LENGTH, OUTPUT_VOCAB_SIZE)[0]
+    def forward(self, src, tgt):
+        # Embed and add positional encoding
+        src = self.embedding(src) + self.pos_encoder[:, :src.size(1), :]
+        tgt = self.embedding(tgt) + self.pos_encoder[:, :tgt.size(1), :]
+        
+        # Transformer expects input in (sequence_length, batch_size, embed_dim) format
+        src = src.permute(1, 0, 2)  # (seq_length, batch_size, embedding_dim)
+        tgt = tgt.permute(1, 0, 2)  # (output_length, batch_size, embedding_dim)
 
-# Create Dataset and DataLoader
-dataset = MusicDataset(src_sequences, tgt_sequences)
-dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+        transformer_output = self.transformer(src, tgt)
+        output = self.fc_out(transformer_output)  # Map to vocab size
 
-# Initialize the model
-model = MusicTransformer(
-    input_vocab_size=INPUT_VOCAB_SIZE,
-    output_vocab_size=OUTPUT_VOCAB_SIZE,
-    embed_size=EMBED_SIZE,
-    num_heads=NUM_HEADS,
-    num_layers=NUM_LAYERS,
-    forward_expansion=FORWARD_EXPANSION,
-    dropout=DROPOUT,
-    max_length=MAX_LENGTH
-)
+        # Save the output predictions in the class variable
+        self.predictions = output.permute(1, 0, 2)  # Save in (batch_size, seq_length, vocab_size) format
+        
+        return self.predictions
 
-# Loss and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+# Training and Generation Functions
+def train_model(model, data_loader, criterion, optimizer, epochs=100):
+    for epoch in range(epochs):
+        total_loss = 0
+        model.train()
+        for batch in data_loader:
+            inputs, targets = batch
+            optimizer.zero_grad()
 
-# Training loop
-for epoch in range(EPOCHS):
-    model.train()
-    epoch_loss = 0
-    for batch_idx, (src, tgt) in enumerate(dataloader):
-        # Shift target to the right for teacher forcing
-        tgt_input = tgt[:, :-1]
-        tgt_output = tgt[:, 1:]
+            # Split targets to get the correct input format for the decoder
+            tgt_input = targets[:, :-1]  # Target input is all but last token
+            tgt_output = targets[:, 1:]  # Target output is all but first token
 
-        # Forward pass
-        output = model(src, tgt_input)
+            # Forward pass
+            output = model(inputs, tgt_input)
 
-        # Reshape output and target to fit into the loss function
-        output = output.reshape(-1, OUTPUT_VOCAB_SIZE)
-        tgt_output = tgt_output.reshape(-1)
+            # Reshape to match the dimensions expected by CrossEntropyLoss
+            output = output.view(-1, vocab_size)
+            tgt_output = tgt_output.view(-1)
 
-        loss = criterion(output, tgt_output)
-        epoch_loss += loss.item()
+            loss = criterion(output, tgt_output)
+            loss.backward()
+            optimizer.step()
 
-        # Backward pass
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            total_loss += loss.item()
 
-    print(f"Epoch [{epoch+1}/{EPOCHS}], Loss: {epoch_loss / len(dataloader):.4f}")
+        print(f'Epoch {epoch + 1}/{epochs}, Loss: {total_loss/len(data_loader)}')
 
-# Inference: Generating a new sequence for a target instrument
-def generate_music(model, src_sequence, max_length, start_token):
+def generate_music(model, input_sequence, max_length=16):
     model.eval()
-    src = torch.tensor(src_sequence).unsqueeze(0)  # Add batch dimension
-    tgt = torch.tensor([start_token]).unsqueeze(0)  # Start with a start token
-    
+    generated_sequence = input_sequence
+
     for _ in range(max_length):
-        # Forward pass
-        with torch.no_grad():
-            output = model(src, tgt)
+        input_seq = torch.LongTensor(generated_sequence).unsqueeze(0)  # Add batch dimension
+        output_seq = torch.LongTensor(generated_sequence[-16:]).unsqueeze(0)  # Decoder takes the last generated sequence
 
-        # Get the predicted next token (the one with the highest probability)
-        next_token = output.argmax(dim=-1)[:, -1]
+        # Get the model's prediction
+        output = model(input_seq, output_seq)
+        next_token = output.argmax(dim=-1)[:, -1].item()  # Get the predicted next token
+        
+        # Add predicted token to generated sequence
+        generated_sequence.append(next_token)
 
-        # Append the predicted token to the target sequence
-        tgt = torch.cat([tgt, next_token.unsqueeze(0)], dim=1)
+    # Store the generated sequence in the model's class variable
+    model.predictions = generated_sequence
 
-        # Stop if the model predicts an end token (for simplicity, let's assume token 0 is <END>)
-        if next_token.item() == 0:
-            break
+    return generated_sequence
 
-    return tgt.squeeze(0).tolist()
+# Main Execution
+if __name__ == "__main__":
+    # Create dataset
+    inputs, targets = generate_dummy_data()
 
-# Example of generating music
-src_sequence = torch.randint(0, INPUT_VOCAB_SIZE, (SEQUENCE_LENGTH,)).tolist()  # Random input sequence for source instrument
-start_token = 1  # Define start token for the target instrument (usually <START>)
-generated_sequence = generate_music(model, src_sequence, max_length=100, start_token=start_token)
+    # Create DataLoader
+    dataset = torch.utils.data.TensorDataset(inputs, targets)
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-print("Generated sequence:", generated_sequence)
+    # Initialize model, loss, and optimizer
+    model = MusicTransformer(vocab_size, embedding_dim, nhead, num_layers, seq_length, output_length)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+    # Train the model
+    train_model(model, data_loader, criterion, optimizer, epochs=epochs)
+
+    # Generate music
+    input_sequence = inputs[0].tolist()[:seq_length]  # Take first 48 tokens
+    generated_sequence = generate_music(model, input_sequence)
+
+    print("Generated Sequence: ", generated_sequence)
+
+    # Access the saved predictions directly from the model class
+    print("Predictions stored in model: ", model.predictions)
