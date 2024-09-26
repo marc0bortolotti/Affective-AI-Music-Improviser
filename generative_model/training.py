@@ -3,7 +3,6 @@ import os
 import time
 import torch
 from torch import optim
-import numpy as np
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_split
 import matplotlib.pyplot as plt
 import yaml
@@ -15,6 +14,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
+
+# torch.manual_seed(1111)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
