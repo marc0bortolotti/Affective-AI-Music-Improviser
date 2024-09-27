@@ -77,6 +77,9 @@ class TransformerModel(nn.Module):
         # Final linear layer to project to the vocab size
         y = self.fc_out(output)
 
+        # Recover the original shape (batch_size, sequence_length, vocab_size)
+        y = y.permute(1, 0, 2)
+
         return y
     
 

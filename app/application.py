@@ -63,7 +63,11 @@ def load_model(model_param_path, model_module_path, model_class_name):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    model.load_state_dict(torch.load(weights_path, map_location = device))
+    try:
+        model.load_state_dict(torch.load(weights_path, map_location = device))
+    except Exception as e:
+        print(f"Error loading model: {e}")
+
     model.eval()
     model.to(device)
 
@@ -220,10 +224,11 @@ class AI_AffectiveMusicImproviser():
 
         self.hystory = []
 
-        softmax = torch.nn.Softmax(dim=1)
+        softmax = torch.nn.Softmax(dim=-1)
+        n_tokens = 4
 
         # initialize the target tensor for the transformer
-        shifted_target = torch.zeros((1, self.BAR_LENGTH), dtype=torch.long).to(self.device)
+        shifted_target = torch.randint(len(self.OUTPUT_TOK.VOCAB), (1, 3 * self.BAR_LENGTH), dtype=torch.long).to(self.device)
 
         while True:
 
@@ -262,13 +267,40 @@ class AI_AffectiveMusicImproviser():
 
                 # Make the prediction 
                 if 'Transformer' in self.model_class_name:
+
+                    prediction_proba = []
                     predicted_tokens = []
-                    for i in range(self.BAR_LENGTH):
+
+                    for i in range(int(self.BAR_LENGTH/n_tokens)):
+
+                        # Generate the mask for the target sequence
                         shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1)).to(self.device)
+
+                        # Make the prediction
                         output = self.model(input_data, shifted_target, tgt_mask=shifted_target_mask)
-                        next_token = output[0, i].argmax().item()
-                        predicted_tokens.append(next_token)
-                        shifted_target[0, i] = next_token
+                        output = output.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
+
+                        # Apply the softmax function to the output
+                        output = softmax(output)
+
+                        # Get the last token of the output
+                        next_tokens = torch.argmax(output, dim=1)[-n_tokens:]
+
+                        # Get the probability of the prediction
+                        proba = torch.max(output, dim=1)[0][-n_tokens:]
+                        proba = proba.detach().numpy().tolist()
+                        prediction_proba+=proba
+
+                        # Update the target tensor
+                        predicted_tokens+=next_tokens.cpu().numpy().tolist()
+
+                        # Update the target tensor
+                        shifted_target = torch.cat([shifted_target, next_tokens.unsqueeze(0)], dim=1)
+
+                        if shifted_target.size(1) > 3 * self.BAR_LENGTH:
+                            shifted_target = shifted_target[:, -3 * self.BAR_LENGTH:]
+
+                    prediction_proba = torch.tensor(prediction_proba) 
                 else:
                     prediction = self.model(input_data)
 
@@ -279,6 +311,7 @@ class AI_AffectiveMusicImproviser():
                     temperature = self.osc_server.get_temperature()
                     prediction = prediction / temperature
                     prediction = softmax(prediction)
+                    prediction_proba = torch.max(prediction, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
                     predicted_tokens = torch.argmax(prediction, 1) [-self.BAR_LENGTH:]
@@ -292,7 +325,7 @@ class AI_AffectiveMusicImproviser():
                 logging.info(f"Generated sequence: {predicted_tokens}")
 
                 # Get the confidence of the prediction withouth the temperature contribution.
-                confidence = torch.mean(torch.max(prediction, 1)[0]).item() # torch.max returns a tuple (values, indices)
+                confidence = torch.mean(prediction_proba).item() 
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
 
                 # save the hystory
