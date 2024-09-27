@@ -21,7 +21,7 @@ device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00001 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
@@ -46,7 +46,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -259,11 +259,10 @@ def epoch_step(dataloader, mode):
         if MODEL == TransformerModel or MODEL == MusicTransformer: 
             # transformer model requires the target to be shifted by one bar to the right
             shifted_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
-            target = target[:, - OUTPUT_TOK.BAR_LENGTH :]  
+            target = target[:, OUTPUT_TOK.BAR_LENGTH :]  
             input_mask = generate_square_subsequent_mask(input.size(1))
             shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
             output = model(input, shifted_target, input_mask, shifted_target_mask)
-            output = output[:, - OUTPUT_TOK.BAR_LENGTH :] 
         else:
             output = model(input)
 
