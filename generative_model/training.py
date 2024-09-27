@@ -7,7 +7,7 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_sp
 import matplotlib.pyplot as plt
 import yaml
 from tokenization import PrettyMidiTokenizer, BCI_TOKENS
-from architectures.transformer import TransformerModel
+from architectures.transformer import TransformerModel, generate_square_subsequent_mask
 from architectures.musicTransformer import MusicTransformer
 from architectures.tcn import TCN   
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -21,11 +21,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 # 0.002
+LEARNING_RATE = 0.000001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['tcn']
+MODEL = ARCHITECTURES['transformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
@@ -257,9 +257,11 @@ def epoch_step(dataloader, mode):
 
         # Forward pass
         if 'Transformer' in str(MODEL):
-            shifted_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
-            target = target[:, OUTPUT_TOK.BAR_LENGTH :]
-            output = model(input, shifted_target) 
+            shifted_target = target[:, : - 1] # remove the last token
+            target = target[:, 1 :] # remove the first token
+            input_mask = generate_square_subsequent_mask(input.size(1))
+            shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
+            output = model(input, shifted_target, input_mask, shifted_target_mask)
         else:
             output = model(input)
 

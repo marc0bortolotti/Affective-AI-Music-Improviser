@@ -4,6 +4,7 @@ from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG
 from EEG.eeg_device import EEG_Device
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
+from generative_model.architectures.transformer import generate_square_subsequent_mask
 import torch
 import numpy as np
 import time
@@ -221,8 +222,8 @@ class AI_AffectiveMusicImproviser():
 
         softmax = torch.nn.Softmax(dim=1)
 
-        # initialize the target tensor
-        last_prediction = torch.randint(0, len(self.OUTPUT_TOK.VOCAB), (1, 3 * self.BAR_LENGTH)).to(self.device)
+        # initialize the target tensor for the transformer
+        shifted_target = torch.zeros((1, self.BAR_LENGTH), dtype=torch.long).to(self.device)
 
         while True:
 
@@ -261,26 +262,33 @@ class AI_AffectiveMusicImproviser():
 
                 # Make the prediction 
                 if 'Transformer' in self.model_class_name:
-                    prediction = self.model(input_data, last_prediction)
+                    predicted_tokens = []
+                    for i in range(self.BAR_LENGTH):
+                        shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1)).to(self.device)
+                        output = self.model(input_data, shifted_target, tgt_mask=shifted_target_mask)
+                        next_token = output[0, i].argmax().item()
+                        predicted_tokens.append(next_token)
+                        shifted_target[0, i] = next_token
                 else:
                     prediction = self.model(input_data)
 
-                # Remove the batch dimension.
-                prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
+                    # Remove the batch dimension.
+                    prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
-                # Get the probability distribution of the prediction by applying the softmax function and the temperature.
-                temperature = self.osc_server.get_temperature()
-                prediction = prediction / temperature
-                prediction = softmax(prediction)
+                    # Get the probability distribution of the prediction by applying the softmax function and the temperature.
+                    temperature = self.osc_server.get_temperature()
+                    prediction = prediction / temperature
+                    prediction = softmax(prediction)
 
-                # Get the predicted tokens.
-                predicted_tokens = torch.argmax(prediction, 1) [-self.BAR_LENGTH:]
+                    # Get the predicted tokens.
+                    predicted_tokens = torch.argmax(prediction, 1) [-self.BAR_LENGTH:]
 
-                # Update the last prediction
-                last_prediction = torch.cat((last_prediction[:, self.BAR_LENGTH:], predicted_tokens.unsqueeze(0)), dim=1)
+                    # Update the last prediction
+                    last_prediction = torch.cat((last_prediction[:, self.BAR_LENGTH:], predicted_tokens.unsqueeze(0)), dim=1)
 
-                # Convert the predicted tokens to a list.
-                predicted_tokens = predicted_tokens.cpu().numpy().tolist()
+                    # Convert the predicted tokens to a list.
+                    predicted_tokens = predicted_tokens.cpu().numpy().tolist()
+                
                 logging.info(f"Generated sequence: {predicted_tokens}")
 
                 # Get the confidence of the prediction withouth the temperature contribution.

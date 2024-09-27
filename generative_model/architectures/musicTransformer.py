@@ -63,6 +63,12 @@ class MusicTransformer(nn.Module):
         self.predictions = output.permute(1, 0, 2)  # Save in (batch_size, seq_length, vocab_size) format
         
         return self.predictions
+    
+def generate_square_subsequent_mask(sz):
+    mask = torch.triu(torch.ones(sz, sz)) == 1
+    mask = mask.transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
 
 # Training and Generation Functions
 def train_model(model, data_loader, criterion, optimizer, epochs=100):
