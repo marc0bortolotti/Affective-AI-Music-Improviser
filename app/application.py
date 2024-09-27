@@ -39,7 +39,6 @@ def load_model(model_param_path, model_module_path, model_class_name):
     - model_module_name: name of the model class
 
     '''
-
     weights_path = os.path.join(model_param_path, 'model_state_dict.pth')
     input_vocab_path = os.path.join(model_param_path, 'input_vocab.txt')
     output_vocab_path = os.path.join(model_param_path, 'output_vocab.txt')
@@ -89,23 +88,11 @@ def thread_function_eeg(name, app):
         app.eeg_device.close()
 
 def thread_function_midi(name, app):
+    
     logging.info("Thread %s: starting", name)   
     if app.STATUS['SIMULATE_MIDI']:
-
-        # SIMULATION_EVENT = threading.Event()
-        # app.midi_in.set_simulation_event(SIMULATION_EVENT)
-
-        a = 0
-        while a<1:
-            SYNCH_EVENT.wait()
-
-            app.midi_in.simulate()
-
-            a += 1
-
-            if not app.STATUS['RUNNING']:
-                logging.info("Thread %s: closing", name)
-                break
+        app.midi_in.set_simulation_event(SYNCH_EVENT)
+        app.midi_in.simulate()
     else:
         app.midi_in.run()
     logging.info("Thread %s: closing", name)

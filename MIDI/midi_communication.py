@@ -44,6 +44,7 @@ class MIDI_Input:
         self.parse_message = parse_message
         self.midi_simulation_port = None
         self.simulation_event = None
+        self.bar_duration = 4 * 60/120 # 4 beats per bar, 120 bpm
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -78,22 +79,18 @@ class MIDI_Input:
         self.simulation_event = event
 
     def simulate(self, path=None):
-
-        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/rithm_CONCENTRATED.mid')
-
-        def thread_function(path):
-            mid = mido.MidiFile(path)
+        logging.info(f"MIDI Input: simulating")
+        if path is None:
+            path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/rithm_RELAXED.mid')
+        mid = mido.MidiFile(path)
+        while not self.exit:
+            self.simulation_event.wait()
             for msg in mid.play(): 
                 if not msg.is_meta and msg.type != 'control_change':
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
                     self.midi_simulation_port.send(msg)
                 if self.exit:
-                    break   
-            if self.simulation_event is not None:
-                self.simulation_event.set()
-
-        thread = threading.Thread(target=thread_function, args=(path,))
-        thread.start()
+                        break   
 
     def get_note_buffer(self):
         return self.note_buffer
