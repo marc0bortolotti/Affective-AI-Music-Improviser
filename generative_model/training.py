@@ -256,18 +256,14 @@ def epoch_step(dataloader, mode):
         optimizer.zero_grad()
 
         # Forward pass
-        if MODEL == TransformerModel:
-            shifted_target = target[:, : - 1] # remove the last token
-            target = target[:, 1 :] # remove the first token
+        if MODEL == TransformerModel or MODEL == MusicTransformer: 
+            # transformer model requires the target to be shifted by one bar to the right
+            shifted_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
+            target = target[:, - OUTPUT_TOK.BAR_LENGTH :]  
             input_mask = generate_square_subsequent_mask(input.size(1))
             shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
             output = model(input, shifted_target, input_mask, shifted_target_mask)
-        elif MODEL == MusicTransformer:
-            shifted_target = target[:, : - 1] # remove the last token
-            target = target[:, 1 :] # remove the first token
-            input_mask = generate_square_subsequent_mask(input.size(1))
-            shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
-            output = model(input, shifted_target, input_mask, shifted_target_mask)
+            output = output[:, - OUTPUT_TOK.BAR_LENGTH :] 
         else:
             output = model(input)
 
