@@ -46,13 +46,13 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH += f'_{idx}'
+    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_{idx}')
     idx += 1
 os.makedirs(RESULTS_PATH)
 
