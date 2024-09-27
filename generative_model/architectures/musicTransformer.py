@@ -23,11 +23,11 @@ def generate_dummy_data(num_sequences=10000, seq_length=48, output_length=16):
 
 # Transformer Model for Music Generation
 class MusicTransformer(nn.Module):
-    def __init__(self, in_vocab_size, out_vocab_size, embedding_dim, nhead, num_layers, seq_length, output_length):
+    def __init__(self, in_vocab_size, out_vocab_size, embedding_dim, nhead, num_layers, seq_length):
         super(MusicTransformer, self).__init__()
         self.in_embedding = nn.Embedding(in_vocab_size, embedding_dim)
         self.out_embedding = nn.Embedding(out_vocab_size, embedding_dim)
-        self.pos_encoder = nn.Parameter(torch.zeros(1, seq_length + output_length, embedding_dim))
+        self.pos_encoder = nn.Parameter(torch.zeros(1, seq_length, embedding_dim))
         self.transformer = nn.Transformer(d_model=embedding_dim, nhead=nhead, num_encoder_layers=num_layers, num_decoder_layers=num_layers)
         self.fc_out = nn.Linear(embedding_dim, out_vocab_size)
         self.softmax = nn.Softmax(dim=-1)
@@ -40,14 +40,13 @@ class MusicTransformer(nn.Module):
                           'embedding_dim' : embedding_dim,
                           'nhead' : nhead,
                           'num_layers' : num_layers,
-                          'seq_length' : seq_length,
-                          'output_length' : output_length
+                          'seq_length' : seq_length
                         }
 
     def size(self): 
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def forward(self, src, tgt):
+    def forward(self, src, tgt, src_mask=None, tgt_mask=None, src_padding_mask=None, tgt_padding_mask=None, memory_key_padding_mask=None):
         # Embed and add positional encoding
         src = self.in_embedding(src) + self.pos_encoder[:, :src.size(1), :]
         tgt = self.out_embedding(tgt) + self.pos_encoder[:, :tgt.size(1), :]
@@ -56,7 +55,11 @@ class MusicTransformer(nn.Module):
         src = src.permute(1, 0, 2)  # (seq_length, batch_size, embedding_dim)
         tgt = tgt.permute(1, 0, 2)  # (output_length, batch_size, embedding_dim)
 
-        transformer_output = self.transformer(src, tgt)
+        transformer_output = self.transformer(  src, tgt, src_mask=src_mask, tgt_mask=tgt_mask,
+                                                src_key_padding_mask=src_padding_mask,
+                                                tgt_key_padding_mask=tgt_padding_mask,
+                                                memory_key_padding_mask=memory_key_padding_mask)
+        
         output = self.fc_out(transformer_output)  # Map to vocab size
 
         # Save the output predictions in the class variable

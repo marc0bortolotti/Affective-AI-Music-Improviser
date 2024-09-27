@@ -17,15 +17,15 @@ from losses import CrossEntropyWithPenaltyLoss
 
 # torch.manual_seed(1111)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.000001 # 0.002
+LEARNING_RATE = 0.00001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['transformer']
+MODEL = ARCHITECTURES['musicTransformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
@@ -83,8 +83,7 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
                     'embedding_dim': EMBEDDING_SIZE,
                     'nhead': 8,
                     'num_layers': 6,
-                    'seq_length': INPUT_TOK.SEQ_LENGTH,
-                    'output_length': OUTPUT_TOK.BAR_LENGTH
+                    'seq_length': INPUT_TOK.SEQ_LENGTH
                 }
     else:
         raise Exception('Model not found')
@@ -173,6 +172,7 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'TEST_SET_SIZE: {len(test_set)}\n\n')
 
         f.write(f'-----------------MODEL------------------\n')
+        f.write(f'MODEL: {MODEL}\n')
         f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
 
         f.write(f'----------OPTIMIZATION PARAMETERS----------\n')
@@ -256,7 +256,13 @@ def epoch_step(dataloader, mode):
         optimizer.zero_grad()
 
         # Forward pass
-        if 'Transformer' in str(MODEL):
+        if MODEL == TransformerModel:
+            shifted_target = target[:, : - 1] # remove the last token
+            target = target[:, 1 :] # remove the first token
+            input_mask = generate_square_subsequent_mask(input.size(1))
+            shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
+            output = model(input, shifted_target, input_mask, shifted_target_mask)
+        elif MODEL == MusicTransformer:
             shifted_target = target[:, : - 1] # remove the last token
             target = target[:, 1 :] # remove the first token
             input_mask = generate_square_subsequent_mask(input.size(1))
