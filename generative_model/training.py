@@ -46,7 +46,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/model_{time.strftime("%Y%m%d-%H%M%S")}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -326,6 +326,7 @@ def train():
 
     writer = SummaryWriter(RESULTS_PATH)
     scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
+    run = RESULTS_PATH.split('/')[-1]
 
     for epoch in range(1, EPOCHS+1):
 
@@ -374,9 +375,9 @@ def train():
         # print the loss and the progress
         elapsed = time.time() - start_time
         lr = optimizer.param_groups[0]['lr']
-        print('| epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | eval_acc {:5.2f} | train_loss {:5.2f} | eval_loss {:5.2f} |' \
+        print('{} | epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | eval_acc {:5.2f} | train_loss {:5.2f} | eval_loss {:5.2f} |' \
               'train_perp {:5.2f} | eval_perp {:5.2f}' \
-                .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
+                .format(run, epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
 
     print('\n\n TRAINING FINISHED:\n\n\tBest Loss: {:5.2f}\tBest Model saved at epoch: {:3d} \n\n' \
             .format(best_eval_loss, best_model_epoch))
