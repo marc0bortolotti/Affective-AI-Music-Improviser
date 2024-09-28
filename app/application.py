@@ -1,7 +1,7 @@
 import threading
 import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
-from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG
+from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG
 from EEG.eeg_device import EEG_Device
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 from generative_model.architectures.transformer import generate_square_subsequent_mask
@@ -217,7 +217,7 @@ class AI_AffectiveMusicImproviser():
         self.thread_osc.start()
         self.thread_eeg.start()
 
-        tokens_buffer = []
+        input_tokens_buffer = []
         generated_track = None
         confidence = 0.0
         temperature = 1.0
@@ -225,7 +225,7 @@ class AI_AffectiveMusicImproviser():
         self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
-        n_tokens = 4
+        n_tokens = 2
 
         # initialize the target tensor for the transformer
         shifted_target = torch.randint(len(self.OUTPUT_TOK.VOCAB), (1, 3 * self.BAR_LENGTH), dtype=torch.long).to(self.device)
@@ -246,15 +246,18 @@ class AI_AffectiveMusicImproviser():
             # clear the buffer
             self.midi_in.clear_note_buffer()
 
+            # Get emotion from the EEG
+            emotion_token = self.get_last_eeg_classification()
+
             # tokenize the notes
             if len(notes) > 0:
-                tokens = self.INPUT_TOK.real_time_tokenization(notes, self.get_last_eeg_classification(), 'drum')
-                tokens_buffer.append(tokens)
+                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, emotion_token, 'drum')
+                input_tokens_buffer.append(input_tokens)
 
             # if the buffer is full (4 bars), make the prediction
-            if len(tokens_buffer) == 3:
+            if len(input_tokens_buffer) == 3:
                 # Flatten the tokens buffer
-                input_data = np.array(tokens_buffer, dtype=np.int32).flatten()
+                input_data = np.array(input_tokens_buffer, dtype=np.int32).flatten()
 
                 # Convert the tokens to tensor
                 input_data = torch.LongTensor(input_data)
@@ -268,7 +271,7 @@ class AI_AffectiveMusicImproviser():
                 # Make the prediction 
                 if 'Transformer' in self.model_class_name:
 
-                    prediction_proba = []
+                    predicted_proba = []
                     predicted_tokens = []
 
                     for i in range(int(self.BAR_LENGTH/n_tokens)):
@@ -281,43 +284,39 @@ class AI_AffectiveMusicImproviser():
                         output = output.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                         # Apply the softmax function to the output
+                        temperature = self.osc_server.get_temperature()
+                        output = output / temperature
                         output = softmax(output)
-
-                        # Get the last token of the output
-                        next_tokens = torch.argmax(output, dim=1)[-n_tokens:]
 
                         # Get the probability of the prediction
                         proba = torch.max(output, dim=1)[0][-n_tokens:]
-                        proba = proba.detach().numpy().tolist()
-                        prediction_proba+=proba
+                        predicted_proba.append(proba)
+
+                        # Get the last token of the output
+                        next_tokens = torch.argmax(output, dim=1)[-n_tokens:]
 
                         # Update the target tensor
                         predicted_tokens+=next_tokens.cpu().numpy().tolist()
 
                         # Update the target tensor
                         shifted_target = torch.cat([shifted_target, next_tokens.unsqueeze(0)], dim=1)
+                        shifted_target = shifted_target[:, -3 * self.BAR_LENGTH:]
 
-                        if shifted_target.size(1) > 3 * self.BAR_LENGTH:
-                            shifted_target = shifted_target[:, -3 * self.BAR_LENGTH:]
-
-                    prediction_proba = torch.tensor(prediction_proba) 
+                    predicted_proba = torch.cat(predicted_proba, dim=0)
                 else:
-                    prediction = self.model(input_data)
+                    output = self.model(input_data)
 
                     # Remove the batch dimension.
-                    prediction = prediction.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
+                    output = output.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                     # Get the probability distribution of the prediction by applying the softmax function and the temperature.
                     temperature = self.osc_server.get_temperature()
-                    prediction = prediction / temperature
-                    prediction = softmax(prediction)
-                    prediction_proba = torch.max(prediction, 1)[0] # torch.max returns a tuple (values, indices)
+                    output = output / temperature
+                    output = softmax(output)
+                    predicted_proba = torch.max(output, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
-                    predicted_tokens = torch.argmax(prediction, 1) [-self.BAR_LENGTH:]
-
-                    # Update the last prediction
-                    last_prediction = torch.cat((last_prediction[:, self.BAR_LENGTH:], predicted_tokens.unsqueeze(0)), dim=1)
+                    predicted_tokens = torch.argmax(output, 1) [-self.BAR_LENGTH:]
 
                     # Convert the predicted tokens to a list.
                     predicted_tokens = predicted_tokens.cpu().numpy().tolist()
@@ -325,18 +324,21 @@ class AI_AffectiveMusicImproviser():
                 logging.info(f"Generated sequence: {predicted_tokens}")
 
                 # Get the confidence of the prediction withouth the temperature contribution.
-                confidence = torch.mean(prediction_proba).item() 
-                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, '/confidence', confidence)
+                confidence = torch.mean(predicted_proba).item() 
 
-                # save the hystory
-                self.hystory.append(tokens_buffer.copy())
-                self.hystory.append(predicted_tokens)
+                # send the confidence and the emotion state to the processing application 
+                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, confidence)
+                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, EMOTION_MSG, emotion_token)
+
+                # # save the hystory
+                # self.hystory.append(input_tokens_buffer.copy())
+                # self.hystory.append(predicted_tokens)
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_tokens, ticks_filter=0)
 
                 # remove the first bar from the tokens buffer
-                tokens_buffer.pop(0)
+                input_tokens_buffer.pop(0)
 
             if self.parse_message:
                 logging.info(f"Confidence: {confidence}")

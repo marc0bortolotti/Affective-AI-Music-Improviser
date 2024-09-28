@@ -5,6 +5,9 @@ from pythonosc.udp_client import SimpleUDPClient
 import logging
 
 REC_MSG = '/action/_SWS_RECTOGGLE'
+CONFIDENCE_MSG = '/confidence'
+EMOTION_MSG = '/emotion'
+
 ESTIMATED_LATENCY_FOR_RX = 0.28 # in seconds
 
 
