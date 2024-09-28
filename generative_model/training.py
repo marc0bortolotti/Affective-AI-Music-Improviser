@@ -241,7 +241,7 @@ def epoch_step(epoch, dataloader, mode):
     n_correct = 0
     n_total = 0
 
-    input_target = torch.zeros([BATCH_SIZE, OUTPUT_TOK.BAR_LENGTH*3], dtype=torch.long)
+    last_output = torch.zeros([BATCH_SIZE, OUTPUT_TOK.BAR_LENGTH*3], dtype=torch.long)
     
     # iterate over the training data
     for batch_idx, (input, target) in enumerate(dataloader):
@@ -254,7 +254,7 @@ def epoch_step(epoch, dataloader, mode):
         # move the input and the target to the device
         input = input.to(device)
         target = target.to(device)
-        input_target = input_target.to(device)
+        last_output = last_output.to(device)
 
         # reset model gradients to zero
         optimizer.zero_grad()
@@ -269,7 +269,7 @@ def epoch_step(epoch, dataloader, mode):
                 # get the target without the last bar
                 input_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
             else:
-                input_target = input_target[:input.size(0), :] 
+                input_target = last_output[:input.size(0), :] 
             
             # remove the first bar from the target
             target = target[:, OUTPUT_TOK.BAR_LENGTH :]  
@@ -285,7 +285,7 @@ def epoch_step(epoch, dataloader, mode):
 
         # update shifted_target
         prediction = torch.argmax(output, -1) [:, -OUTPUT_TOK.BAR_LENGTH:]
-        input_target = torch.cat((input_target, prediction), dim = -1) [:, -OUTPUT_TOK.BAR_LENGTH * 3:]
+        last_output = torch.cat((last_output, prediction), dim = -1) [:, -OUTPUT_TOK.BAR_LENGTH * 3:]
 
         # reshape the output and the target to calculate the loss (flatten the sequences)
         target = target.reshape(-1) # the size -1 is inferred from other dimensions
