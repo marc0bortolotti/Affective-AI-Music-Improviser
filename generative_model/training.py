@@ -26,7 +26,7 @@ LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['transformer']
+MODEL = ARCHITECTURES['musicTransformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
