@@ -44,7 +44,8 @@ class TransformerModel(nn.Module):
                                           num_encoder_layers=num_encoder_layers, 
                                           num_decoder_layers=num_decoder_layers, 
                                           dim_feedforward=dim_feedforward, 
-                                          dropout=dropout)
+                                          dropout=dropout,
+                                          batch_first=True)
         
         # Linear layer to map the output to vocabulary size for predictions
         self.fc_out = nn.Linear(d_model, output_vocab_size)
@@ -64,10 +65,6 @@ class TransformerModel(nn.Module):
         
         tgt = self.positional_encoding(self.tgt_embedding(tgt))
 
-        # Transformer expects input in (sequence_length, batch_size, embed_dim) format, we got (batch_size, sequence_length, embed_dim)
-        src = src.permute(1, 0, 2)
-        tgt = tgt.permute(1, 0, 2)
-        
         # Pass through the Transformer
         output = self.transformer(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask,
                                   src_key_padding_mask=src_padding_mask,
@@ -76,9 +73,6 @@ class TransformerModel(nn.Module):
         
         # Final linear layer to project to the vocab size
         y = self.fc_out(output)
-
-        # Recover the original shape (batch_size, sequence_length, vocab_size)
-        y = y.permute(1, 0, 2)
 
         return y
     

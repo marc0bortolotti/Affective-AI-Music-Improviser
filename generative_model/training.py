@@ -14,6 +14,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
+import random
 
 # torch.manual_seed(1111)
 
@@ -228,8 +229,8 @@ def save_results():
         f.write(f'EVAL_PERPLEXITY: {final_eval_perplexity}\n')
         f.write(f'TEST_PERPLEXITY: {test_perplexity}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
-        
-def epoch_step(dataloader, mode):
+
+def epoch_step(epoch, dataloader, mode):
 
     if mode == 'train':
         model.train()
@@ -240,7 +241,7 @@ def epoch_step(dataloader, mode):
     n_correct = 0
     n_total = 0
 
-    shifted_target = torch.zeros([BATCH_SIZE, OUTPUT_TOK.BAR_LENGTH*3], dtype=torch.long)
+    input_target = torch.zeros([BATCH_SIZE, OUTPUT_TOK.BAR_LENGTH*3], dtype=torch.long)
     
     # iterate over the training data
     for batch_idx, (input, target) in enumerate(dataloader):
@@ -253,26 +254,38 @@ def epoch_step(dataloader, mode):
         # move the input and the target to the device
         input = input.to(device)
         target = target.to(device)
-        shifted_target = shifted_target.to(device)
+        input_target = input_target.to(device)
 
         # reset model gradients to zero
         optimizer.zero_grad()
 
         # Forward pass
         if MODEL == TransformerModel or MODEL == MusicTransformer: 
-            # transformer model requires the target to be shifted by one bar to the right
-            # shifted_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
-            shifted_target = shifted_target[:input.size(0), :]
+
+            # schedule sampling
+            use_teacher_forcing = random.random() < max(0.5, 1 - (epoch / 50)) 
+
+            if use_teacher_forcing:
+                # get the target without the last bar
+                input_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
+            else:
+                input_target = input_target[:input.size(0), :] 
+            
+            # remove the first bar from the target
             target = target[:, OUTPUT_TOK.BAR_LENGTH :]  
+
+            # generate the masks for the input and the target to avoid attending to future tokens
             input_mask = generate_square_subsequent_mask(input.size(1))
-            shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
-            output = model(input, shifted_target, input_mask, shifted_target_mask)
+            input_target_mask = generate_square_subsequent_mask(input_target.size(1))
+
+            # forward pass
+            output = model(input, input_target, input_mask, input_target_mask)
         else:
             output = model(input)
 
         # update shifted_target
         prediction = torch.argmax(output, -1) [:, -OUTPUT_TOK.BAR_LENGTH:]
-        shifted_target = torch.cat((shifted_target, prediction), dim = -1) [:, -OUTPUT_TOK.BAR_LENGTH * 3:]
+        input_target = torch.cat((input_target, prediction), dim = -1) [:, -OUTPUT_TOK.BAR_LENGTH * 3:]
 
         # reshape the output and the target to calculate the loss (flatten the sequences)
         target = target.reshape(-1) # the size -1 is inferred from other dimensions
@@ -335,12 +348,12 @@ def train():
 
         start_time = time.time()
 
-        train_loss, train_accuracy, train_perplexity = epoch_step(train_dataloader, 'train')
+        train_loss, train_accuracy, train_perplexity = epoch_step(epoch, train_dataloader, 'train')
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Accuracy/train', train_accuracy, epoch)
         writer.add_scalar('Perplexity/train', train_perplexity, epoch)
 
-        eval_loss, eval_accuracy, eval_perplexity = epoch_step(eval_dataloader, 'eval')
+        eval_loss, eval_accuracy, eval_perplexity = epoch_step(epoch, eval_dataloader, 'eval')
         writer.add_scalar('Loss/eval', eval_loss, epoch)
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)

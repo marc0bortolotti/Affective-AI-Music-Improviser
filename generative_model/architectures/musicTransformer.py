@@ -28,7 +28,11 @@ class MusicTransformer(nn.Module):
         self.in_embedding = nn.Embedding(in_vocab_size, embedding_dim)
         self.out_embedding = nn.Embedding(out_vocab_size, embedding_dim)
         self.pos_encoder = nn.Parameter(torch.zeros(1, seq_length, embedding_dim))
-        self.transformer = nn.Transformer(d_model=embedding_dim, nhead=nhead, num_encoder_layers=num_layers, num_decoder_layers=num_layers)
+        self.transformer = nn.Transformer(d_model=embedding_dim, 
+                                          nhead=nhead, 
+                                          num_encoder_layers=num_layers, 
+                                          num_decoder_layers=num_layers,
+                                          batch_first=True)
         self.fc_out = nn.Linear(embedding_dim, out_vocab_size)
         self.softmax = nn.Softmax(dim=-1)
         
@@ -36,11 +40,11 @@ class MusicTransformer(nn.Module):
         self.predictions = None
 
         self.PARAMS = { 'in_vocab_size' : in_vocab_size,
-                          'out_vocab_size' : out_vocab_size,
-                          'embedding_dim' : embedding_dim,
-                          'nhead' : nhead,
-                          'num_layers' : num_layers,
-                          'seq_length' : seq_length
+                        'out_vocab_size' : out_vocab_size,
+                        'embedding_dim' : embedding_dim,
+                        'nhead' : nhead,
+                        'num_layers' : num_layers,
+                        'seq_length' : seq_length
                         }
 
     def size(self): 
@@ -50,22 +54,15 @@ class MusicTransformer(nn.Module):
         # Embed and add positional encoding
         src = self.in_embedding(src) + self.pos_encoder[:, :src.size(1), :]
         tgt = self.out_embedding(tgt) + self.pos_encoder[:, :tgt.size(1), :]
-        
-        # Transformer expects input in (sequence_length, batch_size, embed_dim) format
-        src = src.permute(1, 0, 2)  # (seq_length, batch_size, embedding_dim)
-        tgt = tgt.permute(1, 0, 2)  # (output_length, batch_size, embedding_dim)
 
         transformer_output = self.transformer(  src, tgt, src_mask=src_mask, tgt_mask=tgt_mask,
                                                 src_key_padding_mask=src_padding_mask,
                                                 tgt_key_padding_mask=tgt_padding_mask,
                                                 memory_key_padding_mask=memory_key_padding_mask)
         
-        output = self.fc_out(transformer_output)  # Map to vocab size
-
-        # Save the output predictions in the class variable
-        self.predictions = output.permute(1, 0, 2)  # Save in (batch_size, seq_length, vocab_size) format
+        y = self.fc_out(transformer_output)  # Map to vocab size
         
-        return self.predictions
+        return y
     
 def generate_square_subsequent_mask(sz):
     mask = torch.triu(torch.ones(sz, sz)) == 1
