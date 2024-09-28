@@ -18,7 +18,7 @@ import random
 
 # torch.manual_seed(1111)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
@@ -26,7 +26,7 @@ LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['musicTransformer']
+MODEL = ARCHITECTURES['transformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
@@ -353,7 +353,7 @@ def train():
         writer.add_scalar('Accuracy/train', train_accuracy, epoch)
         writer.add_scalar('Perplexity/train', train_perplexity, epoch)
 
-        eval_loss, eval_accuracy, eval_perplexity = epoch_step(epoch, eval_dataloader, 'eval')
+        eval_loss, eval_accuracy, eval_perplexity = epoch_step(epoch, eval_dataloader, 'test')
         writer.add_scalar('Loss/eval', eval_loss, epoch)
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
@@ -400,7 +400,7 @@ def train():
 
     # test the model
     global test_loss, test_accuracy, test_perplexity
-    test_loss, test_accuracy, test_perplexity = epoch_step(test_dataloader, 'eval')
+    test_loss, test_accuracy, test_perplexity = epoch_step(0, test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')
     print(f'TEST PERPLEXITY: {test_perplexity}\n\n')
