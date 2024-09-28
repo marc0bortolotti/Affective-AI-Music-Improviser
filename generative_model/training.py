@@ -17,11 +17,11 @@ from losses import CrossEntropyWithPenaltyLoss
 
 # torch.manual_seed(1111)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00001 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
@@ -46,13 +46,13 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH += f'_{idx}'
+    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_{idx}')
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -239,6 +239,8 @@ def epoch_step(dataloader, mode):
     total_loss = 0
     n_correct = 0
     n_total = 0
+
+    shifted_target = torch.zeros([BATCH_SIZE, OUTPUT_TOK.BAR_LENGTH*3], dtype=torch.long)
     
     # iterate over the training data
     for batch_idx, (input, target) in enumerate(dataloader):
@@ -251,25 +253,26 @@ def epoch_step(dataloader, mode):
         # move the input and the target to the device
         input = input.to(device)
         target = target.to(device)
+        shifted_target = shifted_target.to(device)
 
         # reset model gradients to zero
         optimizer.zero_grad()
 
         # Forward pass
-        if MODEL == TransformerModel:
-            shifted_target = target[:, : - 1] # remove the last token
-            target = target[:, 1 :] # remove the first token
-            input_mask = generate_square_subsequent_mask(input.size(1))
-            shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
-            output = model(input, shifted_target, input_mask, shifted_target_mask)
-        elif MODEL == MusicTransformer:
-            shifted_target = target[:, : - 1] # remove the last token
-            target = target[:, 1 :] # remove the first token
+        if MODEL == TransformerModel or MODEL == MusicTransformer: 
+            # transformer model requires the target to be shifted by one bar to the right
+            # shifted_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
+            shifted_target = shifted_target[:input.size(0), :]
+            target = target[:, OUTPUT_TOK.BAR_LENGTH :]  
             input_mask = generate_square_subsequent_mask(input.size(1))
             shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1))
             output = model(input, shifted_target, input_mask, shifted_target_mask)
         else:
             output = model(input)
+
+        # update shifted_target
+        prediction = torch.argmax(output, -1) [:, -OUTPUT_TOK.BAR_LENGTH:]
+        shifted_target = torch.cat((shifted_target, prediction), dim = -1) [:, -OUTPUT_TOK.BAR_LENGTH * 3:]
 
         # reshape the output and the target to calculate the loss (flatten the sequences)
         target = target.reshape(-1) # the size -1 is inferred from other dimensions
