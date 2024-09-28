@@ -225,10 +225,10 @@ class AI_AffectiveMusicImproviser():
         self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
-        n_tokens = 2
+        n_tokens = 4
 
         # initialize the target tensor for the transformer
-        shifted_target = torch.randint(len(self.OUTPUT_TOK.VOCAB), (1, 3 * self.BAR_LENGTH), dtype=torch.long).to(self.device)
+        last_output = torch.randint(len(self.OUTPUT_TOK.VOCAB), (1, 2 * self.BAR_LENGTH + n_tokens), dtype=torch.long).to(self.device)
 
         while True:
 
@@ -272,15 +272,15 @@ class AI_AffectiveMusicImproviser():
                 if 'Transformer' in self.model_class_name:
 
                     predicted_proba = []
-                    predicted_tokens = []
+                    predicted_bar = []
 
                     for i in range(int(self.BAR_LENGTH/n_tokens)):
 
                         # Generate the mask for the target sequence
-                        shifted_target_mask = generate_square_subsequent_mask(shifted_target.size(1)).to(self.device)
+                        last_output_mask = generate_square_subsequent_mask(last_output.size(1)).to(self.device)
 
                         # Make the prediction
-                        output = self.model(input_data, shifted_target, tgt_mask=shifted_target_mask)
+                        output = self.model(input_data, last_output, tgt_mask=last_output_mask)
                         output = output.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
 
                         # Apply the softmax function to the output
@@ -289,18 +289,15 @@ class AI_AffectiveMusicImproviser():
                         output = softmax(output)
 
                         # Get the probability of the prediction
-                        proba = torch.max(output, dim=1)[0][-n_tokens:]
+                        proba = torch.max(output, dim=-1)[0][-n_tokens:]
                         predicted_proba.append(proba)
 
                         # Get the last token of the output
-                        next_tokens = torch.argmax(output, dim=1)[-n_tokens:]
+                        last_output = torch.argmax(output, dim=-1)
+                        next_tokens = last_output[-n_tokens:]
 
                         # Update the target tensor
-                        predicted_tokens+=next_tokens.cpu().numpy().tolist()
-
-                        # Update the target tensor
-                        shifted_target = torch.cat([shifted_target, next_tokens.unsqueeze(0)], dim=1)
-                        shifted_target = shifted_target[:, -3 * self.BAR_LENGTH:]
+                        predicted_bar+=next_tokens.cpu().numpy().tolist()
 
                     predicted_proba = torch.cat(predicted_proba, dim=0)
                 else:
@@ -316,12 +313,12 @@ class AI_AffectiveMusicImproviser():
                     predicted_proba = torch.max(output, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
-                    predicted_tokens = torch.argmax(output, 1) [-self.BAR_LENGTH:]
+                    predicted_bar = torch.argmax(output, 1) [-self.BAR_LENGTH:]
 
                     # Convert the predicted tokens to a list.
-                    predicted_tokens = predicted_tokens.cpu().numpy().tolist()
+                    predicted_bar = predicted_bar.cpu().numpy().tolist()
                 
-                logging.info(f"Generated sequence: {predicted_tokens}")
+                logging.info(f"Generated sequence: {predicted_bar}")
 
                 # Get the confidence of the prediction withouth the temperature contribution.
                 confidence = torch.mean(predicted_proba).item() 
@@ -335,7 +332,7 @@ class AI_AffectiveMusicImproviser():
                 # self.hystory.append(predicted_tokens)
 
                 # Convert the predicted sequence to MIDI.
-                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_tokens, ticks_filter=0)
+                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0)
 
                 # remove the first bar from the tokens buffer
                 input_tokens_buffer.pop(0)

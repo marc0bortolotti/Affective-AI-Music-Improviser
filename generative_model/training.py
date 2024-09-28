@@ -34,6 +34,8 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
+N_TOKENS = 4 # number of tokens to be predicted at each forward pass
+
 TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 512 
 TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
@@ -175,6 +177,7 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'\n-----------------MODEL------------------\n')
         f.write(f'MODEL: {MODEL}\n')
         f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
+        f.write(f'N_TOKENS: {N_TOKENS}\n')
 
         f.write(f'\n----------OPTIMIZATION PARAMETERS----------\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
@@ -262,54 +265,87 @@ def epoch_step(epoch, dataloader, mode):
         # Forward pass
         if MODEL == TransformerModel or MODEL == MusicTransformer: 
 
-            # schedule sampling
-            use_teacher_forcing = random.random() < max(0.5, 1 - (epoch / 50)) 
+            steps = 0
+            for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS, N_TOKENS):
 
-            if use_teacher_forcing:
-                # get the target without the last bar
-                input_target = target[:, : - OUTPUT_TOK.BAR_LENGTH]
-            else:
-                input_target = last_output[:input.size(0), :] 
+                use_teacher_forcing = random.random() < max(0.5, 1 - (epoch / 50)) 
+
+                # Determine if using teacher forcing or not
+                if use_teacher_forcing or i == 0:
+                    # Use ground truth for next input
+                    input_target = target[:, i : OUTPUT_TOK.BAR_LENGTH * 3 + i]
+                else:
+                    # Use model's own prediction
+                    input_target = last_output
+
+                # generate the masks for the input and the target to avoid attending to future tokens
+                input_mask = generate_square_subsequent_mask(input.size(1))
+                input_target_mask = generate_square_subsequent_mask(input_target.size(1))
+
+                # forward pass
+                output = model(input, input_target, input_mask, input_target_mask)
+
+                # get the last output
+                last_output = torch.argmax(output, -1)
+
+                # get the actual target
+                actual_target = target[:, i + N_TOKENS : 3 * OUTPUT_TOK.BAR_LENGTH + i + N_TOKENS] # target is shifted right by one bar
+
+                # reshape the output and the target to calculate the loss (flatten the sequences)
+                actual_target = actual_target.reshape(-1) # the size -1 is inferred from other dimensions
+                output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
+
+                # calculate the loss
+                loss = criterion(output, actual_target)
+
+                if mode == 'train':
+                    # calculate the gradients
+                    loss.backward()
+
+                    # clip the gradients to avoid exploding gradients
+                    if GRADIENT_CLIP > 0:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
+
+                    # update the weights
+                    optimizer.step()
+
+                total_loss += loss.data.item()
+
+                # update n_correct and n_total to calculate the accuracy
+                n_correct += torch.sum(torch.argmax(output, 1) == actual_target).item()
+                n_total += actual_target.size(0)
+
+                steps += 1
+
+            total_loss /= steps
             
-            # remove the first bar from the target
-            target = target[:, OUTPUT_TOK.BAR_LENGTH :]  
-
-            # generate the masks for the input and the target to avoid attending to future tokens
-            input_mask = generate_square_subsequent_mask(input.size(1))
-            input_target_mask = generate_square_subsequent_mask(input_target.size(1))
-
-            # forward pass
-            output = model(input, input_target, input_mask, input_target_mask)
         else:
+            # forward pass
             output = model(input)
 
-        # update shifted_target
-        prediction = torch.argmax(output, -1) [:, -OUTPUT_TOK.BAR_LENGTH:]
-        last_output = torch.cat((last_output, prediction), dim = -1) [:, -OUTPUT_TOK.BAR_LENGTH * 3:]
+            # reshape the output and the target to calculate the loss (flatten the sequences)
+            target = target.reshape(-1) # the size -1 is inferred from other dimensions
+            output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
 
-        # reshape the output and the target to calculate the loss (flatten the sequences)
-        target = target.reshape(-1) # the size -1 is inferred from other dimensions
-        output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
+            # calculate the loss
+            loss = criterion(output, target)
 
-        # calculate the loss
-        loss = criterion(output, target)
+            if mode == 'train':
+                # calculate the gradients
+                loss.backward()
 
-        if mode == 'train':
-            # calculate the gradients
-            loss.backward()
+                # clip the gradients to avoid exploding gradients
+                if GRADIENT_CLIP > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
 
-            # clip the gradients to avoid exploding gradients
-            if GRADIENT_CLIP > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
+                # update the weights
+                optimizer.step()
 
-            # update the weights
-            optimizer.step()
+            total_loss += loss.data.item()
 
-        total_loss += loss.data.item()
-
-        # update n_correct and n_total to calculate the accuracy
-        n_correct += torch.sum(torch.argmax(output, 1) == target).item()
-        n_total += target.size(0)
+            # update n_correct and n_total to calculate the accuracy
+            n_correct += torch.sum(torch.argmax(output, 1) == target).item()
+            n_total += target.size(0)
 
     # calculate the accuracy
     accuracy = 100 * n_correct / n_total
