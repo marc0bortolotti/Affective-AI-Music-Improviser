@@ -164,19 +164,19 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
      # save the model hyperparameters in a file txt
     with open(os.path.join(RESULTS_PATH, 'parameters.txt'), 'w') as f:
 
-        f.write(f'DATE: {time.strftime("%Y%m%d-%H%M%S")}\n\n')
+        f.write(f'DATE: {time.strftime("%Y%m%d-%H%M%S")}\n')
 
-        f.write(f'-----------------DATASET------------------\n')
+        f.write(f'\n-----------------DATASET------------------\n')
         f.write(f'DATASET_PATH: {DATASET_PATH}\n')
         f.write(f'TRAIN_SET_SIZE: {len(train_set)}\n')
         f.write(f'EVAL_SET_SIZE: {len(eval_set)}\n')
-        f.write(f'TEST_SET_SIZE: {len(test_set)}\n\n')
+        f.write(f'TEST_SET_SIZE: {len(test_set)}\n')
 
-        f.write(f'-----------------MODEL------------------\n')
+        f.write(f'\n-----------------MODEL------------------\n')
         f.write(f'MODEL: {MODEL}\n')
         f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
 
-        f.write(f'----------OPTIMIZATION PARAMETERS----------\n')
+        f.write(f'\n----------OPTIMIZATION PARAMETERS----------\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
@@ -188,9 +188,9 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'PENALTY_WEIGHT: {PENALTY_WEIGHT}\n')
         f.write(f'LEARNING_RATE: {LEARNING_RATE}\n')
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
-        f.write(f'EPOCHS: {EPOCHS}\n\n')
+        f.write(f'EPOCHS: {EPOCHS}\n')
 
-        f.write(f'------------TOKENIZATION PARAMETERS--------------\n')
+        f.write(f'\n------------TOKENIZATION PARAMETERS--------------\n')
         f.write(f'TICKS_PER_BEAT: {TICKS_PER_BEAT}\n')
         f.write(f'TOKENS_FREQUENCY_THRESHOLD: {TOKENS_FREQUENCY_THRESHOLD}\n')
         f.write(f'SILENCE_TOKEN_WEIGHT: {SILENCE_TOKEN_WEIGHT}\n')        
