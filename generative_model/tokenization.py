@@ -257,7 +257,7 @@ class PrettyMidiTokenizer(object):
     return notes_df
 
 
-  def note_to_string(self, tokens, pitch, velocity, start, end):
+  def note_to_string(self, tokens, pitch, velocity, start, end, rithm = False, single_notes = False):
     '''
     Converts a note into a string token and adds it to the time serie of tokens.
 
@@ -270,7 +270,12 @@ class PrettyMidiTokenizer(object):
     '''
 
     velocity_token = self.compute_velocity_token(velocity)
-    pitch = str(pitch)
+
+    if rithm:
+      pitch = 'ON'
+      end = start + 1
+    else:
+      pitch = str(pitch)
 
     for i in range(start, end):
       if tokens[i] != SILENCE_TOKEN:
@@ -283,7 +288,14 @@ class PrettyMidiTokenizer(object):
       # sort the tokens by pitch to avoid redundancy
       if NOTE_SEPARATOR_TOKEN in tokens[i]:
         sorted_tokens = sorted(tokens[i].split(NOTE_SEPARATOR_TOKEN)) # sort the tokens by pitch
-        tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
+        if single_notes:
+          tokens[i] = sorted_tokens[0] + velocity_token
+        else:
+          tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
+
+      
+
+      
 
     return tokens
 
@@ -355,7 +367,7 @@ class PrettyMidiTokenizer(object):
       if i + self.SEQ_LENGTH > len(token_sequence):
         # pad the sequence with silence tokens
         silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
-        sequence = np.concatenate((token_sequence[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(sequence)))))
+        sequence = np.concatenate((token_sequence[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(token_sequence)))))
       else:
         sequence = token_sequence[i:i+self.SEQ_LENGTH]
 

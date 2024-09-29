@@ -34,7 +34,7 @@ SAVE_SESSION = False
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/musicTransformer')
+MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/run_11')
 MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'generative_model/architectures/musicTransformer.py')
 MODEL_MODULE_NAME = 'MusicTransformer'
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))

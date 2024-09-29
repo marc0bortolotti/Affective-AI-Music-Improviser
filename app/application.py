@@ -228,7 +228,9 @@ class AI_AffectiveMusicImproviser():
         n_tokens = 4
 
         # initialize the target tensor for the transformer
-        last_output = torch.randint(len(self.OUTPUT_TOK.VOCAB), (1, 2 * self.BAR_LENGTH + n_tokens), dtype=torch.long).to(self.device)
+        init_midi_path = os.path.join(os.path.dirname(__file__), 'start_token_RELAXED.mid')
+        last_output = self.OUTPUT_TOK.midi_to_tokens(init_midi_path)[0][: 3 * self.BAR_LENGTH]
+        last_output = torch.LongTensor(last_output.tolist()).unsqueeze(0).to(self.device)
 
         while True:
 
@@ -249,7 +251,7 @@ class AI_AffectiveMusicImproviser():
             # Get emotion from the EEG
             emotion_token = self.get_last_eeg_classification()
 
-            # tokenize the notes
+            # tokenize the input notes
             if len(notes) > 0:
                 input_tokens = self.INPUT_TOK.real_time_tokenization(notes, emotion_token, 'drum')
                 input_tokens_buffer.append(input_tokens)
@@ -295,11 +297,13 @@ class AI_AffectiveMusicImproviser():
                         # Get the last token of the output
                         last_output = torch.argmax(output, dim=-1)
                         next_tokens = last_output[-n_tokens:]
+                        last_output = last_output.unsqueeze(0)
 
                         # Update the target tensor
                         predicted_bar+=next_tokens.cpu().numpy().tolist()
 
                     predicted_proba = torch.cat(predicted_proba, dim=0)
+
                 else:
                     output = self.model(input_data)
 
