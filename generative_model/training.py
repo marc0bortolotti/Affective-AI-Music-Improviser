@@ -18,12 +18,14 @@ import random
 
 # torch.manual_seed(1111)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.0001 # 0.002
+LEARNING_RATE = 0.00001 # 0.002
 BATCH_SIZE = 64 # 64
+
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
 MODEL = ARCHITECTURES['musicTransformer']
@@ -34,7 +36,7 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 4 # number of tokens to be predicted at each forward pass
+N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
 TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 512 
@@ -44,7 +46,7 @@ CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
 
 GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
-DATASET_SPLIT = [0.9, 0.07, 0.03] # split the dataset into training, evaluation and test sets
+DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
 EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
@@ -99,6 +101,9 @@ def tokenize_midi_files():
     input_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'rythms/*.mid')))
     output_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'melodies/*.mid')))
 
+    if FROM_MELODY_TO_RHYTHM:
+        input_filenames, output_filenames = output_filenames, input_filenames
+
     INPUT_TOK = PrettyMidiTokenizer()
     OUTPUT_TOK = PrettyMidiTokenizer()
 
@@ -121,7 +126,7 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        _ = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
+        _ = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, rhythm = True)
         _ = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
 
         if len(INPUT_TOK.sequences) != len(OUTPUT_TOK.sequences):
@@ -181,6 +186,7 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
 
         f.write(f'\n----------OPTIMIZATION PARAMETERS----------\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
+        f.write(f'FROM_MELODY_TO_RHYTHM: {FROM_MELODY_TO_RHYTHM}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
         f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
@@ -266,9 +272,10 @@ def epoch_step(epoch, dataloader, mode):
         if MODEL == TransformerModel or MODEL == MusicTransformer: 
 
             steps = 0
+            loss_tmp = 0
             for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS, N_TOKENS):
 
-                use_teacher_forcing = random.random() < max(0.5, 1 - (epoch / 50)) 
+                use_teacher_forcing = random.random() < max(0.3, 1 - (epoch / 10)) 
 
                 # Determine if using teacher forcing or not
                 if use_teacher_forcing or i == 0:
@@ -309,7 +316,7 @@ def epoch_step(epoch, dataloader, mode):
                     # update the weights
                     optimizer.step()
 
-                total_loss += loss.data.item()
+                loss_tmp = loss.data.item()
 
                 # update n_correct and n_total to calculate the accuracy
                 n_correct += torch.sum(torch.argmax(output, 1) == actual_target).item()
@@ -317,7 +324,8 @@ def epoch_step(epoch, dataloader, mode):
 
                 steps += 1
 
-            total_loss /= steps
+            loss_tmp /= steps
+            total_loss += loss_tmp
             
         else:
             # forward pass

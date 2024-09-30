@@ -9,7 +9,7 @@ BPM = 120
 TICKS_PER_BEAT = 4 # resolution of the MIDI file
 BEATS_PER_BAR = 4
 
-VELOCITY_TOKENS = {40:'p', 100:'f'}  #{40:'pp', 60:'p', 90:'f', 110:'ff'} 
+VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'} 
 NOTE_START_TOKEN = 'S' # 'S'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
@@ -267,6 +267,8 @@ class PrettyMidiTokenizer(object):
     - velocity: the velocity of the note (int)
     - start: the start time of the note (int)
     - end: the end time of the note (int)
+    - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
+    - single_notes: a boolean indicating whether to keep only one note per token (bool)
     '''
 
     velocity_token = self.compute_velocity_token(velocity)
@@ -278,7 +280,7 @@ class PrettyMidiTokenizer(object):
       pitch = str(pitch)
 
     for i in range(start, end):
-      if pitch not in tokens[i]:
+      if pitch in tokens[i]:
         break
       elif tokens[i] != SILENCE_TOKEN:
         tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
@@ -338,7 +340,7 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
-      token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end, rhythm, )
+      token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end, rhythm, single_notes)
       
     # update the vocabulary if necessary
     if update_vocab:
@@ -615,7 +617,7 @@ class PrettyMidiTokenizer(object):
         if end > self.BAR_LENGTH :
           end = self.BAR_LENGTH
 
-        tokens = self.note_to_string(tokens, pitch, velocity, start, end)
+        tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm=True, single_notes=False)
 
     # add the BCI token at the beginning
     if emotion_token is not None:
