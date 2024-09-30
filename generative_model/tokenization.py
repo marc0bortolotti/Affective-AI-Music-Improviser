@@ -257,7 +257,7 @@ class PrettyMidiTokenizer(object):
     return notes_df
 
 
-  def note_to_string(self, tokens, pitch, velocity, start, end, rithm = False, single_notes = False):
+  def note_to_string(self, tokens, pitch, velocity, start, end, rhythm = False, single_notes = False):
     '''
     Converts a note into a string token and adds it to the time serie of tokens.
 
@@ -271,36 +271,34 @@ class PrettyMidiTokenizer(object):
 
     velocity_token = self.compute_velocity_token(velocity)
 
-    if rithm:
-      pitch = 'ON'
+    if rhythm:
+      pitch = '1'
       end = start + 1
     else:
       pitch = str(pitch)
 
     for i in range(start, end):
-      if tokens[i] != SILENCE_TOKEN:
+      if pitch not in tokens[i]:
+        break
+      elif tokens[i] != SILENCE_TOKEN:
         tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
       else:
         tokens[i] = pitch + velocity_token
-      if i == start: 
+      if i == start and not rhythm: 
         tokens[i] += NOTE_START_TOKEN
 
       # sort the tokens by pitch to avoid redundancy
       if NOTE_SEPARATOR_TOKEN in tokens[i]:
         sorted_tokens = sorted(tokens[i].split(NOTE_SEPARATOR_TOKEN)) # sort the tokens by pitch
         if single_notes:
-          tokens[i] = sorted_tokens[0] + velocity_token
+          tokens[i] = sorted_tokens[-1] # keep only the note with the highest pitch
         else:
           tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
-
-      
-
-      
 
     return tokens
 
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None, instrument=None):
+  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None, rhythm = False, single_notes = False):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -310,7 +308,8 @@ class PrettyMidiTokenizer(object):
     - update_vocab: a boolean indicating whether to update the vocabulary (bool)
     - update_sequences: a boolean indicating whether to update the sequences (bool)
     - emotion_token: the token representing the emotion of the user (str)
-    - instrument: the instrument of the MIDI file (str)
+    - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
+    - single_notes: a boolean indicating whether to keep only one note per token (bool)
 
     Returns:
     - sequences: a list of sequences of tokens (np.array)
@@ -339,9 +338,7 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
-      if instrument == 'drum':
-        end = start + 1
-      token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end)
+      token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end, rhythm, )
       
     # update the vocabulary if necessary
     if update_vocab:
