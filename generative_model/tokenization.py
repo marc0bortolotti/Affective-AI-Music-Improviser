@@ -502,6 +502,9 @@ class PrettyMidiTokenizer(object):
     track.append(Message('program_change', program=program))
     track.append(MetaMessage('set_tempo', tempo=tempo))
 
+    if 'Piano' in instrument_name:
+      track.append(Message('control_change', control=64, value=127, time=0))
+
     for i in range(len(command_df)):
         command = command_df.loc[i]
         pitch = int(command['pitch'])
@@ -510,15 +513,18 @@ class PrettyMidiTokenizer(object):
         cmd = 'note_on' if command['note_on'] else 'note_off'
         track.append(Message(cmd, note=pitch, velocity=velocity, time=dt, channel=channel)) # NB: time from the previous message in ticks per beat
 
+    if 'Piano' in instrument_name:
+      track.append(Message('control_change', control=64, value=0, time=0))
+
     mid.tracks.append(track)
     return mid
 
-  def tokens_to_midi(self, sequence, out_file_path = None, ticks_filter = 0, instrument_name = 'Acoustic Grand Piano'):
+  def tokens_to_midi(self, tokens, out_file_path = None, ticks_filter = 0, instrument_name = 'Acoustic Grand Piano'):
     '''
     Converts a sequence of tokens into a MIDI file.
 
     Parameters:
-    - sequence: a sequence of tokens (np.array)
+    - tokens: a sequence of tokens (np.array)
     - out_file_path: the path to the output MIDI file (str)
 
     Returns:
@@ -526,14 +532,7 @@ class PrettyMidiTokenizer(object):
 
     '''
     # convert the sequence of tokens into a pandas dataframe of notes
-    if len(sequence.shape) == 2:
-      dfs = []
-      for seq in sequence:
-        df = self.tokens_to_notes_df(seq, ticks_filter)
-        dfs.append(df)
-      notes_df = pd.concat(dfs, ignore_index=True)
-    else:
-      notes_df = self.tokens_to_notes_df(sequence, ticks_filter)
+    notes_df = self.tokens_to_notes_df(tokens, ticks_filter)
 
     # convert the notes into a list of commands (note_on, note_off, velocity, dt)
     command_df = self.notes_df_to_midi_command_df(notes_df)
@@ -655,11 +654,10 @@ class PrettyMidiTokenizer(object):
 
 if __name__ == '__main__':
   import os
-  file_path = os.path.join(os.path.dirname(__file__), 'tok_test/chords.mid')
-  save_path = os.path.join(os.path.dirname(__file__), 'tok_test/chords_reconstructed_2.mid')
+  file_path = os.path.join(os.path.dirname(__file__), 'tok_test/melody_RELAXED.mid')
+  save_path = os.path.join(os.path.dirname(__file__), 'tok_test/melody_RELAXED.mid')
 
   tok = PrettyMidiTokenizer()
-  sequences = tok.midi_to_tokens(file_path, update_vocab=True)
+  tokens = tok.midi_to_tokens(file_path, update_vocab=True) [:120]
 
-  tokens = sequences[0]
-  mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'piano')
+  mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
