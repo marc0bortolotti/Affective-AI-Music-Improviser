@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pretty_midi
 from mido import MidiFile, MidiTrack, Message, MetaMessage
-
+from rapidfuzz import process
 
 BPM = 120
 TICKS_PER_BEAT = 4 # resolution of the MIDI file
@@ -473,7 +473,7 @@ class PrettyMidiTokenizer(object):
 
     return command_df
   
-  def generate_track(self, command_df, bpm = BPM, resolution = TICKS_PER_BEAT, instrument_name = 'Acoustic Grand Piano'):  
+  def generate_track(self, command_df, bpm = BPM, resolution = TICKS_PER_BEAT, instrument_name = 'Acoustic Grand Piano', emotion_token = None):  
     '''
     Generates a MIDI track from a pandas dataframe of commands.
 
@@ -502,7 +502,7 @@ class PrettyMidiTokenizer(object):
     track.append(Message('program_change', program=program))
     track.append(MetaMessage('set_tempo', tempo=tempo))
 
-    if 'Piano' in instrument_name:
+    if emotion_token == BCI_TOKENS[0]:
       track.append(Message('control_change', control=64, value=127, time=0))
 
     for i in range(len(command_df)):
@@ -513,13 +513,13 @@ class PrettyMidiTokenizer(object):
         cmd = 'note_on' if command['note_on'] else 'note_off'
         track.append(Message(cmd, note=pitch, velocity=velocity, time=dt, channel=channel)) # NB: time from the previous message in ticks per beat
 
-    if 'Piano' in instrument_name:
+    if emotion_token == BCI_TOKENS[0]:
       track.append(Message('control_change', control=64, value=0, time=0))
 
     mid.tracks.append(track)
     return mid
 
-  def tokens_to_midi(self, tokens, out_file_path = None, ticks_filter = 0, instrument_name = 'Acoustic Grand Piano'):
+  def tokens_to_midi(self, tokens, out_file_path = None, ticks_filter = 0, instrument_name = 'Acoustic Grand Piano', emotion_token = None):
     '''
     Converts a sequence of tokens into a MIDI file.
 
@@ -538,7 +538,7 @@ class PrettyMidiTokenizer(object):
     command_df = self.notes_df_to_midi_command_df(notes_df)
 
     # generate a MIDI track from the commands
-    mid = self.generate_track(command_df, instrument_name = instrument_name)
+    mid = self.generate_track(command_df, instrument_name = instrument_name, emotion_token = emotion_token)
     
     if out_file_path is not None:
       mid.save(out_file_path)
@@ -569,8 +569,11 @@ class PrettyMidiTokenizer(object):
       for seq in self.sequences:
           for i, tok in enumerate(seq):
               if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
-                  seq[i] = updated_vocab.word2idx[SILENCE_TOKEN]
-                  updated_vocab.add_word(SILENCE_TOKEN)
+                  
+                  closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
+                  closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
+                  seq[i] = updated_vocab.word2idx[closest_token_string]
+                  updated_vocab.add_word(closest_token_string)
               else:
                   word = original_vocab.idx2word[tok]
                   seq[i] = updated_vocab.word2idx[word]

@@ -25,7 +25,7 @@ EPOCHS = 1000
 LEARNING_RATE = 0.00001 # 0.002
 BATCH_SIZE = 64 # 64
 
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
 MODEL = ARCHITECTURES['musicTransformer']
@@ -36,11 +36,11 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 16 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
 TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 512 
-TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
+TOKENS_FREQUENCY_THRESHOLD = 5 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -276,7 +276,7 @@ def epoch_step(epoch, dataloader, mode):
 
             steps = 0
             loss_tmp = 0
-            for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS, N_TOKENS):
+            for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS + 1, N_TOKENS):
 
                 use_teacher_forcing = random.random() < max(0.3, 1 - (epoch / 10)) 
 

@@ -337,7 +337,7 @@ class AI_AffectiveMusicImproviser():
                 # self.hystory.append(predicted_tokens)
 
                 # Convert the predicted sequence to MIDI.
-                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0)
+                generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0, emotion_token=emotion_token)
 
                 # remove the first bar from the tokens buffer
                 input_tokens_buffer.pop(0)
