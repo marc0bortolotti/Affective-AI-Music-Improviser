@@ -585,7 +585,7 @@ class PrettyMidiTokenizer(object):
       print(f'Inintial number of tokens: {len(original_vocab)}')
       print(f'Final number of tokens: {len(self.VOCAB)}\n')
 
-  def real_time_tokenization(self, notes, emotion_token = None, instrument = 'drum'):
+  def real_time_tokenization(self, notes, emotion_token = None, rhythm = True):
     '''
     Converts a list of notes into a sequence of tokens in real-time.
 
@@ -609,23 +609,22 @@ class PrettyMidiTokenizer(object):
       velocity = note['velocity']
       dt = note['dt']
       duration += dt
+      start = self.convert_time_to_ticks(duration)
 
-      if duration > self.BAR_DURATION:
+      if start >= self.BAR_LENGTH or velocity < 40:
         break
 
-      elif velocity > 40:
-        start = self.convert_time_to_ticks(duration)
+      else:
         step = 0
-
-        if instrument == 'drum':
-          end = start + 1
-        else:
+        if not rhythm:
           for i in range (note_id+1, len(notes)):
             step += notes[i]['dt']
             if notes[i]['velocity'] == 0 and notes[i]['pitch'] == pitch: 
               step = self.convert_time_to_ticks(step)
               break
           end = int(start + step)
+        else:
+          end = start + 1
 
         if end >= self.BAR_LENGTH :
           end = self.BAR_LENGTH - 1

@@ -229,7 +229,7 @@ class AI_AffectiveMusicImproviser():
 
         # initialize the target tensor for the transformer
         init_midi_path = os.path.join(os.path.dirname(__file__), 'start_token_RELAXED.mid')
-        last_output = self.OUTPUT_TOK.midi_to_tokens(init_midi_path)[0][: 3 * self.BAR_LENGTH]
+        last_output = self.OUTPUT_TOK.midi_to_tokens(init_midi_path)[: 3 * self.BAR_LENGTH]
         last_output = torch.LongTensor(last_output.tolist()).unsqueeze(0).to(self.device)
 
         while True:
@@ -290,20 +290,20 @@ class AI_AffectiveMusicImproviser():
                         output = softmax(output / temperature)
 
                         # Get the probability of the prediction
-                        # proba = torch.max(output, dim=-1)[0][-n_tokens:]
-                        # predicted_proba.append(proba)
+                        proba = torch.max(output, dim=-1)[0][-n_tokens:]
+                        predicted_proba.append(proba)
 
                         # Get the last token of the output
                         last_output = torch.argmax(output, dim=-1)
-                        # next_tokens = last_output[-n_tokens:]
+                        next_tokens = last_output[-n_tokens:]
                         last_output = last_output.unsqueeze(0)
 
                         # Update the target tensor
-                        # predicted_bar+=next_tokens.cpu().numpy().tolist()
+                        predicted_bar+=next_tokens.cpu().numpy().tolist()
                     
-                    predicted_bar = last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:]
-                    predicted_proba = torch.max(output, dim=-1)[0][-self.BAR_LENGTH:]
-                    # predicted_proba = torch.cat(predicted_proba, dim=0)
+                    # predicted_bar = last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:]
+                    # predicted_proba = torch.max(output, dim=-1)[0][-self.BAR_LENGTH:]
+                    predicted_proba = torch.cat(predicted_proba, dim=0)
 
                 else:
                     output = self.model(input_data)
