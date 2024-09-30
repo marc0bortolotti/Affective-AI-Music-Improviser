@@ -18,14 +18,14 @@ import random
 
 # torch.manual_seed(1111)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
 LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
 MODEL = ARCHITECTURES['musicTransformer']
@@ -51,7 +51,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/musicTransformer_4tokens_lessClasses')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/musicTransformer_16tokens')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
