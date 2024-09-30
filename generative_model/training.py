@@ -126,10 +126,13 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        _ = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, rhythm = True)
-        _ = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, rhythm = True)
+        out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
 
-        if len(INPUT_TOK.sequences) != len(OUTPUT_TOK.sequences):
+        in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)
+        out_seq = OUTPUT_TOK.generate_sequences(out_tokens, update_sequences=True)
+
+        if len(in_seq) != len(out_seq):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
             INPUT_TOK.sequences = INPUT_TOK.sequences[:min_len]
             OUTPUT_TOK.sequences = OUTPUT_TOK.sequences[:min_len]

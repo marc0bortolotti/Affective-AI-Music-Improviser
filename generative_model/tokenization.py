@@ -298,9 +298,42 @@ class PrettyMidiTokenizer(object):
           tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
 
     return tokens
+  
+  def generate_sequences(self, token_sequence, emotion_token = None, update_sequences = False):
 
+    if emotion_token is not None:
+      self.VOCAB.add_word(BCI_TOKENS[0])
+      self.VOCAB.add_word(BCI_TOKENS[1])
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, update_sequences = False, emotion_token = None, rhythm = False, single_notes = False):
+    sequences = []
+    step = self.BAR_LENGTH
+    stop_index = len(token_sequence) - self.SEQ_LENGTH
+    
+    if stop_index <= 0:
+      stop_index = 1
+
+    for i in range(0, stop_index, step):
+
+      if i + self.SEQ_LENGTH > len(token_sequence):
+        # pad the sequence with silence tokens
+        silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
+        sequence = np.concatenate((token_sequence[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(token_sequence)))))
+      else:
+        sequence = token_sequence[i:i+self.SEQ_LENGTH]
+
+      if emotion_token is not None:
+        emotion_token_id = self.VOCAB.word2idx[emotion_token]
+        sequence = np.concatenate(([emotion_token_id], sequence[:-1]))
+        
+      sequences.append(sequence)
+
+    # concatenate the sequences if necessary
+    if update_sequences: 
+      self.sequences += sequences 
+
+    return sequences
+
+  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -317,14 +350,9 @@ class PrettyMidiTokenizer(object):
     - sequences: a list of sequences of tokens (np.array)
     - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
     '''
-    if emotion_token is not None and update_vocab:
-      self.VOCAB.add_word(BCI_TOKENS[0])
-      self.VOCAB.add_word(BCI_TOKENS[1])
 
     filename = midi_path.split('\\')[-1]
     print(f'Processing MIDI file: {filename}')
-    if emotion_token is not None:
-      print(f'Emotion token: {emotion_token}')
 
     pm = pretty_midi.PrettyMIDI(midi_path)
     sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
@@ -354,35 +382,9 @@ class PrettyMidiTokenizer(object):
       else: 
         token_sequence[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
 
-    sequences = []
-    step = self.BAR_LENGTH
-    stop_index = len(token_sequence) - self.SEQ_LENGTH
-    
-    if stop_index <= 0:
-      stop_index = 1
-
-    for i in range(0, stop_index, step):
-
-      if i + self.SEQ_LENGTH > len(token_sequence):
-        # pad the sequence with silence tokens
-        silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
-        sequence = np.concatenate((token_sequence[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(token_sequence)))))
-      else:
-        sequence = token_sequence[i:i+self.SEQ_LENGTH]
-
-      if emotion_token is not None:
-        emotion_token_id = self.VOCAB.word2idx[emotion_token]
-        sequence = np.concatenate(([emotion_token_id], sequence[:-1]))
-        
-      sequences.append(sequence)
-
-    # concatenate the sequences if necessary
-    if update_sequences: 
-      self.sequences += sequences 
-
     print('\nDone!')       
 
-    return sequences
+    return token_sequence
   
   def tokens_to_notes_df(self, sequence, ticks_filter = 0):
     '''
@@ -523,8 +525,20 @@ class PrettyMidiTokenizer(object):
     - mid: a MIDI file (MIDO object)
 
     '''
-    notes_df = self.tokens_to_notes_df(sequence, ticks_filter)
+    # convert the sequence of tokens into a pandas dataframe of notes
+    if len(sequence.shape) == 2:
+      dfs = []
+      for seq in sequence:
+        df = self.tokens_to_notes_df(seq, ticks_filter)
+        dfs.append(df)
+      notes_df = pd.concat(dfs, ignore_index=True)
+    else:
+      notes_df = self.tokens_to_notes_df(sequence, ticks_filter)
+
+    # convert the notes into a list of commands (note_on, note_off, velocity, dt)
     command_df = self.notes_df_to_midi_command_df(notes_df)
+
+    # generate a MIDI track from the commands
     mid = self.generate_track(command_df, instrument_name = instrument_name)
     
     if out_file_path is not None:
@@ -614,8 +628,8 @@ class PrettyMidiTokenizer(object):
               break
           end = int(start + step)
 
-        if end > self.BAR_LENGTH :
-          end = self.BAR_LENGTH
+        if end >= self.BAR_LENGTH :
+          end = self.BAR_LENGTH - 1
 
         tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm=True, single_notes=False)
 

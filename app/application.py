@@ -287,22 +287,23 @@ class AI_AffectiveMusicImproviser():
 
                         # Apply the softmax function to the output
                         temperature = self.osc_server.get_temperature()
-                        output = output / temperature
-                        output = softmax(output)
+                        output = softmax(output / temperature)
 
                         # Get the probability of the prediction
-                        proba = torch.max(output, dim=-1)[0][-n_tokens:]
-                        predicted_proba.append(proba)
+                        # proba = torch.max(output, dim=-1)[0][-n_tokens:]
+                        # predicted_proba.append(proba)
 
                         # Get the last token of the output
                         last_output = torch.argmax(output, dim=-1)
-                        next_tokens = last_output[-n_tokens:]
+                        # next_tokens = last_output[-n_tokens:]
                         last_output = last_output.unsqueeze(0)
 
                         # Update the target tensor
-                        predicted_bar+=next_tokens.cpu().numpy().tolist()
-
-                    predicted_proba = torch.cat(predicted_proba, dim=0)
+                        # predicted_bar+=next_tokens.cpu().numpy().tolist()
+                    
+                    predicted_bar = last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:]
+                    predicted_proba = torch.max(output, dim=-1)[0][-self.BAR_LENGTH:]
+                    # predicted_proba = torch.cat(predicted_proba, dim=0)
 
                 else:
                     output = self.model(input_data)
