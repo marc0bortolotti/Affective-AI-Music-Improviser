@@ -22,7 +22,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00001 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
@@ -36,7 +36,7 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 16 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
 TICKS_PER_BEAT = 4 
 EMBEDDING_SIZE = 512 
@@ -51,7 +51,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/musicTransformer_4tokens_lessClasses')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
