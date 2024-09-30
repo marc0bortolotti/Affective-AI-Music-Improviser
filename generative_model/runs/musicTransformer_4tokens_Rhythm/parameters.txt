@@ -1,4 +1,4 @@
-DATE: 20240930-172734
+DATE: 20240930-172849
 
 -----------------DATASET------------------
 DATASET_PATH: /home/marco_bortolotti/project_official/Affective-AI-Music-Improviser/generative_model/dataset
@@ -8,12 +8,12 @@ TEST_SET_SIZE: 321
 
 -----------------MODEL------------------
 MODEL: <class 'architectures.musicTransformer.MusicTransformer'>
-MODEL SIZE: 45420221
+MODEL SIZE: 44768321
 N_TOKENS: 4
 
 ----------OPTIMIZATION PARAMETERS----------
 GRADIENT_CLIP: 0.35
-FROM_MELODY_TO_RHYTHM: False
+FROM_MELODY_TO_RHYTHM: True
 FEEDBACK: False
 EMPHASIZE_EEG: False
 LR_SCHEDULER: True

@@ -2,5 +2,5 @@ embedding_dim: 512
 in_vocab_size: 7
 nhead: 8
 num_layers: 6
-out_vocab_size: 1213
+out_vocab_size: 577
 seq_length: 64
