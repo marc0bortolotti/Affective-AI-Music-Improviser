@@ -19,17 +19,17 @@ import random
 SEED = 1111
 torch.manual_seed(SEED)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
 LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
-FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['tcn']
+MODEL = ARCHITECTURES['musicTransformer']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
@@ -37,9 +37,9 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 12 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
-TICKS_PER_BEAT = 4 
+TICKS_PER_BEAT = 12
 EMBEDDING_SIZE = 256 
 TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
@@ -52,7 +52,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/MT_rhythm')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -125,7 +125,7 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = 'Drum')
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = 'Drum', rhythm=FROM_MELODY_TO_RHYTHM)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
 
         in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)
