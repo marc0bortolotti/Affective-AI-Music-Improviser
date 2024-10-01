@@ -36,9 +36,9 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 12 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
-TICKS_PER_BEAT = 4 
+TICKS_PER_BEAT = 12 
 EMBEDDING_SIZE = 512 
 TOKENS_FREQUENCY_THRESHOLD = 5 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
