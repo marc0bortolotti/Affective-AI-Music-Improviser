@@ -16,9 +16,10 @@ from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
 import random
 
-# torch.manual_seed(1111)
+SEED = 1111
+torch.manual_seed(SEED)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
@@ -28,7 +29,7 @@ BATCH_SIZE = 64 # 64
 FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['musicTransformer']
+MODEL = ARCHITECTURES['tcn']
 
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
@@ -36,14 +37,14 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 12 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
-TICKS_PER_BEAT = 12 
-EMBEDDING_SIZE = 512 
+TICKS_PER_BEAT = 4 
+EMBEDDING_SIZE = 256 
 TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
-PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
+PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
 
 GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
 DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
@@ -51,7 +52,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/musicTransformer_12tokens_12ticks_lessClasses')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -86,8 +87,9 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
         PARAMS = {  'in_vocab_size': len(INPUT_TOK.VOCAB),
                     'out_vocab_size': len(OUTPUT_TOK.VOCAB),
                     'embedding_dim': EMBEDDING_SIZE,
-                    'nhead': 8,
-                    'num_layers': 6,
+                    'nhead': 4,
+                    'num_layers': 3,
+                    'dim_feedforward': 4 * EMBEDDING_SIZE,
                     'seq_length': INPUT_TOK.SEQ_LENGTH
                 }
     else:
@@ -123,7 +125,7 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, rhythm = True)
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = 'Drum')
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
 
         in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)
@@ -185,6 +187,7 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'N_TOKENS: {N_TOKENS}\n')
 
         f.write(f'\n----------OPTIMIZATION PARAMETERS----------\n')
+        f.write(f'SEED: {SEED}\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
         f.write(f'FROM_MELODY_TO_RHYTHM: {FROM_MELODY_TO_RHYTHM}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
@@ -403,13 +406,12 @@ def train():
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
         # Save the model if the validation loss is the best we've seen so far.
-        if eval_loss < best_eval_loss:
-            # torch.save(model.state_dict(), MODEL_PATH)
-            best_eval_loss = eval_loss
-
         if train_loss < best_train_loss:
-            torch.save(model.state_dict(), MODEL_PATH)
             best_train_loss = train_loss
+
+        if eval_loss < best_eval_loss:
+            torch.save(model.state_dict(), MODEL_PATH)
+            best_eval_loss = eval_loss
             final_train_accuracy = train_accuracy
             final_eval_accuracy = eval_accuracy
             final_train_perplexity = train_perplexity
@@ -425,12 +427,12 @@ def train():
 
         # Early stopping
         if epoch > EARLY_STOP_EPOCHS:
-            if min(train_losses[-EARLY_STOP_EPOCHS:]) > best_train_loss:
+            if min(eval_losses[-EARLY_STOP_EPOCHS:]) > best_eval_loss:
                 break
 
         # Learning rate scheduler
         if LR_SCHEDULER:
-            scheduler.step(train_loss)
+            scheduler.step(eval_loss)
 
         # print the loss and the progress
         elapsed = time.time() - start_time

@@ -34,13 +34,14 @@ class CrossEntropyWithPenaltyLoss(nn.Module):
 
         # Penalty: Number of predictions equal to class 0
         zero_class_predictions = (predictions == 0).float().sum()
+        zero_class_targets = (targets == 0).float().sum()
         total_predictions = predictions.size(0)
 
         # Normalize the penalty term
-        zero_class_predictions = zero_class_predictions / total_predictions
+        penalty = abs((zero_class_predictions - zero_class_targets) / total_predictions)
 
         # Compute the total loss as a weighted sum
-        total_loss = self.weight_ce * ce_loss + self.weight_penalty * zero_class_predictions
+        total_loss = self.weight_ce * ce_loss + self.weight_penalty * penalty
 
         return total_loss
     

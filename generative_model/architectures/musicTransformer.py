@@ -23,13 +23,14 @@ def generate_dummy_data(num_sequences=10000, seq_length=48, output_length=16):
 
 # Transformer Model for Music Generation
 class MusicTransformer(nn.Module):
-    def __init__(self, in_vocab_size, out_vocab_size, embedding_dim, nhead, num_layers, seq_length):
+    def __init__(self, in_vocab_size, out_vocab_size, embedding_dim, nhead, num_layers, seq_length, dim_feedforward):
         super(MusicTransformer, self).__init__()
         self.in_embedding = nn.Embedding(in_vocab_size, embedding_dim)
         self.out_embedding = nn.Embedding(out_vocab_size, embedding_dim)
         self.pos_encoder = nn.Parameter(torch.zeros(1, seq_length, embedding_dim))
         self.transformer = nn.Transformer(d_model=embedding_dim, 
                                           nhead=nhead, 
+                                          dim_feedforward=dim_feedforward,
                                           num_encoder_layers=num_layers, 
                                           num_decoder_layers=num_layers,
                                           batch_first=True)
@@ -44,7 +45,8 @@ class MusicTransformer(nn.Module):
                         'embedding_dim' : embedding_dim,
                         'nhead' : nhead,
                         'num_layers' : num_layers,
-                        'seq_length' : seq_length
+                        'seq_length' : seq_length,
+                        'dim_feedforward' : dim_feedforward,
                         }
 
     def size(self): 

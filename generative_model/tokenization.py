@@ -322,7 +322,7 @@ class PrettyMidiTokenizer(object):
 
     return sequences
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False, max_len = None):
+  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False, max_len = None, instrument = None):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -363,6 +363,8 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
+      if instrument == 'Drum':
+        end = start + 1
       if start >= tokens_len or end >= tokens_len:
         break
       token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end, rhythm, single_notes)

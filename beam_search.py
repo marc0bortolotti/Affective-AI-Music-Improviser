@@ -14,7 +14,7 @@ def beam_search_decoder(data, k):
             seq, score = sequences[i]
             for j in range(len(row)):
                 candidate = [seq + [j], score - log(row[j])]
-                print(candidate)
+                # print(candidate)
                 all_candidates.append(candidate)
 
         # order all candidates by score
