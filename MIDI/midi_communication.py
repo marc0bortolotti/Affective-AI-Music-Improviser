@@ -89,11 +89,11 @@ class MIDI_Input:
         while not self.exit:
             self.simulation_event.wait()
             for msg in mid.play(): 
-                if not msg.is_meta and msg.type != 'control_change':
+                self.midi_simulation_port.send(msg)
+                if msg.type in ['note_on', 'note_off']:
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
-                    self.midi_simulation_port.send(msg)
                 if self.exit:
-                        break   
+                    break   
 
     def get_note_buffer(self):
         return self.note_buffer

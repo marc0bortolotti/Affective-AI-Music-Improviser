@@ -333,7 +333,7 @@ class PrettyMidiTokenizer(object):
 
     return sequences
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False):
+  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False, max_len = None):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -359,7 +359,12 @@ class PrettyMidiTokenizer(object):
     
     # create a sequence of string tokens
     last_note = sorted_notes[-1]
-    tokens_len = self.convert_time_to_ticks(last_note.end)
+
+    if max_len is None:
+      tokens_len = self.convert_time_to_ticks(last_note.end)
+    else:
+      tokens_len = max_len
+
     token_sequence = np.empty((tokens_len), dtype=object)
     token_sequence[:] = SILENCE_TOKEN
     for idx, note in enumerate(sorted_notes):
@@ -368,6 +373,8 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
+      if start >= tokens_len or end >= tokens_len:
+        break
       token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end, rhythm, single_notes)
       
     # update the vocabulary if necessary
@@ -629,8 +636,8 @@ class PrettyMidiTokenizer(object):
         else:
           end = start + 1
 
-        if end >= self.BAR_LENGTH :
-          end = self.BAR_LENGTH - 1
+        if end > self.BAR_LENGTH :
+          end = self.BAR_LENGTH 
 
         tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm=True, single_notes=False)
 

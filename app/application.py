@@ -84,7 +84,7 @@ def thread_function_eeg(name, app):
             time.sleep(app.WINDOW_DURATION)
             eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
             prediction = app.eeg_device.get_prediction(eeg) 
-            app.eeg_classification_buffer.append(BCI_TOKENS[prediction])
+            app.append_eeg_classification(BCI_TOKENS[prediction])
 
             if not app.STATUS['RUNNING']:
                 logging.info("Thread %s: closing", name)
@@ -141,7 +141,6 @@ class AI_AffectiveMusicImproviser():
                        'USE_EEG': False}
         
         self.parse_message = parse_message 
-        self.init_track_path = init_track_path
 
         # MIDI
         self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
@@ -154,7 +153,7 @@ class AI_AffectiveMusicImproviser():
 
         # EEG 
         self.eeg_device = EEG_Device(eeg_device_type)
-        self.eeg_classification_buffer = [BCI_TOKENS[0]]
+        self.eeg_classification_buffer = []
         self.WINDOW_DURATION = window_duration
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
@@ -167,6 +166,8 @@ class AI_AffectiveMusicImproviser():
         self.OUTPUT_TOK = OUTPUT_TOK
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
         self.SEQ_LENGTH = OUTPUT_TOK.SEQ_LENGTH
+        self.init_track_path = init_track_path
+        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, max_len = 3 * self.BAR_LENGTH)
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
@@ -181,6 +182,9 @@ class AI_AffectiveMusicImproviser():
 
     def get_last_eeg_classification(self):
         return self.eeg_classification_buffer[-1]
+    
+    def append_eeg_classification(self, classification):
+        self.eeg_classification_buffer.append(classification)
 
     def get_application_status(self):
         return self.STATUS
@@ -228,11 +232,10 @@ class AI_AffectiveMusicImproviser():
         self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
-        n_tokens = 4
+        n_tokens = 8 # number of tokens to predict at each step
 
         # initialize the target tensor for the transformer
-        last_output = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path)[: 3 * self.BAR_LENGTH]
-        last_output = torch.LongTensor(last_output.tolist()).unsqueeze(0).to(self.device)
+        last_output = torch.LongTensor(self.init_tokens.tolist()).unsqueeze(0).to(self.device)
 
         while True:
 

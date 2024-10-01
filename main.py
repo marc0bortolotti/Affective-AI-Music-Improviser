@@ -5,6 +5,7 @@ import os
 from app.application import AI_AffectiveMusicImproviser
 from EEG.pretraining import pretraining
 from EEG.validation import validation
+from generative_model.tokenization import BCI_TOKENS
 import threading
 import brainflow
 from PyQt5 import QtWidgets
@@ -32,11 +33,11 @@ VALIDATION_TIME = 5
 USE_EEG = False
 SAVE_SESSION = False
 STARTING_MOOD = {'RELAXED': 1, 'EXCITED': 0}
-GENERATION_TYPE = {'RHYTHM': 1, 'MELODY': 0}
+GENERATION_TYPE = {'RHYTHM': 0, 'MELODY': 1}
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/musicTransformer_4tokens_Rhythm')
+MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/musicTransformer_4tokens')
 MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'generative_model/architectures/musicTransformer.py')
 MODEL_CLASS_NAME = 'MusicTransformer'
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
@@ -58,14 +59,17 @@ if __name__ == "__main__":
             if not os.path.exists(SAVE_PATH):
                 os.makedirs(SAVE_PATH)      
 
-        gen_type = 'melody' if GENERATION_TYPE['MELODY'] else 'rhythm'
+        gen_type = 'rhythm' if GENERATION_TYPE['MELODY'] else 'melody'
         start_mood = 'RELAXED' if STARTING_MOOD['RELAXED'] else 'CONCENTRATED'
-        simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{gen_type}/{start_mood}.mid')
+        simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{gen_type}/{gen_type}_{start_mood}.mid')
+
+        instrument_out_port_name = setup_parameters['RHYTHM_OUT_PORT_NAME'] if GENERATION_TYPE['MELODY'] else setup_parameters['MELODY_OUT_PORT_NAME']
+        generation_play_port_name = setup_parameters['MELODY_OUT_PORT_NAME'] if GENERATION_TYPE['MELODY'] else setup_parameters['RHYTHM_OUT_PORT_NAME']
 
         # Initialize the application
-        app = AI_AffectiveMusicImproviser(  instrument_in_port_name = setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'], 
-                                            instrument_out_port_name = setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'],
-                                            generation_play_port_name = setup_parameters['GENERATION_MIDI_PLAY_PORT_NAME'],
+        app = AI_AffectiveMusicImproviser(  instrument_in_port_name = setup_parameters['INSTRUMENT_IN_PORT_NAME'], 
+                                            instrument_out_port_name = instrument_out_port_name,
+                                            generation_play_port_name = generation_play_port_name,
                                             eeg_device_type = setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
                                             window_duration = WINDOW_DURATION,
                                             model_param_path = MODEL_PARAM_PATH,
@@ -74,11 +78,15 @@ if __name__ == "__main__":
                                             init_track_path = simulation_track_path,
                                             parse_message=True)
 
+        # Set starting mood
+        start_emotion = BCI_TOKENS[0] if STARTING_MOOD['RELAXED'] else BCI_TOKENS[1]
+        app.append_eeg_classification(start_emotion)
+
         # Set the simulation mode
-        if setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'] == SIMULATE_INSTRUMENT:
+        if setup_parameters['INSTRUMENT_IN_PORT_NAME'] == SIMULATE_INSTRUMENT:
             app.set_application_status('SIMULATE_MIDI', True)
-            app.midi_in.set_midi_simulation(simulation_port=setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'],
-                                            simulation_track_path=simulation_track_path)
+            app.midi_in.set_midi_simulation(simulation_port = instrument_out_port_name,
+                                            simulation_track_path = simulation_track_path)
 
         # Set if the EEG device should be used in the application    
         if USE_EEG:
