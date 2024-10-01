@@ -45,6 +45,7 @@ class MIDI_Input:
         self.midi_simulation_port = None
         self.simulation_event = None
         self.bar_duration = 4 * 60/120 # 4 beats per bar, 120 bpm
+        self.simulation_track_path = None
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -71,18 +72,20 @@ class MIDI_Input:
             
         logging.info(f'MIDI Input: Disconnected')
 
-    def set_midi_simulation_port(self, midi_simulation_port):
+    def set_midi_simulation(self, simulation_port, simulation_track_path):
         self.midi_out_port.close_port()
-        self.midi_simulation_port = mido.open_output(midi_simulation_port)
+        self.midi_simulation_port = mido.open_output(simulation_port)
+        self.simulation_track_path = simulation_track_path
 
     def set_simulation_event(self, event):
         self.simulation_event = event
 
-    def simulate(self, path=None):
+    def simulate(self):
         logging.info(f"MIDI Input: simulating")
-        if path is None:
-            path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/rithm_RELAXED.mid')
-        mid = mido.MidiFile(path)
+        if self.simulation_track_path is None:
+            logging.error(f'MIDI Input: No simulation track path defined')
+            return
+        mid = mido.MidiFile(self.simulation_track_path)
         while not self.exit:
             self.simulation_event.wait()
             for msg in mid.play(): 

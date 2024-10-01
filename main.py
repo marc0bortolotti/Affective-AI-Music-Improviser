@@ -31,12 +31,14 @@ VALIDATION_TIME = 5
 # APPLICATION PARAMETERS
 USE_EEG = False
 SAVE_SESSION = False
+STARTING_MOOD = {'RELAXED': 1, 'EXCITED': 0}
+GENERATION_TYPE = {'RHYTHM': 1, 'MELODY': 0}
 
 # PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/run_5')
+MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/musicTransformer_4tokens_Rhythm')
 MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'generative_model/architectures/musicTransformer.py')
-MODEL_MODULE_NAME = 'MusicTransformer'
+MODEL_CLASS_NAME = 'MusicTransformer'
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
@@ -54,24 +56,29 @@ if __name__ == "__main__":
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
             if not os.path.exists(SAVE_PATH):
-                os.makedirs(SAVE_PATH)
+                os.makedirs(SAVE_PATH)      
+
+        gen_type = 'melody' if GENERATION_TYPE['MELODY'] else 'rhythm'
+        start_mood = 'RELAXED' if STARTING_MOOD['RELAXED'] else 'CONCENTRATED'
+        simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{gen_type}/{start_mood}.mid')
 
         # Initialize the application
-        app = AI_AffectiveMusicImproviser(  setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'], 
-                                            setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'], 
-                                            setup_parameters['MELODY_MIDI_PLAY_PORT_NAME'], 
-                                            # setup_parameters['MELODY_MIDI_REC_PORT_NAME'], 
-                                            setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
-                                            WINDOW_DURATION, 
-                                            MODEL_PARAM_PATH,
-                                            MODEL_MODULE_PATH,
-                                            MODEL_MODULE_NAME,
+        app = AI_AffectiveMusicImproviser(  instrument_in_port_name = setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'], 
+                                            instrument_out_port_name = setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'],
+                                            generation_play_port_name = setup_parameters['GENERATION_MIDI_PLAY_PORT_NAME'],
+                                            eeg_device_type = setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
+                                            window_duration = WINDOW_DURATION,
+                                            model_param_path = MODEL_PARAM_PATH,
+                                            model_module_path = MODEL_MODULE_PATH,
+                                            model_class_name = MODEL_CLASS_NAME,
+                                            init_track_path = simulation_track_path,
                                             parse_message=True)
 
         # Set the simulation mode
         if setup_parameters['INSTRUMENT_MIDI_IN_PORT_NAME'] == SIMULATE_INSTRUMENT:
             app.set_application_status('SIMULATE_MIDI', True)
-            app.midi_in.set_midi_simulation_port(setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'])
+            app.midi_in.set_midi_simulation(simulation_port=setup_parameters['INSTRUMENT_MIDI_OUT_PORT_NAME'],
+                                            simulation_track_path=simulation_track_path)
 
         # Set if the EEG device should be used in the application    
         if USE_EEG:

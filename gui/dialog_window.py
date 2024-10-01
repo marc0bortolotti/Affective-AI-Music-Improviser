@@ -54,13 +54,13 @@ class SetupDialog(QtWidgets.QDialog):
         self.instrument_output_combo.addItems([port for port in output_ports])
         self.instrument_output_combo.setCurrentText(output_ports[2])
 
-        # self.melody_rec_combo = QtWidgets.QComboBox(self)
-        # self.melody_rec_combo.addItems([port for port in output_ports])
-        # self.melody_rec_combo.setCurrentText('Bass Out Port Recording 2')
+        # self.generation_rec_combo = QtWidgets.QComboBox(self)
+        # self.generation_rec_combo.addItems([port for port in output_ports])
+        # self.generation_rec_combo.setCurrentText('Bass Out Port Recording 2')
 
-        self.melody_play_combo = QtWidgets.QComboBox(self)
-        self.melody_play_combo.addItems([port for port in output_ports])
-        self.melody_play_combo.setCurrentText(output_ports[3])
+        self.generation_play_combo = QtWidgets.QComboBox(self)
+        self.generation_play_combo.addItems([port for port in output_ports])
+        self.generation_play_combo.setCurrentText(output_ports[3])
 
         # Add OK and Cancel buttons
         self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)
@@ -74,10 +74,10 @@ class SetupDialog(QtWidgets.QDialog):
         layout.addWidget(self.instrument_input_combo)
         layout.addWidget(QtWidgets.QLabel('Select MIDI OUTPUT port for the INSTRUMENT'))
         layout.addWidget(self.instrument_output_combo)
-        # layout.addWidget(QtWidgets.QLabel('Select MIDI RECORD port for the GENERATED MELODY'))
-        # layout.addWidget(self.melody_rec_combo)
-        layout.addWidget(QtWidgets.QLabel('Select MIDI PLAY port for the GENERATED MELODY'))
-        layout.addWidget(self.melody_play_combo)
+        # layout.addWidget(QtWidgets.QLabel('Select MIDI RECORD port for the GENERATED MUSIC'))
+        # layout.addWidget(self.generation_rec_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI PLAY port for the GENERATED MUSIC'))
+        layout.addWidget(self.generation_play_combo)
         layout.addWidget(self.button_box)
 
 
@@ -86,8 +86,8 @@ class SetupDialog(QtWidgets.QDialog):
             'EEG_DEVICE_SERIAL_NUMBER' : self.device_combo.currentText(),
             'INSTRUMENT_MIDI_IN_PORT_NAME' : self.instrument_input_combo.currentText(),
             'INSTRUMENT_MIDI_OUT_PORT_NAME' : self.instrument_output_combo.currentText(),
-            # 'MELODY_MIDI_REC_PORT_NAME' : self.melody_rec_combo.currentText(),
-            'MELODY_MIDI_PLAY_PORT_NAME' : self.melody_play_combo.currentText()
+            # 'GENERATION_MIDI_REC_PORT_NAME' : self.generation_rec_combo.currentText(),
+            'GENERATION_MIDI_PLAY_PORT_NAME' : self.generation_play_combo.currentText()
         }
 
 

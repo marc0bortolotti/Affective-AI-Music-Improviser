@@ -98,8 +98,8 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
 
 def tokenize_midi_files():
 
-    input_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'rythms/*.mid')))
-    output_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'melodies/*.mid')))
+    input_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'rhythm/*.mid')))
+    output_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'melody/*.mid')))
 
     if FROM_MELODY_TO_RHYTHM:
         input_filenames, output_filenames = output_filenames, input_filenames

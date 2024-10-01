@@ -122,6 +122,7 @@ class AI_AffectiveMusicImproviser():
                         model_param_path,
                         model_module_path,
                         model_class_name,
+                        init_track_path,
                         parse_message=False):
         '''
         Parameters:
@@ -131,6 +132,7 @@ class AI_AffectiveMusicImproviser():
         - generation_record_port_name: name of the MIDI output port for the generated melody
         - window_duration: duration of the window in seconds
         - model_dict: path to the model dictionary
+        - init_track_path: path to the initial track to start the generation
         '''
 
         self.STATUS = {'READY': False, 
@@ -138,7 +140,8 @@ class AI_AffectiveMusicImproviser():
                        'SIMULATE_MIDI': False,
                        'USE_EEG': False}
         
-        self.parse_message = parse_message
+        self.parse_message = parse_message 
+        self.init_track_path = init_track_path
 
         # MIDI
         self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
@@ -228,8 +231,7 @@ class AI_AffectiveMusicImproviser():
         n_tokens = 4
 
         # initialize the target tensor for the transformer
-        init_midi_path = os.path.join(os.path.dirname(__file__), 'start_token_RELAXED.mid')
-        last_output = self.OUTPUT_TOK.midi_to_tokens(init_midi_path)[: 3 * self.BAR_LENGTH]
+        last_output = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path)[: 3 * self.BAR_LENGTH]
         last_output = torch.LongTensor(last_output.tolist()).unsqueeze(0).to(self.device)
 
         while True:
