@@ -143,9 +143,6 @@ class TCN(nn.Module):
     def forward(self, input):
         """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""
 
-        # add mask to the last bar
-        input_masked = torch.cat((input[:, :self.bar_length*3], torch.zeros([input.size(0), self.bar_length], dtype=torch.long, device = input.device)), dim = 1)
-
         # if feedback is enabled, concatenate the previous output to the input
         if self.feedback:
 
@@ -157,7 +154,7 @@ class TCN(nn.Module):
             min_batch = min(input.size(0), self.prev_output.size(0))
 
             # concatenate the previous output to the input
-            input_masked = torch.cat((input_masked[:min_batch, :], self.prev_output[:min_batch, :]), dim = 1)
+            input = torch.cat((input[:min_batch, :], self.prev_output[:min_batch, :]), dim = 1)
 
         # add embeddings and apply dropout
         emb = self.drop(self.encoder(input))

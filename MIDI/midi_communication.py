@@ -44,6 +44,8 @@ class MIDI_Input:
         self.parse_message = parse_message
         self.midi_simulation_port = None
         self.simulation_event = None
+        self.bar_duration = 4 * 60/120 # 4 beats per bar, 120 bpm
+        self.simulation_track_path = None
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -70,30 +72,28 @@ class MIDI_Input:
             
         logging.info(f'MIDI Input: Disconnected')
 
-    def set_midi_simulation_port(self, midi_simulation_port):
+    def set_midi_simulation(self, simulation_port, simulation_track_path):
         self.midi_out_port.close_port()
-        self.midi_simulation_port = mido.open_output(midi_simulation_port)
+        self.midi_simulation_port = mido.open_output(simulation_port)
+        self.simulation_track_path = simulation_track_path
 
     def set_simulation_event(self, event):
         self.simulation_event = event
 
-    def simulate(self, path=None):
-
-        path = os.path.join(os.path.dirname(__file__), 'midi_simulation_tracks/rithm_CONCENTRATED.mid')
-
-        def thread_function(path):
-            mid = mido.MidiFile(path)
+    def simulate(self):
+        logging.info(f"MIDI Input: simulating")
+        if self.simulation_track_path is None:
+            logging.error(f'MIDI Input: No simulation track path defined')
+            return
+        mid = mido.MidiFile(self.simulation_track_path)
+        while not self.exit:
+            self.simulation_event.wait()
             for msg in mid.play(): 
-                if not msg.is_meta and msg.type != 'control_change':
+                self.midi_simulation_port.send(msg)
+                if msg.type in ['note_on', 'note_off']:
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
-                    self.midi_simulation_port.send(msg)
                 if self.exit:
                     break   
-            if self.simulation_event is not None:
-                self.simulation_event.set()
-
-        thread = threading.Thread(target=thread_function, args=(path,))
-        thread.start()
 
     def get_note_buffer(self):
         return self.note_buffer

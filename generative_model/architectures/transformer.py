@@ -44,7 +44,8 @@ class TransformerModel(nn.Module):
                                           num_encoder_layers=num_encoder_layers, 
                                           num_decoder_layers=num_decoder_layers, 
                                           dim_feedforward=dim_feedforward, 
-                                          dropout=dropout)
+                                          dropout=dropout,
+                                          batch_first=True)
         
         # Linear layer to map the output to vocabulary size for predictions
         self.fc_out = nn.Linear(d_model, output_vocab_size)
@@ -64,10 +65,6 @@ class TransformerModel(nn.Module):
         
         tgt = self.positional_encoding(self.tgt_embedding(tgt))
 
-        # Transformer expects input in (sequence_length, batch_size, embed_dim) format, we got (batch_size, sequence_length, embed_dim)
-        src = src.permute(1, 0, 2)
-        tgt = tgt.permute(1, 0, 2)
-        
         # Pass through the Transformer
         output = self.transformer(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask,
                                   src_key_padding_mask=src_padding_mask,
@@ -78,3 +75,11 @@ class TransformerModel(nn.Module):
         y = self.fc_out(output)
 
         return y
+    
+
+    
+def generate_square_subsequent_mask(sz):
+    mask = torch.triu(torch.ones(sz, sz)) == 1
+    mask = mask.transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask

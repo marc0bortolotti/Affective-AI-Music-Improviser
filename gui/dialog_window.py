@@ -45,22 +45,18 @@ class SetupDialog(QtWidgets.QDialog):
         # Create dropdown for MIDI ports selection
         input_ports, output_ports = retrieve_midi_ports()
 
-        self.instrument_input_combo = QtWidgets.QComboBox(self)
-        self.instrument_input_combo.addItems([port for port in input_ports])
-        self.instrument_input_combo.addItems([SIMULATE_INSTRUMENT])
-        self.instrument_input_combo.setCurrentText(SIMULATE_INSTRUMENT)
+        self.instrument_combo = QtWidgets.QComboBox(self)
+        self.instrument_combo.addItems([port for port in input_ports])
+        self.instrument_combo.addItems([SIMULATE_INSTRUMENT])
+        self.instrument_combo.setCurrentText(SIMULATE_INSTRUMENT)
 
-        self.instrument_output_combo = QtWidgets.QComboBox(self)
-        self.instrument_output_combo.addItems([port for port in output_ports])
-        self.instrument_output_combo.setCurrentText(output_ports[2])
+        self.rhythm_combo = QtWidgets.QComboBox(self)
+        self.rhythm_combo.addItems([port for port in output_ports])
+        self.rhythm_combo.setCurrentText(output_ports[2])
 
-        # self.melody_rec_combo = QtWidgets.QComboBox(self)
-        # self.melody_rec_combo.addItems([port for port in output_ports])
-        # self.melody_rec_combo.setCurrentText('Bass Out Port Recording 2')
-
-        self.melody_play_combo = QtWidgets.QComboBox(self)
-        self.melody_play_combo.addItems([port for port in output_ports])
-        self.melody_play_combo.setCurrentText(output_ports[3])
+        self.melody_combo = QtWidgets.QComboBox(self)
+        self.melody_combo.addItems([port for port in output_ports])
+        self.melody_combo.setCurrentText(output_ports[3])
 
         # Add OK and Cancel buttons
         self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)
@@ -71,23 +67,20 @@ class SetupDialog(QtWidgets.QDialog):
         layout.addWidget(QtWidgets.QLabel('Select EEG device'))
         layout.addWidget(self.device_combo)
         layout.addWidget(QtWidgets.QLabel('Select MIDI INPUT port for the INSTRUMENT'))
-        layout.addWidget(self.instrument_input_combo)
-        layout.addWidget(QtWidgets.QLabel('Select MIDI OUTPUT port for the INSTRUMENT'))
-        layout.addWidget(self.instrument_output_combo)
-        # layout.addWidget(QtWidgets.QLabel('Select MIDI RECORD port for the GENERATED MELODY'))
-        # layout.addWidget(self.melody_rec_combo)
-        layout.addWidget(QtWidgets.QLabel('Select MIDI PLAY port for the GENERATED MELODY'))
-        layout.addWidget(self.melody_play_combo)
+        layout.addWidget(self.instrument_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI OUTPUT port for the RHYTHM'))
+        layout.addWidget(self.rhythm_combo)
+        layout.addWidget(QtWidgets.QLabel('Select MIDI OUTPUT port for the MELODY'))
+        layout.addWidget(self.melody_combo)
         layout.addWidget(self.button_box)
 
 
     def get_data(self):
         return {
             'EEG_DEVICE_SERIAL_NUMBER' : self.device_combo.currentText(),
-            'INSTRUMENT_MIDI_IN_PORT_NAME' : self.instrument_input_combo.currentText(),
-            'INSTRUMENT_MIDI_OUT_PORT_NAME' : self.instrument_output_combo.currentText(),
-            # 'MELODY_MIDI_REC_PORT_NAME' : self.melody_rec_combo.currentText(),
-            'MELODY_MIDI_PLAY_PORT_NAME' : self.melody_play_combo.currentText()
+            'INSTRUMENT_IN_PORT_NAME' : self.instrument_combo.currentText(),
+            'RHYTHM_OUT_PORT_NAME' : self.rhythm_combo.currentText(),
+            'MELODY_OUT_PORT_NAME' : self.melody_combo.currentText()
         }
 
 

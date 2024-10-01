@@ -3,55 +3,61 @@ import os
 import time
 import torch
 from torch import optim
-import numpy as np
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_split
 import matplotlib.pyplot as plt
 import yaml
 from tokenization import PrettyMidiTokenizer, BCI_TOKENS
-from architectures.transformer import TransformerModel
+from architectures.transformer import TransformerModel, generate_square_subsequent_mask
 from architectures.musicTransformer import MusicTransformer
 from architectures.tcn import TCN   
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
+import random
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+DIRECTORY_PATH = os.path.dirname(__file__)
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/MT_melody_48tokens')
+DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
+
+SEED = 1111
+torch.manual_seed(SEED)
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00001 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
 MODEL = ARCHITECTURES['musicTransformer']
 
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
-FEEDBACK = True # use the feedback mechanism in the model
+FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 4 
-EMBEDDING_SIZE = 512 
-TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
+N_TOKENS = 48 # number of tokens to be predicted at each forward pass (only for the transformer model)
+
+TICKS_PER_BEAT = 12
+EMBEDDING_SIZE = 256 
+TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
-PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
+PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
 
 GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
-DATASET_SPLIT = [0.9, 0.07, 0.03] # split the dataset into training, evaluation and test sets
+DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
 EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
-
-DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/model_{time.strftime("%Y%m%d-%H%M%S")}')
-DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH += f'_{idx}'
+    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_{idx}')
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -80,10 +86,10 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
         PARAMS = {  'in_vocab_size': len(INPUT_TOK.VOCAB),
                     'out_vocab_size': len(OUTPUT_TOK.VOCAB),
                     'embedding_dim': EMBEDDING_SIZE,
-                    'nhead': 8,
-                    'num_layers': 6,
-                    'seq_length': INPUT_TOK.SEQ_LENGTH,
-                    'output_length': OUTPUT_TOK.BAR_LENGTH
+                    'nhead': 4,
+                    'num_layers': 3,
+                    'dim_feedforward': 4 * EMBEDDING_SIZE,
+                    'seq_length': INPUT_TOK.SEQ_LENGTH
                 }
     else:
         raise Exception('Model not found')
@@ -93,14 +99,14 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
 
 def tokenize_midi_files():
 
-    input_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'rythms/*.mid')))
-    output_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'melodies/*.mid')))
+    input_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'rhythm/*.mid')))
+    output_filenames = sorted(glob.glob(os.path.join(DATASET_PATH, 'melody/*.mid')))
 
-    INPUT_TOK = PrettyMidiTokenizer()
-    OUTPUT_TOK = PrettyMidiTokenizer()
+    if FROM_MELODY_TO_RHYTHM:
+        input_filenames, output_filenames = output_filenames, input_filenames
 
-    INPUT_TOK.set_ticks_per_beat(TICKS_PER_BEAT)
-    OUTPUT_TOK.set_ticks_per_beat(TICKS_PER_BEAT)
+    INPUT_TOK = PrettyMidiTokenizer(TICKS_PER_BEAT=TICKS_PER_BEAT)
+    OUTPUT_TOK = PrettyMidiTokenizer(TICKS_PER_BEAT=TICKS_PER_BEAT)
 
     for i, (in_file, out_file) in enumerate(zip(input_filenames, output_filenames)):
 
@@ -118,10 +124,13 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        _ = INPUT_TOK.midi_to_tokens(in_file, update_sequences= True, update_vocab=True, emotion_token = emotion_token, instrument='drum')
-        _ = OUTPUT_TOK.midi_to_tokens(out_file, update_sequences= True, update_vocab=True)
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = 'Drum', rhythm=FROM_MELODY_TO_RHYTHM)
+        out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
 
-        if len(INPUT_TOK.sequences) != len(OUTPUT_TOK.sequences):
+        in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)
+        out_seq = OUTPUT_TOK.generate_sequences(out_tokens, update_sequences=True)
+
+        if len(in_seq) != len(out_seq):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
             INPUT_TOK.sequences = INPUT_TOK.sequences[:min_len]
             OUTPUT_TOK.sequences = OUTPUT_TOK.sequences[:min_len]
@@ -163,19 +172,23 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
      # save the model hyperparameters in a file txt
     with open(os.path.join(RESULTS_PATH, 'parameters.txt'), 'w') as f:
 
-        f.write(f'DATE: {time.strftime("%Y%m%d-%H%M%S")}\n\n')
+        f.write(f'DATE: {time.strftime("%Y%m%d-%H%M%S")}\n')
 
-        f.write(f'-----------------DATASET------------------\n')
+        f.write(f'\n-----------------DATASET------------------\n')
         f.write(f'DATASET_PATH: {DATASET_PATH}\n')
         f.write(f'TRAIN_SET_SIZE: {len(train_set)}\n')
         f.write(f'EVAL_SET_SIZE: {len(eval_set)}\n')
-        f.write(f'TEST_SET_SIZE: {len(test_set)}\n\n')
+        f.write(f'TEST_SET_SIZE: {len(test_set)}\n')
 
-        f.write(f'-----------------MODEL------------------\n')
+        f.write(f'\n-----------------MODEL------------------\n')
+        f.write(f'MODEL: {MODEL}\n')
         f.write(f'MODEL SIZE: {MODEL_SIZE}\n')
+        f.write(f'N_TOKENS: {N_TOKENS}\n')
 
-        f.write(f'----------OPTIMIZATION PARAMETERS----------\n')
+        f.write(f'\n----------OPTIMIZATION PARAMETERS----------\n')
+        f.write(f'SEED: {SEED}\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
+        f.write(f'FROM_MELODY_TO_RHYTHM: {FROM_MELODY_TO_RHYTHM}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
         f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
@@ -186,9 +199,9 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'PENALTY_WEIGHT: {PENALTY_WEIGHT}\n')
         f.write(f'LEARNING_RATE: {LEARNING_RATE}\n')
         f.write(f'BATCH_SIZE: {BATCH_SIZE}\n')
-        f.write(f'EPOCHS: {EPOCHS}\n\n')
+        f.write(f'EPOCHS: {EPOCHS}\n')
 
-        f.write(f'------------TOKENIZATION PARAMETERS--------------\n')
+        f.write(f'\n------------TOKENIZATION PARAMETERS--------------\n')
         f.write(f'TICKS_PER_BEAT: {TICKS_PER_BEAT}\n')
         f.write(f'TOKENS_FREQUENCY_THRESHOLD: {TOKENS_FREQUENCY_THRESHOLD}\n')
         f.write(f'SILENCE_TOKEN_WEIGHT: {SILENCE_TOKEN_WEIGHT}\n')        
@@ -227,8 +240,8 @@ def save_results():
         f.write(f'EVAL_PERPLEXITY: {final_eval_perplexity}\n')
         f.write(f'TEST_PERPLEXITY: {test_perplexity}\n')
         f.write(f'BEST_MODEL_EPOCH: {best_model_epoch}\n')
-        
-def epoch_step(dataloader, mode):
+
+def epoch_step(epoch, dataloader, mode):
 
     if mode == 'train':
         model.train()
@@ -238,50 +251,111 @@ def epoch_step(dataloader, mode):
     total_loss = 0
     n_correct = 0
     n_total = 0
+
+    last_output = torch.zeros([BATCH_SIZE, OUTPUT_TOK.BAR_LENGTH*3], dtype=torch.long)
     
     # iterate over the training data
-    for batch_idx, (input, targets) in enumerate(dataloader):
+    for batch_idx, (input, target) in enumerate(dataloader):
 
         batch_idx += 1
 
+        # add mask to the input last bar
+        input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)), dim = 1)
+
         # move the input and the target to the device
         input = input.to(device)
-        targets = targets.to(device)
+        target = target.to(device)
+        last_output = last_output.to(device)
 
         # reset model gradients to zero
         optimizer.zero_grad()
 
         # Forward pass
-        if 'Transformer' in str(MODEL):
-            tgt_input = targets[:, : - OUTPUT_TOK.BAR_LENGTH]
-            targets = targets[:, OUTPUT_TOK.BAR_LENGTH :]
-            output = model(input, tgt_input)
+        if MODEL == TransformerModel or MODEL == MusicTransformer: 
+
+            steps = 0
+            loss_tmp = 0
+            for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS + 1, N_TOKENS):
+
+                use_teacher_forcing = random.random() < max(0.3, 1 - (epoch / 10)) 
+
+                # Determine if using teacher forcing or not
+                if use_teacher_forcing or i == 0:
+                    # Use ground truth for next input
+                    input_target = target[:, i : OUTPUT_TOK.BAR_LENGTH * 3 + i]
+                else:
+                    # Use model's own prediction
+                    input_target = last_output
+
+                # generate the masks for the input and the target to avoid attending to future tokens
+                input_mask = generate_square_subsequent_mask(input.size(1))
+                input_target_mask = generate_square_subsequent_mask(input_target.size(1))
+
+                # forward pass
+                output = model(input, input_target, input_mask, input_target_mask)
+
+                # get the last output
+                last_output = torch.argmax(output, -1)
+
+                # get the actual target
+                actual_target = target[:, i + N_TOKENS : 3 * OUTPUT_TOK.BAR_LENGTH + i + N_TOKENS] # target is shifted right by one bar
+
+                # reshape the output and the target to calculate the loss (flatten the sequences)
+                actual_target = actual_target.reshape(-1) # the size -1 is inferred from other dimensions
+                output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
+
+                # calculate the loss
+                loss = criterion(output, actual_target)
+
+                if mode == 'train':
+                    # calculate the gradients
+                    loss.backward()
+
+                    # clip the gradients to avoid exploding gradients
+                    if GRADIENT_CLIP > 0:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
+
+                    # update the weights
+                    optimizer.step()
+
+                loss_tmp = loss.data.item()
+
+                # update n_correct and n_total to calculate the accuracy
+                n_correct += torch.sum(torch.argmax(output, 1) == actual_target).item()
+                n_total += actual_target.size(0)
+
+                steps += 1
+
+            loss_tmp /= steps
+            total_loss += loss_tmp
+            
         else:
+            # forward pass
             output = model(input)
 
-        # reshape the output and the target to calculate the loss (flatten the sequences)
-        target = targets.reshape(-1) # the size -1 is inferred from other dimensions
-        output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
+            # reshape the output and the target to calculate the loss (flatten the sequences)
+            target = target.reshape(-1) # the size -1 is inferred from other dimensions
+            output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
 
-        # calculate the loss
-        loss = criterion(output, target)
+            # calculate the loss
+            loss = criterion(output, target)
 
-        if mode == 'train':
-            # calculate the gradients
-            loss.backward()
+            if mode == 'train':
+                # calculate the gradients
+                loss.backward()
 
-            # clip the gradients to avoid exploding gradients
-            if GRADIENT_CLIP > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
+                # clip the gradients to avoid exploding gradients
+                if GRADIENT_CLIP > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
 
-            # update the weights
-            optimizer.step()
+                # update the weights
+                optimizer.step()
 
-        total_loss += loss.data.item()
+            total_loss += loss.data.item()
 
-        # update n_correct and n_total to calculate the accuracy
-        n_correct += torch.sum(torch.argmax(output, 1) == target).item()
-        n_total += target.size(0)
+            # update n_correct and n_total to calculate the accuracy
+            n_correct += torch.sum(torch.argmax(output, 1) == target).item()
+            n_total += target.size(0)
 
     # calculate the accuracy
     accuracy = 100 * n_correct / n_total
@@ -314,29 +388,29 @@ def train():
 
     writer = SummaryWriter(RESULTS_PATH)
     scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
+    run = RESULTS_PATH.split('/')[-1]
 
     for epoch in range(1, EPOCHS+1):
 
         start_time = time.time()
 
-        train_loss, train_accuracy, train_perplexity = epoch_step(train_dataloader, 'train')
+        train_loss, train_accuracy, train_perplexity = epoch_step(epoch, train_dataloader, 'train')
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Accuracy/train', train_accuracy, epoch)
         writer.add_scalar('Perplexity/train', train_perplexity, epoch)
 
-        eval_loss, eval_accuracy, eval_perplexity = epoch_step(eval_dataloader, 'eval')
+        eval_loss, eval_accuracy, eval_perplexity = epoch_step(epoch, eval_dataloader, 'test')
         writer.add_scalar('Loss/eval', eval_loss, epoch)
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
         # Save the model if the validation loss is the best we've seen so far.
-        if eval_loss < best_eval_loss:
-            # torch.save(model.state_dict(), MODEL_PATH)
-            best_eval_loss = eval_loss
-
         if train_loss < best_train_loss:
-            torch.save(model.state_dict(), MODEL_PATH)
             best_train_loss = train_loss
+
+        if eval_loss < best_eval_loss:
+            torch.save(model.state_dict(), MODEL_PATH)
+            best_eval_loss = eval_loss
             final_train_accuracy = train_accuracy
             final_eval_accuracy = eval_accuracy
             final_train_perplexity = train_perplexity
@@ -352,26 +426,26 @@ def train():
 
         # Early stopping
         if epoch > EARLY_STOP_EPOCHS:
-            if min(train_losses[-EARLY_STOP_EPOCHS:]) > best_train_loss:
+            if min(eval_losses[-EARLY_STOP_EPOCHS:]) > best_eval_loss:
                 break
 
         # Learning rate scheduler
         if LR_SCHEDULER:
-            scheduler.step(train_loss)
+            scheduler.step(eval_loss)
 
         # print the loss and the progress
         elapsed = time.time() - start_time
         lr = optimizer.param_groups[0]['lr']
-        print('| epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | eval_acc {:5.2f} | train_loss {:5.2f} | eval_loss {:5.2f} |' \
+        print('{} | epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | eval_acc {:5.2f} | train_loss {:5.2f} | eval_loss {:5.2f} |' \
               'train_perp {:5.2f} | eval_perp {:5.2f}' \
-                .format(epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
+                .format(run, epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
 
     print('\n\n TRAINING FINISHED:\n\n\tBest Loss: {:5.2f}\tBest Model saved at epoch: {:3d} \n\n' \
             .format(best_eval_loss, best_model_epoch))
 
     # test the model
     global test_loss, test_accuracy, test_perplexity
-    test_loss, test_accuracy, test_perplexity = epoch_step(test_dataloader, 'eval')
+    test_loss, test_accuracy, test_perplexity = epoch_step(0, test_dataloader, 'eval')
     print(f'\n\nTEST LOSS: {test_loss}')
     print(f'TEST ACCURACY: {test_accuracy}')
     print(f'TEST PERPLEXITY: {test_perplexity}\n\n')
@@ -385,7 +459,9 @@ if __name__ == '__main__':
     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
     # update the sequences
+    print('\nUpdating INPUT_TOK sequences and vocabulary')
     INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    print('\nUpdating OUTPUT_TOK sequences and vocabulary')
     OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
@@ -394,7 +470,7 @@ if __name__ == '__main__':
 
     # Split the dataset into training, evaluation and test sets
     train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
-    print(f'Train set size: {len(train_set)}')
+    print(f'\nTrain set size: {len(train_set)}')
     print(f'Evaluation set size: {len(eval_set)}')
     print(f'Test set size: {len(test_set)}')
 
@@ -404,12 +480,12 @@ if __name__ == '__main__':
         print(f'Training set size after augmentation: {len(train_set)}')
 
     # initialize the dataloaders
-    print(f'Initializing the dataloaders...')
+    print(f'\nInitializing the dataloaders...')
     global train_dataloader, eval_dataloader, test_dataloader
     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
 
     # initialize the model
-    print(f'Initializing the model...')
+    print(f'\nInitializing the model...')
     model = initialize_model(INPUT_TOK, OUTPUT_TOK)
     criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
@@ -423,7 +499,7 @@ if __name__ == '__main__':
 
     # train the model
     time.sleep(5)
-    print(f'Training the model...')
+    print(f'\nTraining the model...')
     train()
 
     # save the results
