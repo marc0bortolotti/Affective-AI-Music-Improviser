@@ -128,7 +128,7 @@ class PrettyMidiTokenizer(object):
   - real_time_tokenization(notes, emotion_token): converts a list of notes into a sequence of tokens in real-time
   '''
     
-  def __init__(self):
+  def __init__(self, BPM = BPM, BEATS_PER_BAR = BEATS_PER_BAR, TICKS_PER_BEAT = TICKS_PER_BEAT):
 
     self.BPM = BPM
     self.BEATS_PER_BAR = BEATS_PER_BAR
@@ -147,24 +147,13 @@ class PrettyMidiTokenizer(object):
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
 
-  def set_ticks_per_beat(self, ticks_per_beat):
-    self.TICKS_PER_BEAT = ticks_per_beat
-    self.BAR_LENGTH = self.BEATS_PER_BAR * self.TICKS_PER_BEAT
-    self.BAR_DURATION_IN_TICKS = self.convert_time_to_ticks(self.BAR_DURATION)
-
-  def set_bpm(self, bpm):
-    self.BPM = bpm
-    self.BEAT_DURATION = 60 / self.BPM
-    self.BAR_DURATION = self.BEAT_DURATION * self.BEATS_PER_BAR
-    self.TEMPO = int(self.BEAT_DURATION * 1000000)
-
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
     self.VOCAB.load(path)
 
-  def convert_time_to_ticks(self, time, resolution = TICKS_PER_BEAT, bpm = BPM):
-    beat_duration = 60 / bpm
-    tick_duration = beat_duration / resolution
+  def convert_time_to_ticks(self, time):
+    beat_duration = 60 / self.BPM
+    tick_duration = beat_duration / self.TICKS_PER_BEAT
     ticks = int(time / tick_duration)
     return ticks
 
@@ -345,6 +334,7 @@ class PrettyMidiTokenizer(object):
     - emotion_token: the token representing the emotion of the user (str)
     - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
     - single_notes: a boolean indicating whether to keep only one note per token (bool)
+    - max_len: the maximum length of the sequence (int)
 
     Returns:
     - sequences: a list of sequences of tokens (np.array)
@@ -591,9 +581,9 @@ class PrettyMidiTokenizer(object):
 
       # Verify that the vocab was updated
       print(f'Initial silence token weigth: {original_vocab.weights[original_vocab.word2idx[SILENCE_TOKEN]]}')
-      print(f'Final silence token weigth:{self.VOCAB.weights[self.VOCAB.word2idx[SILENCE_TOKEN]]}')
+      print(f'Final silence token weigth: {self.VOCAB.weights[self.VOCAB.word2idx[SILENCE_TOKEN]]}')
       print(f'Inintial number of tokens: {len(original_vocab)}')
-      print(f'Final number of tokens: {len(self.VOCAB)}\n')
+      print(f'Final number of tokens: {len(self.VOCAB)}')
 
   def real_time_tokenization(self, notes, emotion_token = None, rhythm = True):
     '''

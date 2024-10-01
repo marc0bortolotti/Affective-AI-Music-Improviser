@@ -40,7 +40,7 @@ N_TOKENS = 12 # number of tokens to be predicted at each forward pass (only for 
 
 TICKS_PER_BEAT = 12 
 EMBEDDING_SIZE = 512 
-TOKENS_FREQUENCY_THRESHOLD = 5 # remove tokens that appear less than # times in the dataset
+TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 3.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -51,7 +51,7 @@ EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # e
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/musicTransformer_16tokens')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/musicTransformer_12tokens_12ticks_lessClasses')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
@@ -104,11 +104,8 @@ def tokenize_midi_files():
     if FROM_MELODY_TO_RHYTHM:
         input_filenames, output_filenames = output_filenames, input_filenames
 
-    INPUT_TOK = PrettyMidiTokenizer()
-    OUTPUT_TOK = PrettyMidiTokenizer()
-
-    INPUT_TOK.set_ticks_per_beat(TICKS_PER_BEAT)
-    OUTPUT_TOK.set_ticks_per_beat(TICKS_PER_BEAT)
+    INPUT_TOK = PrettyMidiTokenizer(TICKS_PER_BEAT=TICKS_PER_BEAT)
+    OUTPUT_TOK = PrettyMidiTokenizer(TICKS_PER_BEAT=TICKS_PER_BEAT)
 
     for i, (in_file, out_file) in enumerate(zip(input_filenames, output_filenames)):
 
@@ -461,7 +458,9 @@ if __name__ == '__main__':
     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
     # update the sequences
+    print('\nUpdating INPUT_TOK sequences and vocabulary')
     INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    print('\nUpdating OUTPUT_TOK sequences and vocabulary')
     OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
@@ -470,7 +469,7 @@ if __name__ == '__main__':
 
     # Split the dataset into training, evaluation and test sets
     train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
-    print(f'Train set size: {len(train_set)}')
+    print(f'\nTrain set size: {len(train_set)}')
     print(f'Evaluation set size: {len(eval_set)}')
     print(f'Test set size: {len(test_set)}')
 
@@ -480,12 +479,12 @@ if __name__ == '__main__':
         print(f'Training set size after augmentation: {len(train_set)}')
 
     # initialize the dataloaders
-    print(f'Initializing the dataloaders...')
+    print(f'\nInitializing the dataloaders...')
     global train_dataloader, eval_dataloader, test_dataloader
     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
 
     # initialize the model
-    print(f'Initializing the model...')
+    print(f'\nInitializing the model...')
     model = initialize_model(INPUT_TOK, OUTPUT_TOK)
     criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
@@ -499,7 +498,7 @@ if __name__ == '__main__':
 
     # train the model
     time.sleep(5)
-    print(f'Training the model...')
+    print(f'\nTraining the model...')
     train()
 
     # save the results
