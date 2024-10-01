@@ -16,6 +16,10 @@ from data_augmentation import data_augmentation_shift
 from losses import CrossEntropyWithPenaltyLoss
 import random
 
+DIRECTORY_PATH = os.path.dirname(__file__)
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/MT_melody_48tokens')
+DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
+
 SEED = 1111
 torch.manual_seed(SEED)
 
@@ -26,18 +30,17 @@ EPOCHS = 1000
 LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
-
 ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
 MODEL = ARCHITECTURES['musicTransformer']
 
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 12 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 48 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
 TICKS_PER_BEAT = 12
 EMBEDDING_SIZE = 256 
@@ -50,10 +53,6 @@ GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
 DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
 EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
-
-DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/MT_rhythm')
-DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 # create a unique results path
 idx = 1
