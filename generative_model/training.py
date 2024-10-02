@@ -17,7 +17,7 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_emotion')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody_emotion')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -52,7 +52,7 @@ PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of p
 
 GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
 DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
-EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
+EARLY_STOP_EPOCHS = 40  # stop the training if the loss does not improve for # epochs
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 # create a unique results path
