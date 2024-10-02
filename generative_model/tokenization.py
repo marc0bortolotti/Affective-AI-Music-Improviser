@@ -162,6 +162,9 @@ class PrettyMidiTokenizer(object):
     nearest_key = min(keys, key=lambda k: abs(k - target))
     return VELOCITY_TOKENS[nearest_key]
   
+  def append_emotion_token(self, tokens, emotion_token):
+    return np.concatenate(([emotion_token], tokens))
+  
   def new_note(self, pitch, velocity, start, end, bar):
     new_note = {
       'pitch': pitch,
@@ -312,7 +315,7 @@ class PrettyMidiTokenizer(object):
 
       if emotion_token is not None:
         emotion_token_id = self.VOCAB.word2idx[emotion_token]
-        sequence = np.concatenate(([emotion_token_id], sequence[:-1]))
+        sequence = self.append_emotion_token(sequence, emotion_token_id)
         
       sequences.append(sequence)
 
@@ -636,7 +639,7 @@ class PrettyMidiTokenizer(object):
 
     # add the BCI token at the beginning
     if emotion_token is not None:
-      tokens = np.concatenate(([emotion_token], tokens[:-1]))
+      tokens = self.append_emotion_token(tokens, emotion_token)
         
     # convert string tokens into integer tokens
     for i in range(len(tokens)):      
