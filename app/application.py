@@ -1,7 +1,7 @@
 import threading
 import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
-from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG
+from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG, MOVE_CURSOR_MSG
 from EEG.eeg_device import EEG_Device
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
 from generative_model.architectures.transformer import generate_square_subsequent_mask
@@ -22,14 +22,8 @@ OSC_REAPER_PORT = 8000
 OSC_PROCESSING_PORT = 7000
 '''---------------------------------------------'''
 
-'''--------------- MIDI PARAMETERS --------------'''
-BPM = 120
-BEAT_PER_BAR = 4
-TICKS_PER_BEAT = 12  # quantization of a beat
-'''----------------------------------------------'''
 
-
-def load_model(model_param_path, model_module_path, model_class_name):
+def load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat):
 
     '''
     Load the model from the model dictionary.
@@ -38,16 +32,17 @@ def load_model(model_param_path, model_module_path, model_class_name):
     - model_param_path: path to the model parameters (weights, vocabularies, config)
     - model_module_path: path to the model module
     - model_module_name: name of the model class
+    - ticks_per_beat: number of ticks per beat
 
     '''
     weights_path = os.path.join(model_param_path, 'model_state_dict.pth')
     input_vocab_path = os.path.join(model_param_path, 'input_vocab.txt')
     output_vocab_path = os.path.join(model_param_path, 'output_vocab.txt')
 
-    INPUT_TOK = PrettyMidiTokenizer()
+    INPUT_TOK = PrettyMidiTokenizer(TICKS_PER_BEAT=ticks_per_beat)
     INPUT_TOK.load_vocab(input_vocab_path)
 
-    OUTPUT_TOK = PrettyMidiTokenizer()
+    OUTPUT_TOK = PrettyMidiTokenizer(TICKS_PER_BEAT=ticks_per_beat)
     OUTPUT_TOK.load_vocab(output_vocab_path)
 
     directory, architecture_filename = os.path.split(model_module_path)
@@ -71,26 +66,29 @@ def load_model(model_param_path, model_module_path, model_class_name):
     model.eval()
     model.to(device)
 
+    logging.info(f"Model {model_class_name} loaded correctly")
+
     return model, device, INPUT_TOK, OUTPUT_TOK
 
 def thread_function_eeg(name, app):
     logging.info("Thread %s: starting", name)
 
-    if app.STATUS['USE_EEG']:
-        app.eeg_device.start_recording()
-        time.sleep(5)  # wait for signal to stabilize
+    app.eeg_device.start_recording()
+    time.sleep(5)  # wait for signal to stabilize
 
-        while True:
-            time.sleep(app.WINDOW_DURATION)
-            eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
-            prediction = app.eeg_device.get_prediction(eeg) 
-            app.append_eeg_classification(BCI_TOKENS[prediction])
+    while True:
+        time.sleep(app.WINDOW_DURATION)
+        eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
+        prediction = app.eeg_device.get_prediction(eeg) 
+        app.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, EMOTION_MSG, float(prediction))
+        app.append_eeg_classification(BCI_TOKENS[prediction])
 
-            if not app.STATUS['RUNNING']:
-                logging.info("Thread %s: closing", name)
-                break
-        app.eeg_device.stop_recording()
-        app.eeg_device.close()
+        if not app.STATUS['RUNNING']:
+            logging.info("Thread %s: closing", name)
+            break
+
+    app.eeg_device.stop_recording()
+    app.eeg_device.close()
 
 def thread_function_midi(name, app):
     
@@ -123,6 +121,8 @@ class AI_AffectiveMusicImproviser():
                         model_module_path,
                         model_class_name,
                         init_track_path,
+                        ticks_per_beat,
+                        generate_rhythm,
                         parse_message=False):
         '''
         Parameters:
@@ -133,14 +133,20 @@ class AI_AffectiveMusicImproviser():
         - window_duration: duration of the window in seconds
         - model_dict: path to the model dictionary
         - init_track_path: path to the initial track to start the generation
+        - ticks_per_beat: number of ticks per beat
+        - generate_rhythm: boolean to generate melody or rhythm
         '''
 
         self.STATUS = {'READY': False, 
                        'RUNNING': False, 
                        'SIMULATE_MIDI': False,
-                       'USE_EEG': False}
+                       'USE_EEG': False,
+                       'IS_RECORDING': False}
         
         self.parse_message = parse_message 
+
+        # GENERATION TYPE
+        self.generate_rhythm = generate_rhythm
 
         # MIDI
         self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
@@ -148,6 +154,7 @@ class AI_AffectiveMusicImproviser():
         # self.midi_out_rec = MIDI_Output(generation_record_port_name)
 
         # SYNCHRONIZATION
+        BPM = 120
         self.osc_server = Server_OSC(LOCAL_HOST, OSC_SERVER_PORT, BPM, parse_message=False)
         self.osc_client = Client_OSC()
 
@@ -158,7 +165,7 @@ class AI_AffectiveMusicImproviser():
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
         # AI-MODEL
-        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_class_name)
+        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat)
         self.model_class_name = model_class_name
         self.model = model
         self.device = device
@@ -172,7 +179,8 @@ class AI_AffectiveMusicImproviser():
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
         self.thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', self))
-        self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
+        if self.STATUS['USE_EEG']:
+            self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
     
         # set the status of the application
         self.set_application_status('READY', True)
@@ -195,6 +203,15 @@ class AI_AffectiveMusicImproviser():
     def get_eeg_device(self):
         return self.eeg_device
     
+    def start_reaper_recording(self):
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, MOVE_CURSOR_MSG, 1)
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
+        self.set_application_status('IS_RECORDING', True)
+
+    def stop_reaper_recording(self):
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
+        self.set_application_status('IS_RECORDING', False)
+    
     def save_hystory(self, path):
         path = os.path.join(path, 'hystory.txt')
         with open(path, 'w') as file:
@@ -216,13 +233,13 @@ class AI_AffectiveMusicImproviser():
 
         self.STATUS['RUNNING'] = True
 
-        # start recording in Reaper
-        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
+        self.start_reaper_recording()
 
         # start the threads
         self.thread_midi_input.start()
         self.thread_osc.start()
-        self.thread_eeg.start()
+        if self.STATUS['USE_EEG']:
+            self.thread_eeg.start()
 
         input_tokens_buffer = []
         generated_track = None
@@ -232,7 +249,7 @@ class AI_AffectiveMusicImproviser():
         self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
-        n_tokens = 8 # number of tokens to predict at each step
+        n_tokens = self.OUTPUT_TOK.TICKS_PER_BEAT # number of tokens to predict at each step
 
         # initialize the target tensor for the transformer
         last_output = torch.LongTensor(self.init_tokens.tolist()).unsqueeze(0).to(self.device)
@@ -258,7 +275,7 @@ class AI_AffectiveMusicImproviser():
 
             # tokenize the input notes
             if len(notes) > 0:
-                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, emotion_token, 'drum')
+                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, emotion_token, rhythm=self.generate_rhythm)
                 input_tokens_buffer.append(input_tokens)
 
             # if the buffer is full (4 bars), make the prediction
@@ -292,10 +309,11 @@ class AI_AffectiveMusicImproviser():
 
                         # Apply the softmax function to the output
                         temperature = self.osc_server.get_temperature()
+                        output_no_temp = softmax(output)
                         output = softmax(output / temperature)
 
                         # Get the probability of the prediction
-                        proba = torch.max(output, dim=-1)[0][-n_tokens:]
+                        proba = torch.max(output_no_temp, dim=-1)[0][-n_tokens:]
                         predicted_proba.append(proba)
 
                         # Get the last token of the output
@@ -309,6 +327,7 @@ class AI_AffectiveMusicImproviser():
                     # predicted_bar = last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:]
                     # predicted_proba = torch.max(output, dim=-1)[0][-self.BAR_LENGTH:]
                     predicted_proba = torch.cat(predicted_proba, dim=0)
+                    print(last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:])
 
                 else:
                     output = self.model(input_data)
@@ -318,9 +337,9 @@ class AI_AffectiveMusicImproviser():
 
                     # Get the probability distribution of the prediction by applying the softmax function and the temperature.
                     temperature = self.osc_server.get_temperature()
-                    output = output / temperature
-                    output = softmax(output)
-                    predicted_proba = torch.max(output, 1)[0] # torch.max returns a tuple (values, indices)
+                    output_no_temp = softmax(output)
+                    output = softmax(output / temperature)
+                    predicted_proba = torch.max(output_no_temp, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
                     predicted_bar = torch.argmax(output, 1) [-self.BAR_LENGTH:]
@@ -333,9 +352,8 @@ class AI_AffectiveMusicImproviser():
                 # Get the confidence of the prediction withouth the temperature contribution.
                 confidence = torch.mean(predicted_proba).item() 
 
-                # send the confidence and the emotion state to the processing application 
-                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, confidence)
-                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, EMOTION_MSG, emotion_token)
+                # send the confidence to the processing application 
+                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
 
                 # # save the hystory
                 # self.hystory.append(input_tokens_buffer.copy())
@@ -350,6 +368,7 @@ class AI_AffectiveMusicImproviser():
             if self.parse_message:
                 logging.info(f"Confidence: {confidence}")
                 logging.info(f"Temperature: {temperature}")
+                logging.info(f'Emotion: {emotion_token}')
                 logging.info(f"Elapsed time: {time.time() - start_time}")
 
             if not self.STATUS['RUNNING']:
@@ -367,9 +386,10 @@ class AI_AffectiveMusicImproviser():
         self.osc_server.close()  # serve_forever() must be closed outside the thread
         self.thread_osc.join()
 
-        self.thread_eeg.join()
+        if self.STATUS['USE_EEG']:
+            self.thread_eeg.join()
 
-        # stop recording in Reaper
-        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
+        self.stop_reaper_recording()
+        self.midi_out_play.close()
 
         logging.info('All done')

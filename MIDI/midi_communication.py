@@ -73,7 +73,8 @@ class MIDI_Input:
         logging.info(f'MIDI Input: Disconnected')
 
     def set_midi_simulation(self, simulation_port, simulation_track_path):
-        self.midi_out_port.close_port()
+        if self.midi_out_port is not None:
+            self.midi_out_port.close_port()
         self.midi_simulation_port = mido.open_output(simulation_port)
         self.simulation_track_path = simulation_track_path
 
@@ -94,6 +95,7 @@ class MIDI_Input:
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
                 if self.exit:
                     break   
+        self.midi_simulation_port.close()
 
     def get_note_buffer(self):
         return self.note_buffer
@@ -133,8 +135,8 @@ class MIDI_Output:
             logging.info(f"MIDI Output: sent message <<{message}>>")
 
     def close(self):
-        self.midi_out_port.close_port()
-
+        self.midi_out_port.close()
+        logging.info(f'MIDI Output: Disconnected')
 
     def send_midi_to_reaper(self, mid, parse_message = False):
         def thread_reaper(mid, parse_message):

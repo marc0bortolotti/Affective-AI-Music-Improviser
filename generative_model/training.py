@@ -124,7 +124,12 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = 'Drum', rhythm=FROM_MELODY_TO_RHYTHM)
+        if FROM_MELODY_TO_RHYTHM:
+            instrument = 'Piano'
+        else:
+            instrument = 'Drum'
+
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = instrument, rhythm=FROM_MELODY_TO_RHYTHM)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
 
         in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)

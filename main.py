@@ -10,7 +10,6 @@ import threading
 import brainflow
 from PyQt5 import QtWidgets
 from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
-import sys
 
 # Set log levels
 mne.set_log_level(verbose='WARNING', return_old_level=False, add_frames=None)
@@ -18,7 +17,6 @@ brainflow.BoardShim.set_log_level(3)
 
 format = "%(asctime)s: %(message)s"
 logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
-
 
 # EEG PARAMETERS
 WINDOW_OVERLAP = 0.875 # percentage
@@ -31,40 +29,49 @@ VALIDATION_TIME = 5
 
 # APPLICATION PARAMETERS
 USE_EEG = False
+SKIP_TRAINING = True
 SAVE_SESSION = False
-STARTING_MOOD = {'RELAXED': 1, 'EXCITED': 0}
-GENERATION_TYPE = {'RHYTHM': 0, 'MELODY': 1}
-
-# PATHS
 PROJECT_PATH = os.path.dirname(__file__)
-MODEL_PARAM_PATH = os.path.join(PROJECT_PATH, 'generative_model/runs/musicTransformer_4tokens')
-MODEL_MODULE_PATH = os.path.join(PROJECT_PATH, 'generative_model/architectures/musicTransformer.py')
-MODEL_CLASS_NAME = 'MusicTransformer'
 SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
-if __name__ == "__main__":
 
-    # Setup the application
-    win = QtWidgets.QApplication([])
-    dialog = SetupDialog()
-    
+# Setup the application
+win = QtWidgets.QApplication([])
+app = None
+dialog = SetupDialog()
+
+while True:                    
+
     if dialog.exec_() == QtWidgets.QDialog.Accepted:
-    
+
         # Get the setup parameters from the dialog window
         setup_parameters = dialog.get_data()
+
+        if app is not None:
+            app.close()
+            thread_app.join()
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
             if not os.path.exists(SAVE_PATH):
                 os.makedirs(SAVE_PATH)      
 
-        gen_type = 'rhythm' if GENERATION_TYPE['MELODY'] else 'melody'
-        start_mood = 'RELAXED' if STARTING_MOOD['RELAXED'] else 'CONCENTRATED'
-        simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{gen_type}/{gen_type}_{start_mood}.mid')
+        generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
+        input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
+        start_mood = setup_parameters['STARTING_MOOD']
+        simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{input_track_type}/{input_track_type}_{start_mood}.mid')
 
-        instrument_out_port_name = setup_parameters['RHYTHM_OUT_PORT_NAME'] if GENERATION_TYPE['MELODY'] else setup_parameters['MELODY_OUT_PORT_NAME']
-        generation_play_port_name = setup_parameters['MELODY_OUT_PORT_NAME'] if GENERATION_TYPE['MELODY'] else setup_parameters['RHYTHM_OUT_PORT_NAME']
+        instrument_out_port_name = setup_parameters['MELODY_OUT_PORT_NAME'] if generation_type == 'rhythm'  else setup_parameters['RHYTHM_OUT_PORT_NAME']
+        generation_play_port_name = setup_parameters['RHYTHM_OUT_PORT_NAME'] if generation_type == 'rhythm' else setup_parameters['MELODY_OUT_PORT_NAME']
+
+        ticks_per_beat = 12 if generation_type == 'rhythm' else 4
+        generate_rhythm = True if generation_type == 'rhythm' else False
+
+        module_name = 'musicTransformer.py' if 'MT' in setup_parameters['MODEL'] else 'tcn.py'
+        model_param_path = os.path.join(PROJECT_PATH, 'generative_model/runs', setup_parameters['MODEL'])
+        model_module_path = os.path.join(PROJECT_PATH, 'generative_model/architectures', module_name)
+        model_class_name = 'MusicTransformer' if 'MT' in setup_parameters['MODEL'] else 'TCN'
 
         # Initialize the application
         app = AI_AffectiveMusicImproviser(  instrument_in_port_name = setup_parameters['INSTRUMENT_IN_PORT_NAME'], 
@@ -72,14 +79,16 @@ if __name__ == "__main__":
                                             generation_play_port_name = generation_play_port_name,
                                             eeg_device_type = setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
                                             window_duration = WINDOW_DURATION,
-                                            model_param_path = MODEL_PARAM_PATH,
-                                            model_module_path = MODEL_MODULE_PATH,
-                                            model_class_name = MODEL_CLASS_NAME,
+                                            model_param_path = model_param_path,
+                                            model_module_path = model_module_path,
+                                            model_class_name = model_class_name,
                                             init_track_path = simulation_track_path,
+                                            ticks_per_beat = ticks_per_beat,
+                                            generate_rhythm = generate_rhythm,
                                             parse_message=True)
 
         # Set starting mood
-        start_emotion = BCI_TOKENS[0] if STARTING_MOOD['RELAXED'] else BCI_TOKENS[1]
+        start_emotion = BCI_TOKENS[0] if start_mood == 'RELAXED' else BCI_TOKENS[1]
         app.append_eeg_classification(start_emotion)
 
         # Set the simulation mode
@@ -93,68 +102,74 @@ if __name__ == "__main__":
             app.set_application_status('USE_EEG', True)
 
         # Train the EEG classifier
-        dialog = CustomDialog('Do you want to TRAIN EEG classifiers?', buttons=['Yes', 'No'])
-        if dialog.exec_() == 0:
+        if not SKIP_TRAINING:
+            dialog = CustomDialog('Do you want to TRAIN EEG classifiers?', buttons=['Yes', 'No'])
+            if dialog.exec_() == 0:
 
-            # train the EEG classification model
-            scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
+                # train the EEG classification model
+                scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
 
-            # Save the EEG classifier and the EEG raw data
-            if SAVE_SESSION:
-                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'pretraining.csv'))
-                app.eeg_device.save_classifier(SAVE_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
-
-        else:
-
-            try:
-                # Load the EEG classifier from the file
-                scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
-            except:
-                logging.error("No classifier found. Please, train the classifier first.")
-                sys.exit()
-        
-        # Validate the EEG classifier with both LDA and SVM
-        dialog = CustomDialog('Do you want to VALIDATE classifiers?')
-        if dialog.exec_() == 0:
-            app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
-            print('\nLDA')
-            accuracy_lda, f1_lda = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
-            if SAVE_SESSION:
-                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'lda_validation.csv'))
-
-            app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
-            print('\nSVM')
-            accuracy_svm, f1_svm = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
-            if SAVE_SESSION:
-                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'svm_validation.csv'))
-
-        # Set the classifier to be used in the application
-        dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
-        if dialog.exec_() == 0:
-            app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
-        else:
-            app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
-
-        # Start the application
-        start_dialog = CustomDialog('Do you want to START the application?')
-        if start_dialog.exec_() == 0:
-
-            # Start the application in a separate thread
-            thread_app = threading.Thread(target=app.run, args=())
-            thread_app.start()
-
-            # Close the application
-            close_dialog = CustomDialog('Do you want to CLOSE the application?')
-            if close_dialog.exec_() == 0:
-
+                # Save the EEG classifier and the EEG raw data
                 if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-                    app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'pretraining.csv'))
+                    app.eeg_device.save_classifier(SAVE_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
 
-                app.close()
+            else:
+
+                try:
+                    # Load the EEG classifier from the file
+                    scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
+                except:
+                    logging.error("No classifier found. Please, train the classifier first.")
+                    break
+            
+            # Validate the EEG classifier with both LDA and SVM
+            dialog = CustomDialog('Do you want to VALIDATE classifiers?')
+            if dialog.exec_() == 0:
+                app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
+                print('\nLDA')
+                accuracy_lda, f1_lda = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
+                if SAVE_SESSION:
+                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'lda_validation.csv'))
+
+                app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
+                print('\nSVM')
+                accuracy_svm, f1_svm = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
+                if SAVE_SESSION:
+                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'svm_validation.csv'))
+
+            # Set the classifier to be used in the application
+            dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
+            if dialog.exec_() == 0:
+                app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
+            else:
+                app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
 
         else:
-            sys.exit()
+            scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
+            app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
+
+        # # Start the application
+        # start_dialog = CustomDialog('Do you want to START the application?')
+        # if start_dialog.exec_() == 0:
+
+        # Start the application in a separate thread
+        thread_app = threading.Thread(target=app.run, args=())
+        thread_app.start()
+
+        # Close the application
+        close_dialog = CustomDialog('Do you want to CLOSE the application?')
+        if close_dialog.exec_() == 0:
+
+            if SAVE_SESSION:
+                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+                app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+
+            app.close()
+            thread_app.join()
+            break
+    else:
+        break
 
 
 

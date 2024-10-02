@@ -587,7 +587,7 @@ class PrettyMidiTokenizer(object):
       print(f'Inintial number of tokens: {len(original_vocab)}')
       print(f'Final number of tokens: {len(self.VOCAB)}')
 
-  def real_time_tokenization(self, notes, emotion_token = None, rhythm = True):
+  def real_time_tokenization(self, notes, emotion_token = None, rhythm = False, single_notes = False):
     '''
     Converts a list of notes into a sequence of tokens in real-time.
 
@@ -617,21 +617,22 @@ class PrettyMidiTokenizer(object):
         break
 
       else:
-        step = 0
-        if not rhythm:
-          for i in range (note_id+1, len(notes)):
-            step += notes[i]['dt']
-            if notes[i]['velocity'] == 0 and notes[i]['pitch'] == pitch: 
-              step = self.convert_time_to_ticks(step)
-              break
-          end = int(start + step)
-        else:
-          end = start + 1
+        # step = 0
+        # if not rhythm:
+        #   for i in range (note_id+1, len(notes)):
+        #     step += notes[i]['dt']
+        #     if notes[i]['velocity'] == 0 and notes[i]['pitch'] == pitch: 
+        #       step = self.convert_time_to_ticks(step)
+        #       break
+        #   end = int(start + step)
+        # else:
+        
+        end = start + 1
 
         if end > self.BAR_LENGTH :
-          end = self.BAR_LENGTH 
+          break
 
-        tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm=True, single_notes=False)
+        tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm=rhythm, single_notes=single_notes)
 
     # add the BCI token at the beginning
     if emotion_token is not None:

@@ -4,7 +4,8 @@ from pythonosc import osc_server
 from pythonosc.udp_client import SimpleUDPClient
 import logging
 
-REC_MSG = '/action/_SWS_RECTOGGLE'
+REC_MSG = '/action/40046'
+MOVE_CURSOR_MSG = '/action/41174'
 CONFIDENCE_MSG = '/confidence'
 EMOTION_MSG = '/emotion'
 
@@ -49,7 +50,7 @@ class Server_OSC:
     self.dispatcher.map("/beat/str", self.beat_handler, "Beat")
     self.dispatcher.map("/temperature", self.temperature_handler, "Temperature")
     self.server = osc_server.ThreadingOSCUDPServer((self.ip, self.port), self.dispatcher)
-  
+
   def run(self):
     logging.info("OSC Server: running on {}".format(self.server.server_address))
     self.server.serve_forever()
@@ -103,6 +104,7 @@ class Server_OSC:
   def close(self):
     self.exit = True
     self.server.shutdown()
+    self.server.server_close()
     logging.info("OSC Server: closed")
 
 
@@ -111,6 +113,6 @@ class Server_OSC:
 if __name__ == "__main__":
   client = Client_OSC()
   while True:
-    confidence = input("Confidence: ")
-    client.send('127.0.0.1', 7000, '/confidence', float(confidence))
+    emotion = input("Emotion: ")
+    client.send('127.0.0.1', 7000, '/emotion', float(emotion))
   
