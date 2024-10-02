@@ -17,7 +17,7 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/MT_melody_48tokens')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_emotion')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -27,11 +27,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
-ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['tcn']
+ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
+MODEL = ARCHITECTURES['TCN']
 
 FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
@@ -40,13 +40,14 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 48 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
 
-TICKS_PER_BEAT = 12
-EMBEDDING_SIZE = 516 
+TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
+
+EMBEDDING_SIZE = 256
 TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
-CROSS_ENTROPY_WEIGHT = 3.0  # weight of the cross entropy loss in the total loss
+CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
 
 GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
@@ -265,8 +266,11 @@ def epoch_step(epoch, dataloader, mode):
         batch_idx += 1
 
         # add mask to the input last bar
-        emotion, input = input[:, 0], input[:, 1:]
-        mask = torch.ones([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long) * emotion
+        emotion, input = input[:, 0].unsqueeze(1), input[:, 1:]
+        if USE_EEG:   
+            mask = emotion.expand(-1, OUTPUT_TOK.BAR_LENGTH)
+        else:
+            mask = torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)
         input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], mask), dim = 1)
 
         # move the input and the target to the device
