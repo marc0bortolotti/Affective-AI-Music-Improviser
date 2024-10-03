@@ -181,7 +181,8 @@ class AI_AffectiveMusicImproviser():
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
         self.SEQ_LENGTH = OUTPUT_TOK.SEQ_LENGTH
         self.init_track_path = init_track_path
-        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, max_len = 3 * self.BAR_LENGTH)
+        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, max_len = 8 * self.BAR_LENGTH) 
+        self.init_tokens = self.init_tokens[-3*self.BAR_LENGTH:]  
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))

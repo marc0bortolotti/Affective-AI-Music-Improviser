@@ -165,6 +165,8 @@ while True:
         close_dialog = CustomDialog('Do you want to CLOSE the application?')
         if close_dialog.exec_() == 0:
             break
+    else:
+        break   
 
 if app is not None:
     if SAVE_SESSION:
