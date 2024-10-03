@@ -14,6 +14,7 @@ NOTE_START_TOKEN = 'S' # 'S'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
+IN_OUT_SEPARATOR_TOKEN = '|'
 
 
 DRUM_MIDI_DICT = {    
@@ -174,28 +175,14 @@ class PrettyMidiTokenizer(object):
       'bar': bar
     }   
     return pd.DataFrame([new_note])  
+  
+  def update_vocab(self, tokens):
+    for i in range(0, len(tokens)):
+      self.VOCAB.add_word(tokens[i])
 
-  def midi_to_df(self, midi_path, instrument = None):
-    '''
-    Converts a MIDI file into a pandas dataframe.
-
-    Parameters:
-    - midi_path: the path to the MIDI file (str)
-
-    Returns:
-    - notes_df: a pandas dataframe containing the notes of the MIDI file
-
-    NB: The MIDI file should contain only one instrument.
-    '''
+  def midi_to_df(self, midi_path):
 
     pm = pretty_midi.PrettyMIDI(midi_path)
-
-    # if pm.resolution != TICKS_PER_BEAT:
-    #   raise Exception(f'The resolution of the MIDI file is {pm.resolution} instead of {self.TICKS_PER_BEAT}.')
-
-    # elif pm.get_tempo_changes()[1][0] != BPM:
-    #   raise Exception(f'The tempo of the MIDI file is {pm.get_tempo_changes[1][0]} instead of {self.BPM}.')
-    
 
     # Sort the notes by start time
     sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
@@ -210,8 +197,6 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
-      if instrument == 'drum':
-        end = start + 1
 
       # bar is the integer part of the start time divided by the duration of a bar
       start_bar = start // self.BAR_DURATION_IN_TICKS
@@ -247,7 +232,6 @@ class PrettyMidiTokenizer(object):
       notes_df = notes_df.reset_index(drop=True)
     
     return notes_df
-
 
   def note_to_string(self, tokens, pitch, velocity, start, end, rhythm = False, single_notes = False):
     '''
@@ -291,27 +275,27 @@ class PrettyMidiTokenizer(object):
 
     return tokens
   
-  def generate_sequences(self, token_sequence, emotion_token = None, update_sequences = False):
+  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
 
     if emotion_token is not None:
       self.VOCAB.add_word(BCI_TOKENS[0])
       self.VOCAB.add_word(BCI_TOKENS[1])
 
     sequences = []
-    step = self.BAR_LENGTH
-    stop_index = len(token_sequence) - self.SEQ_LENGTH
+    step = 1
+    stop_index = len(tokens) - self.SEQ_LENGTH
     
     if stop_index <= 0:
       stop_index = 1
 
     for i in range(0, stop_index, step):
 
-      if i + self.SEQ_LENGTH > len(token_sequence):
+      if i + self.SEQ_LENGTH > len(tokens):
         # pad the sequence with silence tokens
         silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
-        sequence = np.concatenate((token_sequence[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(token_sequence)))))
+        sequence = np.concatenate((tokens[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(tokens)))))
       else:
-        sequence = token_sequence[i:i+self.SEQ_LENGTH]
+        sequence = tokens[i:i+self.SEQ_LENGTH]
 
       if emotion_token is not None:
         emotion_token_id = self.VOCAB.word2idx[emotion_token]
@@ -324,8 +308,16 @@ class PrettyMidiTokenizer(object):
       self.sequences += sequences 
 
     return sequences
+  
+  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out):
+    min_len = min(len(string_tokens_in), len(string_tokens_out))
+    combined_tokens = np.empty((min_len), dtype=object)
+    for i in range(min_len):
+      combined_tokens[i] = string_tokens_in[i] + IN_OUT_SEPARATOR_TOKEN + string_tokens_out[i]
+    
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False, max_len = None, instrument = None):
+
+  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False, max_len = None, drum = False,  convert_to_integers = True):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -338,10 +330,11 @@ class PrettyMidiTokenizer(object):
     - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
     - single_notes: a boolean indicating whether to keep only one note per token (bool)
     - max_len: the maximum length of the sequence (int)
+    - drum: a boolean indicating whether the MIDI file contains drum notes (bool)
+    - convert_to_integers: a boolean indicating whether to convert the tokens into integers (bool)
 
     Returns:
-    - sequences: a list of sequences of tokens (np.array)
-    - notes_df: a pandas dataframe containing the notes of the MIDI file (columns: pitch, start, duration, velocity)
+    - tokens: a sequence of tokens (np.array)
     '''
 
     filename = midi_path.split('\\')[-1]
@@ -358,35 +351,35 @@ class PrettyMidiTokenizer(object):
     else:
       tokens_len = max_len
 
-    token_sequence = np.empty((tokens_len), dtype=object)
-    token_sequence[:] = SILENCE_TOKEN
+    tokens = np.empty((tokens_len), dtype=object)
+    tokens[:] = SILENCE_TOKEN
     for idx, note in enumerate(sorted_notes):
       print(f"Processing note: {idx+1}/{len(sorted_notes)}", end="\r")
       pitch = note.pitch
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
-      if instrument == 'Drum':
+      if drum:
         end = start + 1
       if start >= tokens_len or end >= tokens_len:
         break
-      token_sequence = self.note_to_string(token_sequence, pitch, velocity, start, end, rhythm, single_notes)
+      tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm, single_notes)
       
     # update the vocabulary if necessary
     if update_vocab:
-      for i in range(0, len(token_sequence)):
-        self.VOCAB.add_word(token_sequence[i])
+      self.update_vocab(tokens)
 
     # convert string tokens into integer tokens
-    for i in range(len(token_sequence)):
-      if self.VOCAB.is_in_vocab(token_sequence[i]):
-        token_sequence[i] = self.VOCAB.word2idx[token_sequence[i]] 
-      else: 
-        token_sequence[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
+    if convert_to_integers:
+      for i in range(len(tokens)):
+        if self.VOCAB.is_in_vocab(tokens[i]):
+          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
+        else: 
+          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
 
     print('\nDone!')       
 
-    return token_sequence
+    return tokens
   
   def tokens_to_notes_df(self, sequence, ticks_filter = 0):
     '''
@@ -568,8 +561,9 @@ class PrettyMidiTokenizer(object):
               updated_vocab.add_word(word)
 
       # Update the sequences with the new vocab
-      for seq in self.sequences:
+      for seq_id, seq in enumerate(self.sequences):
           for i, tok in enumerate(seq):
+              print(f'Processing token {i+1}/{len(seq)} of sequence {seq_id+1}/{len(self.sequences)}', end="\r")
               if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
                   
                   closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
@@ -585,8 +579,11 @@ class PrettyMidiTokenizer(object):
       self.VOCAB.compute_weights()
 
       # Verify that the vocab was updated
-      print(f'Initial silence token weigth: {original_vocab.weights[original_vocab.word2idx[SILENCE_TOKEN]]}')
-      print(f'Final silence token weigth: {self.VOCAB.weights[self.VOCAB.word2idx[SILENCE_TOKEN]]}')
+      init_silence_token_weight = int(original_vocab.weights[original_vocab.word2idx[SILENCE_TOKEN]] * 100)
+      final_silence_token_weight = int(self.VOCAB.weights[self.VOCAB.word2idx[SILENCE_TOKEN]] * 100)
+
+      print(f'\nInitial silence token weigth: {init_silence_token_weight}%')
+      print(f'Final silence token weigth: {final_silence_token_weight}%')
       print(f'Inintial number of tokens: {len(original_vocab)}')
       print(f'Final number of tokens: {len(self.VOCAB)}')
 

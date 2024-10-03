@@ -17,17 +17,17 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody_emotion')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody_emotion_1StepSequences_LR002_TokFreq5_512')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
 torch.manual_seed(SEED)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.0001 # 0.002
+LEARNING_RATE = 0.02 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
@@ -40,19 +40,19 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 4 # number of tokens to be predicted at each forward pass (only for the transformer model)
+N_TOKENS = 4 # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
 TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
 
-EMBEDDING_SIZE = 256
-TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
+EMBEDDING_SIZE = 512
+TOKENS_FREQUENCY_THRESHOLD = 5 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
 
 GRADIENT_CLIP = 0.35 # clip the gradients to avoid exploding gradients
 DATASET_SPLIT = [0.8, 0.1, 0.1] # split the dataset into training, evaluation and test sets
-EARLY_STOP_EPOCHS = 40  # stop the training if the loss does not improve for # epochs
+EARLY_STOP_EPOCHS = 15  # stop the training if the loss does not improve for # epochs
 LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for # epochs
 
 # create a unique results path
@@ -125,16 +125,11 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        if FROM_MELODY_TO_RHYTHM:
-            instrument = 'Piano'
-        else:
-            instrument = 'Drum'
-
-        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = instrument, rhythm=FROM_MELODY_TO_RHYTHM)
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, drum=not FROM_MELODY_TO_RHYTHM, rhythm=FROM_MELODY_TO_RHYTHM)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
 
-        in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)
-        out_seq = OUTPUT_TOK.generate_sequences(out_tokens, update_sequences=True)
+        in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
+        out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
 
         if len(in_seq) != len(out_seq):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
@@ -400,6 +395,7 @@ def train():
     writer = SummaryWriter(RESULTS_PATH)
     scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
     run = RESULTS_PATH.split('/')[-1]
+    run = run.split('_')[0]
 
     for epoch in range(1, EPOCHS+1):
 
