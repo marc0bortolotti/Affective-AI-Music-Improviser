@@ -78,8 +78,12 @@ def thread_function_eeg(name, app):
 
     while True:
         time.sleep(app.WINDOW_DURATION)
-        eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
-        prediction = app.eeg_device.get_prediction(eeg) 
+        if app.eeg_device.params.serial_number == 'Synthetic Board':
+            prediction = 0 if app.get_last_eeg_classification() == 'R' else 1
+        else:
+            eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
+            prediction = app.eeg_device.get_prediction(eeg) 
+
         app.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, EMOTION_MSG, float(prediction))
         app.append_eeg_classification(BCI_TOKENS[prediction])
 
@@ -123,6 +127,7 @@ class AI_AffectiveMusicImproviser():
                         init_track_path,
                         ticks_per_beat,
                         generate_rhythm,
+                        n_tokens,
                         parse_message=False):
         '''
         Parameters:
@@ -135,6 +140,7 @@ class AI_AffectiveMusicImproviser():
         - init_track_path: path to the initial track to start the generation
         - ticks_per_beat: number of ticks per beat
         - generate_rhythm: boolean to generate melody or rhythm
+        - n_tokens: number of tokens to generate at each step
         '''
 
         self.STATUS = {'READY': False, 
@@ -145,8 +151,9 @@ class AI_AffectiveMusicImproviser():
         
         self.parse_message = parse_message 
 
-        # GENERATION TYPE
+        # GENERATION 
         self.generate_rhythm = generate_rhythm
+        self.n_tokens = n_tokens
 
         # MIDI
         self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
@@ -179,8 +186,7 @@ class AI_AffectiveMusicImproviser():
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
         self.thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', self))
-        if self.STATUS['USE_EEG']:
-            self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
+        self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
     
         # set the status of the application
         self.set_application_status('READY', True)
@@ -249,10 +255,10 @@ class AI_AffectiveMusicImproviser():
         self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
-        n_tokens = self.OUTPUT_TOK.TICKS_PER_BEAT # number of tokens to predict at each step
 
         # initialize the target tensor for the transformer
-        last_output = torch.LongTensor(self.init_tokens.tolist()).unsqueeze(0).to(self.device)
+        last_output = torch.LongTensor(self.init_tokens.tolist()).to(self.device)
+        emotion_token = None
 
         while True:
 
@@ -270,12 +276,9 @@ class AI_AffectiveMusicImproviser():
             # clear the buffer
             self.midi_in.clear_note_buffer()
 
-            # Get emotion from the EEG
-            emotion_token = self.get_last_eeg_classification()
-
             # tokenize the input notes
             if len(notes) > 0:
-                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, emotion_token, rhythm=self.generate_rhythm)
+                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, rhythm=self.generate_rhythm)
                 input_tokens_buffer.append(input_tokens)
 
             # if the buffer is full (4 bars), make the prediction
@@ -287,7 +290,12 @@ class AI_AffectiveMusicImproviser():
                 input_data = torch.LongTensor(input_data)
 
                 # add mask to the input data
-                input_data = torch.cat((input_data, torch.zeros(self.BAR_LENGTH, dtype=torch.long)))
+                if self.STATUS['USE_EEG']:
+                    emotion_token = self.get_last_eeg_classification()
+                    mask = torch.ones(self.BAR_LENGTH, dtype=torch.long) * self.INPUT_TOK.VOCAB.word2idx[emotion_token]
+                else:
+                    mask = torch.zeros(self.BAR_LENGTH, dtype=torch.long)
+                input_data = torch.cat((input_data, mask))
 
                 # Add the batch dimension.
                 input_data = input_data.unsqueeze(0).to(self.device)
@@ -298,7 +306,10 @@ class AI_AffectiveMusicImproviser():
                     predicted_proba = []
                     predicted_bar = []
 
-                    for i in range(int(self.BAR_LENGTH/n_tokens)):
+                    for i in range(int(self.BAR_LENGTH/self.n_tokens)):
+
+                        # add the batch dimension
+                        last_output = last_output.unsqueeze(0)
 
                         # Generate the mask for the target sequence
                         last_output_mask = generate_square_subsequent_mask(last_output.size(1)).to(self.device)
@@ -313,13 +324,13 @@ class AI_AffectiveMusicImproviser():
                         output = softmax(output / temperature)
 
                         # Get the probability of the prediction
-                        proba = torch.max(output_no_temp, dim=-1)[0][-n_tokens:]
+                        proba = torch.max(output_no_temp, dim=-1)[0][-self.n_tokens:]
                         predicted_proba.append(proba)
 
                         # Get the last token of the output
-                        last_output = torch.argmax(output, dim=-1)
-                        next_tokens = last_output[-n_tokens:]
-                        last_output = last_output.unsqueeze(0)
+                        prediction = torch.argmax(output, 1)
+                        next_tokens = prediction[-self.n_tokens:]
+                        last_output = torch.cat((last_output[0, self.n_tokens:], next_tokens))
 
                         # Update the target tensor
                         predicted_bar+=next_tokens.cpu().numpy().tolist()
@@ -327,7 +338,6 @@ class AI_AffectiveMusicImproviser():
                     # predicted_bar = last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:]
                     # predicted_proba = torch.max(output, dim=-1)[0][-self.BAR_LENGTH:]
                     predicted_proba = torch.cat(predicted_proba, dim=0)
-                    print(last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:])
 
                 else:
                     output = self.model(input_data)
@@ -378,6 +388,8 @@ class AI_AffectiveMusicImproviser():
         logging.info('Thread Main: Closing application...')
 
         self.set_application_status('RUNNING', False)
+
+        time.sleep(5)   # wait for the threads to close
 
         # close the threads
         self.midi_in.close()

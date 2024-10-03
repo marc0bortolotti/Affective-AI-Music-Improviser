@@ -28,11 +28,9 @@ TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 VALIDATION_TIME = 5
 
 # APPLICATION PARAMETERS
-USE_EEG = False
 SKIP_TRAINING = True
 SAVE_SESSION = False
 PROJECT_PATH = os.path.dirname(__file__)
-SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
 
 
 
@@ -49,11 +47,15 @@ while True:
         setup_parameters = dialog.get_data()
 
         if app is not None:
+            if SAVE_SESSION:
+                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+                app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
             app.close()
             thread_app.join()
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
+            SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
             if not os.path.exists(SAVE_PATH):
                 os.makedirs(SAVE_PATH)      
 
@@ -61,6 +63,7 @@ while True:
         input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
         start_mood = setup_parameters['STARTING_MOOD']
         simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{input_track_type}/{input_track_type}_{start_mood}.mid')
+        init_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{generation_type}/{generation_type}_{start_mood}.mid')
 
         instrument_out_port_name = setup_parameters['MELODY_OUT_PORT_NAME'] if generation_type == 'rhythm'  else setup_parameters['RHYTHM_OUT_PORT_NAME']
         generation_play_port_name = setup_parameters['RHYTHM_OUT_PORT_NAME'] if generation_type == 'rhythm' else setup_parameters['MELODY_OUT_PORT_NAME']
@@ -82,9 +85,10 @@ while True:
                                             model_param_path = model_param_path,
                                             model_module_path = model_module_path,
                                             model_class_name = model_class_name,
-                                            init_track_path = simulation_track_path,
+                                            init_track_path = init_track_path,
                                             ticks_per_beat = ticks_per_beat,
                                             generate_rhythm = generate_rhythm,
+                                            n_tokens = int(setup_parameters['TOKENS']),
                                             parse_message=True)
 
         # Set starting mood
@@ -98,7 +102,7 @@ while True:
                                             simulation_track_path = simulation_track_path)
 
         # Set if the EEG device should be used in the application    
-        if USE_EEG:
+        if not setup_parameters['EEG_DEVICE_SERIAL_NUMBER'] == 'None':
             app.set_application_status('USE_EEG', True)
 
         # Train the EEG classifier
@@ -160,16 +164,15 @@ while True:
         # Close the application
         close_dialog = CustomDialog('Do you want to CLOSE the application?')
         if close_dialog.exec_() == 0:
-
-            if SAVE_SESSION:
-                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-                app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
-
-            app.close()
-            thread_app.join()
             break
-    else:
-        break
+
+    if app is not None:
+        if SAVE_SESSION:
+            app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+            app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+        app.close()
+        thread_app.join()
+
 
 
 

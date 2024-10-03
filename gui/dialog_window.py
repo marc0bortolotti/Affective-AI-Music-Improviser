@@ -15,7 +15,8 @@ def retrieve_eeg_devices():
     synthetic_devices = [('00:00:00:00:00:00', 'Synthetic Board', '0000')]
     ant_neuro_devices = [('ANT_NEURO_225', 'ANT Neuro 225', '0000'), ('ANT_NEURO_411', 'ANT Neuro 411', '0000')]
     lsl_device = [('LSL', 'LSL', '0000')]
-    all_devices = synthetic_devices + unicorn_devices + enophone_devices + ant_neuro_devices + lsl_device
+    no_eeg_device = [('00:00:00:00:00:00', 'None', '0000')]
+    all_devices = no_eeg_device + synthetic_devices + unicorn_devices + enophone_devices + ant_neuro_devices + lsl_device
     return all_devices
 
 
@@ -48,6 +49,11 @@ class SetupDialog(QtWidgets.QDialog):
         self.model_combo = QtWidgets.QComboBox(self)
         self.model_combo.addItems(models)
         self.model_combo.setCurrentText(models[0])
+
+        # Create dropdown for the number of tokens to be generated at each step
+        self.token_combo = QtWidgets.QComboBox(self)
+        self.token_combo.addItems(['1', '2', '4', '8', '12', '16', '24', '48'])
+        self.token_combo.setCurrentText('1')
 
         # Create dropdown for mood
         self.mood_combo = QtWidgets.QComboBox(self)
@@ -83,6 +89,8 @@ class SetupDialog(QtWidgets.QDialog):
         # Add widgets to layout
         layout.addWidget(QtWidgets.QLabel('Select model'))
         layout.addWidget(self.model_combo)
+        layout.addWidget(QtWidgets.QLabel('Select number of tokens to be generated at each step'))
+        layout.addWidget(self.token_combo)
         layout.addWidget(QtWidgets.QLabel('Select starting mood'))
         layout.addWidget(self.mood_combo)
         layout.addWidget(QtWidgets.QLabel('Select EEG device'))
@@ -99,6 +107,7 @@ class SetupDialog(QtWidgets.QDialog):
     def get_data(self):
         return {
             'MODEL' : self.model_combo.currentText(),
+            'TOKENS' : self.token_combo.currentText(),
             'STARTING_MOOD' : self.mood_combo.currentText(),
             'EEG_DEVICE_SERIAL_NUMBER' : self.device_combo.currentText(),
             'INSTRUMENT_IN_PORT_NAME' : self.instrument_combo.currentText(),
