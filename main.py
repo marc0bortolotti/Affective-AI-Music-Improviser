@@ -166,12 +166,12 @@ while True:
         if close_dialog.exec_() == 0:
             break
 
-    if app is not None:
-        if SAVE_SESSION:
-            app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-            app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
-        app.close()
-        thread_app.join()
+if app is not None:
+    if SAVE_SESSION:
+        app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+        app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+    app.close()
+    thread_app.join()
 
 
 
