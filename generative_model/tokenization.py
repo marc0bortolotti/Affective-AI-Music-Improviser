@@ -309,15 +309,64 @@ class PrettyMidiTokenizer(object):
 
     return sequences
   
-  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out):
+  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True):
+    
     min_len = min(len(string_tokens_in), len(string_tokens_out))
     combined_tokens = np.empty((min_len), dtype=object)
     for i in range(min_len):
       combined_tokens[i] = string_tokens_in[i] + IN_OUT_SEPARATOR_TOKEN + string_tokens_out[i]
     
+    # update the vocabulary 
+    if update_vocab:
+      self.update_vocab(combined_tokens)
+      if emotion_token is not None:
+        self.VOCAB.add_word(emotion_token)
 
+    # convert string tokens into integer tokens
+    for i in range(len(combined_tokens)):
+      if self.VOCAB.is_in_vocab(combined_tokens[i]):
+        combined_tokens[i] = self.VOCAB.word2idx[combined_tokens[i]] 
+      else: 
+        combined_tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
 
-  def midi_to_tokens(self, midi_path, update_vocab = False, rhythm = False, single_notes = False, max_len = None, drum = False,  convert_to_integers = True):
+    # generate in-out sequences
+    step = 1
+    stop_index = len(combined_tokens) - self.SEQ_LENGTH
+
+    in_sequences = []
+    out_sequences = []
+    for i in range(0, stop_index, step):
+      if i + self.SEQ_LENGTH + step > len(combined_tokens):
+        # pad the sequence with silence tokens
+        silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
+        in_sequence = np.concatenate(combined_tokens[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(combined_tokens))))
+        out_sequence = np.concatenate(in_sequence[step:] + np.array([silence_token_id] * step))
+      else:
+        in_sequence = combined_tokens[i : i+self.SEQ_LENGTH]
+        out_sequence = combined_tokens[i+step : i+self.SEQ_LENGTH+step]
+
+      if emotion_token is not None:
+        emotion_token_id = self.VOCAB.word2idx[emotion_token]
+        in_sequence = self.append_emotion_token(in_sequence, emotion_token_id)
+
+      in_sequences.append(in_sequence)
+      out_sequences.append(out_sequence)
+
+    return in_sequences, out_sequences
+    
+  def get_in_out_tokens(self, tokens):
+
+    in_tokens = []
+    out_tokens = []
+    for tok in tokens:
+      if IN_OUT_SEPARATOR_TOKEN in tok:
+        in_token, out_token = tok.split(IN_OUT_SEPARATOR_TOKEN)
+        in_tokens.append(in_token)
+        out_tokens.append(out_token)
+    
+    return in_tokens, out_tokens
+
+  def midi_to_tokens(self, midi_path, update_vocab = True, rhythm = False, single_notes = False, max_len = None, drum = False,  convert_to_integers = True):
 
     '''
     Converts a MIDI file into a sequence of tokens.
@@ -549,31 +598,30 @@ class PrettyMidiTokenizer(object):
 
       # Remove tokens that appear less than # times in the dataset
       for idx, count in enumerate(original_vocab.counter):
-          if original_vocab.idx2word[idx] in BCI_TOKENS.values(): 
-              pass
-          elif count < count_th:
-              original_vocab.counter[idx] = 0
+        if original_vocab.idx2word[idx] in BCI_TOKENS.values(): 
+          pass
+        elif count < count_th:
+          original_vocab.counter[idx] = 0
 
       # Create a new vocab with the updated tokens
       updated_vocab = Dictionary()
       for word in original_vocab.word2idx.keys():
-          if original_vocab.counter[original_vocab.word2idx[word]] > 0:
-              updated_vocab.add_word(word)
+        if original_vocab.counter[original_vocab.word2idx[word]] > 0:
+          updated_vocab.add_word(word)
 
       # Update the sequences with the new vocab
       for seq_id, seq in enumerate(self.sequences):
-          for i, tok in enumerate(seq):
-              print(f'Processing token {i+1}/{len(seq)} of sequence {seq_id+1}/{len(self.sequences)}', end="\r")
-              if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
-                  
-                  closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
-                  closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
-                  seq[i] = updated_vocab.word2idx[closest_token_string]
-                  updated_vocab.add_word(closest_token_string)
-              else:
-                  word = original_vocab.idx2word[tok]
-                  seq[i] = updated_vocab.word2idx[word]
-                  updated_vocab.add_word(word)
+        for i, tok in enumerate(seq):
+          print(f'Processing token {i+1}/{len(seq)} of sequence {seq_id+1}/{len(self.sequences)}', end="\r")
+          if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
+            closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
+            closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
+            seq[i] = updated_vocab.word2idx[closest_token_string]
+            updated_vocab.add_word(closest_token_string)
+          else:
+            word = original_vocab.idx2word[tok]
+            seq[i] = updated_vocab.word2idx[word]
+            updated_vocab.add_word(word)
       
       self.VOCAB = updated_vocab
       self.VOCAB.compute_weights()

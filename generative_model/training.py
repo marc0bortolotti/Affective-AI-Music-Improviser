@@ -17,7 +17,7 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody_emotion_1StepSequences_LR002_TokFreq5_512')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_rhythm_emotion_1StepSequences_LR00001_256_uniqueTokens')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -27,25 +27,26 @@ device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.02 # 0.002
+LEARNING_RATE = 0.002 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
 MODEL = ARCHITECTURES['TCN']
 
-FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
+COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
-DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
+DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
 N_TOKENS = 4 # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
 TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
 
-EMBEDDING_SIZE = 512
-TOKENS_FREQUENCY_THRESHOLD = 5 # remove tokens that appear less than # times in the dataset
+EMBEDDING_SIZE = 256
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -125,11 +126,23 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, drum=not FROM_MELODY_TO_RHYTHM, rhythm=FROM_MELODY_TO_RHYTHM)
-        out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, 
+                                             drum=not FROM_MELODY_TO_RHYTHM, 
+                                             rhythm=FROM_MELODY_TO_RHYTHM,
+                                             update_vocab=not COMBINE_IN_OUT_TOKENS,
+                                             convert_to_integers=not COMBINE_IN_OUT_TOKENS)
+        out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
+                                               update_vocab=not COMBINE_IN_OUT_TOKENS,
+                                               convert_to_integers=not COMBINE_IN_OUT_TOKENS)
 
-        in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
-        out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
+        if COMBINE_IN_OUT_TOKENS:
+            in_seq, out_seq = OUTPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
+            INPUT_TOK.VOCAB = OUTPUT_TOK.VOCAB
+            INPUT_TOK.sequences+=in_seq
+            OUTPUT_TOK.sequences+=out_seq
+        else:
+            in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
+            out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
 
         if len(in_seq) != len(out_seq):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
@@ -190,6 +203,7 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'SEED: {SEED}\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
         f.write(f'FROM_MELODY_TO_RHYTHM: {FROM_MELODY_TO_RHYTHM}\n')
+        f.write(f'COMBINE_IN_OUT_TOKENS: {COMBINE_IN_OUT_TOKENS}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
         f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
@@ -473,7 +487,7 @@ if __name__ == '__main__':
 
     # create the dataset
     dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
-                            torch.LongTensor(OUTPUT_TOK.sequences))
+                                torch.LongTensor(OUTPUT_TOK.sequences))
 
     # Split the dataset into training, evaluation and test sets
     train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
