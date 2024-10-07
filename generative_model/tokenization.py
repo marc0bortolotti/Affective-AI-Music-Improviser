@@ -275,7 +275,7 @@ class PrettyMidiTokenizer(object):
 
     return tokens
   
-  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True, step = 0):
+  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
 
     if emotion_token is not None:
       self.VOCAB.add_word(BCI_TOKENS[0])
@@ -287,7 +287,7 @@ class PrettyMidiTokenizer(object):
     if stop_index <= 0:
       stop_index = 1
 
-    for i in range(0, stop_index, step):
+    for i in range(0, stop_index):
 
       if i + self.SEQ_LENGTH > len(tokens):
         # pad the sequence with silence tokens
@@ -308,7 +308,7 @@ class PrettyMidiTokenizer(object):
 
     return sequences
   
-  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True, step = 0):
+  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True):
     
     min_len = min(len(string_tokens_in), len(string_tokens_out))
     combined_tokens = np.empty((min_len), dtype=object)
@@ -318,8 +318,6 @@ class PrettyMidiTokenizer(object):
     # update the vocabulary 
     if update_vocab:
       self.update_vocab(combined_tokens)
-      if emotion_token is not None:
-        self.VOCAB.add_word(emotion_token)
 
     # convert string tokens into integer tokens
     for i in range(len(combined_tokens)):
@@ -328,29 +326,11 @@ class PrettyMidiTokenizer(object):
       else: 
         combined_tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
 
-    # generate in-out sequences
-    stop_index = len(combined_tokens) - self.SEQ_LENGTH
+    # generate sequences
+    in_seq = self.generate_sequences(combined_tokens, emotion_token, update_sequences = False)
+    out_seq = self.generate_sequences(combined_tokens, update_sequences = False)
 
-    in_sequences = []
-    out_sequences = []
-    for i in range(0, stop_index, step):
-      if i + self.SEQ_LENGTH + step > len(combined_tokens):
-        # pad the sequence with silence tokens
-        silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
-        in_sequence = np.concatenate(combined_tokens[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(combined_tokens))))
-        out_sequence = np.concatenate(in_sequence[step:] + np.array([silence_token_id] * step))
-      else:
-        in_sequence = combined_tokens[i : i+self.SEQ_LENGTH]
-        out_sequence = combined_tokens[i+step : i+self.SEQ_LENGTH+step]
-
-      if emotion_token is not None:
-        emotion_token_id = self.VOCAB.word2idx[emotion_token]
-        in_sequence = self.append_emotion_token(in_sequence, emotion_token_id)
-
-      in_sequences.append(in_sequence)
-      out_sequences.append(out_sequence)
-
-    return in_sequences, out_sequences
+    return in_seq, out_seq
     
   def get_in_out_tokens(self, tokens):
 

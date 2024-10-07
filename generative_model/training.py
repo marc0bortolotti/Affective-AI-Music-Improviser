@@ -17,13 +17,20 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody_uniqueTokens')
+
+MODEL_NAME = 'TCN'
+COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+
+GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
+TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
 torch.manual_seed(SEED)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
@@ -31,19 +38,19 @@ LEARNING_RATE = 0.002 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
-MODEL = ARCHITECTURES['TCN']
+try:
+    MODEL = ARCHITECTURES[MODEL_NAME]
+except:
+    raise Exception('Model not found, check the model name')
 
-COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 4 # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
-
 TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
+N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
 EMBEDDING_SIZE = 256
 TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
@@ -136,11 +143,10 @@ def tokenize_midi_files():
                                                convert_to_integers=not COMBINE_IN_OUT_TOKENS)
 
         if COMBINE_IN_OUT_TOKENS:
-            in_seq, out_seq = OUTPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
-            INPUT_TOK.VOCAB = OUTPUT_TOK.VOCAB
+            in_seq, out_seq = INPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
+            OUTPUT_TOK.VOCAB = INPUT_TOK.VOCAB
             INPUT_TOK.sequences+=in_seq
             OUTPUT_TOK.sequences+=out_seq
-            print(in_seq[-1], out_seq[-1])
         else:
             in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
             out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
@@ -426,6 +432,18 @@ def train():
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
+        with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
+            f.write(f'EPOCH: {epoch}\n')
+            emotion, input = input_sample[0], input_sample[1:] 
+            mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
+            input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
+            output = model(input.unsqueeze(0).to(device))
+            output = torch.argmax(output, -1)
+            f.write(f'INPUT: {input.tolist()}\n')
+            f.write(f'OUTPUT: {output.tolist()}\n')
+            f.write(f'TARGET: {target_sample.tolist()}\n')
+                    
+
         # Save the model if the validation loss is the best we've seen so far.
         if train_loss < best_train_loss:
             best_train_loss = train_loss
@@ -488,7 +506,7 @@ if __name__ == '__main__':
 
     # create the dataset
     dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
-                                torch.LongTensor(OUTPUT_TOK.sequences))
+                            torch.LongTensor(OUTPUT_TOK.sequences))
 
     # Split the dataset into training, evaluation and test sets
     train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
@@ -503,7 +521,8 @@ if __name__ == '__main__':
 
     # initialize the dataloaders
     print(f'\nInitializing the dataloaders...')
-    global train_dataloader, eval_dataloader, test_dataloader
+    global train_dataloader, eval_dataloader, test_dataloader, input_sample, target_sample
+    input_sample, target_sample = train_set[0][0], train_set[0][1]
     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
 
     # initialize the model
