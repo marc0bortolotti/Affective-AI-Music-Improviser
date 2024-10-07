@@ -275,14 +275,13 @@ class PrettyMidiTokenizer(object):
 
     return tokens
   
-  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
+  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True, step = 0):
 
     if emotion_token is not None:
       self.VOCAB.add_word(BCI_TOKENS[0])
       self.VOCAB.add_word(BCI_TOKENS[1])
 
     sequences = []
-    step = 1
     stop_index = len(tokens) - self.SEQ_LENGTH
     
     if stop_index <= 0:
@@ -309,7 +308,7 @@ class PrettyMidiTokenizer(object):
 
     return sequences
   
-  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True):
+  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True, step = 0):
     
     min_len = min(len(string_tokens_in), len(string_tokens_out))
     combined_tokens = np.empty((min_len), dtype=object)
@@ -330,7 +329,6 @@ class PrettyMidiTokenizer(object):
         combined_tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
 
     # generate in-out sequences
-    step = 1
     stop_index = len(combined_tokens) - self.SEQ_LENGTH
 
     in_sequences = []

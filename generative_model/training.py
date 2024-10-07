@@ -480,50 +480,50 @@ if __name__ == '__main__':
     # tokenize the midi files
     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
-    # # update the sequences
-    # print('\nUpdating INPUT_TOK sequences and vocabulary')
-    # INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
-    # print('\nUpdating OUTPUT_TOK sequences and vocabulary')
-    # OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    # update the sequences
+    print('\nUpdating INPUT_TOK sequences and vocabulary')
+    INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    print('\nUpdating OUTPUT_TOK sequences and vocabulary')
+    OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
-    # # create the dataset
-    # dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
-    #                             torch.LongTensor(OUTPUT_TOK.sequences))
+    # create the dataset
+    dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
+                                torch.LongTensor(OUTPUT_TOK.sequences))
 
-    # # Split the dataset into training, evaluation and test sets
-    # train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
-    # print(f'\nTrain set size: {len(train_set)}')
-    # print(f'Evaluation set size: {len(eval_set)}')
-    # print(f'Test set size: {len(test_set)}')
+    # Split the dataset into training, evaluation and test sets
+    train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
+    print(f'\nTrain set size: {len(train_set)}')
+    print(f'Evaluation set size: {len(eval_set)}')
+    print(f'Test set size: {len(test_set)}')
 
-    # # augment the dataset
-    # if DATA_AUGMENTATION:
-    #     train_set = data_augmentation_shift(train_set, [-2, -1, 1, 2])
-    #     print(f'Training set size after augmentation: {len(train_set)}')
+    # augment the dataset
+    if DATA_AUGMENTATION:
+        train_set = data_augmentation_shift(train_set, [-2, -1, 1, 2])
+        print(f'Training set size after augmentation: {len(train_set)}')
 
-    # # initialize the dataloaders
-    # print(f'\nInitializing the dataloaders...')
-    # global train_dataloader, eval_dataloader, test_dataloader
-    # train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
+    # initialize the dataloaders
+    print(f'\nInitializing the dataloaders...')
+    global train_dataloader, eval_dataloader, test_dataloader
+    train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
 
-    # # initialize the model
-    # print(f'\nInitializing the model...')
-    # model = initialize_model(INPUT_TOK, OUTPUT_TOK)
-    # criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
-    # optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
-    # global MODEL_SIZE
-    # MODEL_SIZE = model.size()
-    # print(f'Model size: {MODEL_SIZE}')   
+    # initialize the model
+    print(f'\nInitializing the model...')
+    model = initialize_model(INPUT_TOK, OUTPUT_TOK)
+    criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
+    optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
+    global MODEL_SIZE
+    MODEL_SIZE = model.size()
+    print(f'Model size: {MODEL_SIZE}')   
 
-    # # save the model configuration
-    # save_model_config(model)
-    # save_parameters(INPUT_TOK, OUTPUT_TOK)
+    # save the model configuration
+    save_model_config(model)
+    save_parameters(INPUT_TOK, OUTPUT_TOK)
 
-    # # train the model
-    # time.sleep(5)
-    # print(f'\nTraining the model...')
-    # train()
+    # train the model
+    time.sleep(5)
+    print(f'\nTraining the model...')
+    train()
 
-    # # save the results
-    # save_results()
+    # save the results
+    save_results()
     
