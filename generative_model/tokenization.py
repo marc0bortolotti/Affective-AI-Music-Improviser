@@ -449,12 +449,18 @@ class PrettyMidiTokenizer(object):
     # convert the sequence of tokens into a list of tokens and their duration and velocity
     for token_idx, token in enumerate(sequence):
 
-      token_string = self.VOCAB.idx2word[token] # convert token id to string
+      if type(token) != str:
+        token_string = self.VOCAB.idx2word[token] # convert token id to string
+      else:
+        token_string = token
+
+      if IN_OUT_SEPARATOR_TOKEN in token_string:
+        token_string = token_string.split(IN_OUT_SEPARATOR_TOKEN)[1]
 
       if NOTE_SEPARATOR_TOKEN in token_string:
-          notes = token_string.split(NOTE_SEPARATOR_TOKEN)
+        notes = token_string.split(NOTE_SEPARATOR_TOKEN)
       else:
-          notes = [token_string]
+        notes = [token_string]
 
       # get current pitches in the token
       pitches = re.findall('\d+', token_string)
@@ -635,7 +641,7 @@ class PrettyMidiTokenizer(object):
       print(f'Inintial number of tokens: {len(original_vocab)}')
       print(f'Final number of tokens: {len(self.VOCAB)}')
 
-  def real_time_tokenization(self, notes, emotion_token = None, rhythm = False, single_notes = False):
+  def real_time_tokenization(self, notes, emotion_token = None, rhythm = False, single_notes = False, convert_to_integers = True):
     '''
     Converts a list of notes into a sequence of tokens in real-time.
 
@@ -687,11 +693,12 @@ class PrettyMidiTokenizer(object):
       tokens = self.append_emotion_token(tokens, emotion_token)
         
     # convert string tokens into integer tokens
-    for i in range(len(tokens)):      
-      if self.VOCAB.is_in_vocab(tokens[i]):
-        tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-      else: 
-        tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
+    if convert_to_integers:
+      for i in range(len(tokens)):      
+        if self.VOCAB.is_in_vocab(tokens[i]):
+          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
+        else: 
+          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
 
     return tokens
   
