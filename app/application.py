@@ -3,7 +3,7 @@ import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG, MOVE_CURSOR_MSG
 from EEG.eeg_device import EEG_Device
-from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS
+from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
 from generative_model.architectures.transformer import generate_square_subsequent_mask
 import torch
 import numpy as np
@@ -177,11 +177,19 @@ class AI_AffectiveMusicImproviser():
         self.model = model
         self.device = device
         self.INPUT_TOK = INPUT_TOK
-        self.OUTPUT_TOK = OUTPUT_TOK
+        self.OUTPUT_TOK = OUTPUT_TOK 
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
         self.SEQ_LENGTH = OUTPUT_TOK.SEQ_LENGTH
         self.init_track_path = init_track_path
-        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, max_len = 8 * self.BAR_LENGTH) 
+        self.combine_in_out = False
+        for word in self.INPUT_TOK.VOCAB.word2idx.keys():
+            if IN_OUT_SEPARATOR_TOKEN in word:
+                self.combine_in_out = True
+                break
+        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, 
+                                                          max_len = 8 * self.BAR_LENGTH,
+                                                          update_vocab=False,
+                                                          convert_to_integers=not self.combine_in_out) 
         self.init_tokens = self.init_tokens[-3*self.BAR_LENGTH:]  
 
         # THREADS
@@ -258,7 +266,8 @@ class AI_AffectiveMusicImproviser():
         softmax = torch.nn.Softmax(dim=-1)
 
         # initialize the target tensor for the transformer
-        last_output = torch.LongTensor(self.init_tokens.tolist()).to(self.device)
+        last_output_string = self.init_tokens.tolist()
+        last_output = last_output_string.copy()
         emotion_token = None
 
         while True:
@@ -279,16 +288,35 @@ class AI_AffectiveMusicImproviser():
 
             # tokenize the input notes
             if len(notes) > 0:
-                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, rhythm=self.generate_rhythm)
+                input_tokens = self.INPUT_TOK.real_time_tokenization(notes, 
+                                                                     rhythm=self.generate_rhythm,
+                                                                     convert_to_integers=not self.combine_in_out)
                 input_tokens_buffer.append(input_tokens)
 
             # if the buffer is full (4 bars), make the prediction
             if len(input_tokens_buffer) == 3:
                 # Flatten the tokens buffer
-                input_data = np.array(input_tokens_buffer, dtype=np.int32).flatten()
+                input_data = np.array(input_tokens_buffer).flatten().tolist()
 
-                # Convert the tokens to tensor
-                input_data = torch.LongTensor(input_data)
+                # Add the separator token between the input and the output 
+                if self.combine_in_out:
+                    for i in range(len(last_output_string)):
+                        input_data[i] = input_data[i] + IN_OUT_SEPARATOR_TOKEN + last_output_string[i]
+
+                        if self.INPUT_TOK.VOCAB.is_in_vocab(input_data[i]):
+                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[input_data[i]] 
+                        else:
+                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]
+                            
+                        if self.OUTPUT_TOK.VOCAB.is_in_vocab(last_output[i]):
+                            last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[last_output_string[i]]
+                        else: 
+                            last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]
+
+                input_data = np.array(input_data, dtype=np.int32)
+                last_output = np.array(last_output, dtype=np.int32)
+                input_data = torch.LongTensor(input_data).to(self.device)
+                last_output = torch.LongTensor(last_output).to(self.device)
 
                 # add mask to the input data
                 if self.STATUS['USE_EEG']:
@@ -299,7 +327,7 @@ class AI_AffectiveMusicImproviser():
                 input_data = torch.cat((input_data, mask))
 
                 # Add the batch dimension.
-                input_data = input_data.unsqueeze(0).to(self.device)
+                input_data = input_data.unsqueeze(0)
 
                 # Make the prediction 
                 if 'Transformer' in self.model_class_name:
@@ -354,9 +382,14 @@ class AI_AffectiveMusicImproviser():
 
                     # Get the predicted tokens.
                     predicted_bar = torch.argmax(output, 1) [-self.BAR_LENGTH:]
-
-                    # Convert the predicted tokens to a list.
                     predicted_bar = predicted_bar.cpu().numpy().tolist()
+
+                if self.combine_in_out:
+                    for i in range(self.BAR_LENGTH):
+                        predicted_bar[i] = self.OUTPUT_TOK.VOCAB.idx2word[predicted_bar[i]]
+                        predicted_bar[i] = predicted_bar[i].split(IN_OUT_SEPARATOR_TOKEN)[1]
+                    last_output_string += predicted_bar
+                    last_output_string = last_output_string[self.BAR_LENGTH:]                    
                 
                 logging.info(f"Generated sequence: {predicted_bar}")
 
@@ -390,7 +423,7 @@ class AI_AffectiveMusicImproviser():
 
         self.set_application_status('RUNNING', False)
 
-        time.sleep(5)   # wait for the threads to close
+        time.sleep(7)   # wait for the threads to close
 
         # close the threads
         self.midi_in.close()
