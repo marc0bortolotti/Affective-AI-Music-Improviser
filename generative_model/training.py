@@ -17,7 +17,7 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_rhythm_emotion_1StepSequences_LR00001_256_uniqueTokens')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/TCN_melody_uniqueTokens')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -34,7 +34,7 @@ ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
 MODEL = ARCHITECTURES['TCN']
 
 COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
@@ -140,6 +140,7 @@ def tokenize_midi_files():
             INPUT_TOK.VOCAB = OUTPUT_TOK.VOCAB
             INPUT_TOK.sequences+=in_seq
             OUTPUT_TOK.sequences+=out_seq
+            print(in_seq[-1], out_seq[-1])
         else:
             in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
             out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
@@ -479,50 +480,50 @@ if __name__ == '__main__':
     # tokenize the midi files
     INPUT_TOK, OUTPUT_TOK = tokenize_midi_files()
 
-    # update the sequences
-    print('\nUpdating INPUT_TOK sequences and vocabulary')
-    INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
-    print('\nUpdating OUTPUT_TOK sequences and vocabulary')
-    OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    # # update the sequences
+    # print('\nUpdating INPUT_TOK sequences and vocabulary')
+    # INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    # print('\nUpdating OUTPUT_TOK sequences and vocabulary')
+    # OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
 
-    # create the dataset
-    dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
-                                torch.LongTensor(OUTPUT_TOK.sequences))
+    # # create the dataset
+    # dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
+    #                             torch.LongTensor(OUTPUT_TOK.sequences))
 
-    # Split the dataset into training, evaluation and test sets
-    train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
-    print(f'\nTrain set size: {len(train_set)}')
-    print(f'Evaluation set size: {len(eval_set)}')
-    print(f'Test set size: {len(test_set)}')
+    # # Split the dataset into training, evaluation and test sets
+    # train_set, eval_set, test_set = random_split(dataset, DATASET_SPLIT)
+    # print(f'\nTrain set size: {len(train_set)}')
+    # print(f'Evaluation set size: {len(eval_set)}')
+    # print(f'Test set size: {len(test_set)}')
 
-    # augment the dataset
-    if DATA_AUGMENTATION:
-        train_set = data_augmentation_shift(train_set, [-2, -1, 1, 2])
-        print(f'Training set size after augmentation: {len(train_set)}')
+    # # augment the dataset
+    # if DATA_AUGMENTATION:
+    #     train_set = data_augmentation_shift(train_set, [-2, -1, 1, 2])
+    #     print(f'Training set size after augmentation: {len(train_set)}')
 
-    # initialize the dataloaders
-    print(f'\nInitializing the dataloaders...')
-    global train_dataloader, eval_dataloader, test_dataloader
-    train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
+    # # initialize the dataloaders
+    # print(f'\nInitializing the dataloaders...')
+    # global train_dataloader, eval_dataloader, test_dataloader
+    # train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
 
-    # initialize the model
-    print(f'\nInitializing the model...')
-    model = initialize_model(INPUT_TOK, OUTPUT_TOK)
-    criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
-    optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
-    global MODEL_SIZE
-    MODEL_SIZE = model.size()
-    print(f'Model size: {MODEL_SIZE}')   
+    # # initialize the model
+    # print(f'\nInitializing the model...')
+    # model = initialize_model(INPUT_TOK, OUTPUT_TOK)
+    # criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
+    # optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
+    # global MODEL_SIZE
+    # MODEL_SIZE = model.size()
+    # print(f'Model size: {MODEL_SIZE}')   
 
-    # save the model configuration
-    save_model_config(model)
-    save_parameters(INPUT_TOK, OUTPUT_TOK)
+    # # save the model configuration
+    # save_model_config(model)
+    # save_parameters(INPUT_TOK, OUTPUT_TOK)
 
-    # train the model
-    time.sleep(5)
-    print(f'\nTraining the model...')
-    train()
+    # # train the model
+    # time.sleep(5)
+    # print(f'\nTraining the model...')
+    # train()
 
-    # save the results
-    save_results()
+    # # save the results
+    # save_results()
     
