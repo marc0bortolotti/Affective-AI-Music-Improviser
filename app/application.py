@@ -317,12 +317,12 @@ class AI_AffectiveMusicImproviser():
                             input_data[i] = self.INPUT_TOK.VOCAB.word2idx[input_data[i]] 
                         else:
                             
-                            closest_token_string = process.extractOne(input_data[i], self.OUTPUT_TOK.VOCAB.word2idx.keys())
-                            if closest_token_string:
-                                closest_token_string = closest_token_string[0]
-                            else:
-                                count += 1
-                                closest_token_string = SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN
+                            # closest_token_string = process.extractOne(input_data[i], self.OUTPUT_TOK.VOCAB.word2idx.keys())
+                            # if closest_token_string:
+                            #     closest_token_string = closest_token_string[0]
+                            # else:
+                            count += 1
+                            closest_token_string = SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN
                             input_data[i] = self.INPUT_TOK.VOCAB.word2idx[closest_token_string]
                             
                         if self.OUTPUT_TOK.VOCAB.is_in_vocab(last_output[i]):
@@ -330,7 +330,7 @@ class AI_AffectiveMusicImproviser():
                         else: 
                             # count += 1
                             last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN]
-                print(count)
+                
                 input_data = np.array(input_data, dtype=np.int32)
                 last_output = np.array(last_output, dtype=np.int32)
                 input_data = torch.LongTensor(input_data).to(self.device)
