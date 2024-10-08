@@ -16,6 +16,8 @@ SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
 IN_OUT_SEPARATOR_TOKEN = '|'
+START_TOKEN = '<START>'
+END_TOKEN = '<END>'
 
 
 DRUM_MIDI_DICT = {    
@@ -148,6 +150,10 @@ class PrettyMidiTokenizer(object):
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
     self.VOCAB.add_word(SILENCE_TOKEN)
+    self.VOCAB.add_word(BCI_TOKENS[0])
+    self.VOCAB.add_word(BCI_TOKENS[1])
+    self.VOCAB.add_word(NOTE_START_TOKEN)
+    self.VOCAB.add_word(END_TOKEN)
 
   def load_vocab(self, path):
     self.VOCAB = Dictionary()
@@ -279,10 +285,6 @@ class PrettyMidiTokenizer(object):
   
   def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
 
-    if emotion_token is not None:
-      self.VOCAB.add_word(BCI_TOKENS[0])
-      self.VOCAB.add_word(BCI_TOKENS[1])
-
     sequences = []
     stop_index = len(tokens) - self.SEQ_LENGTH
     
@@ -290,13 +292,8 @@ class PrettyMidiTokenizer(object):
       stop_index = 1
 
     for i in range(0, stop_index):
-
-      if i + self.SEQ_LENGTH > len(tokens):
-        # pad the sequence with silence tokens
-        silence_token_id = self.VOCAB.word2idx[SILENCE_TOKEN]
-        sequence = np.concatenate((tokens[i:], np.array([silence_token_id] * (self.SEQ_LENGTH - len(tokens)))))
-      else:
-        sequence = tokens[i:i+self.SEQ_LENGTH]
+      
+      sequence = tokens[i:i+self.SEQ_LENGTH]
 
       if emotion_token is not None:
         emotion_token_id = self.VOCAB.word2idx[emotion_token]
@@ -380,7 +377,9 @@ class PrettyMidiTokenizer(object):
     else:
       tokens_len = max_len
 
-    tokens = np.empty((tokens_len), dtype=object)
+    pad = tokens_len % self.BAR_LENGTH
+
+    tokens = np.empty((tokens_len + pad), dtype=object)
     tokens[:] = SILENCE_TOKEN
     for idx, note in enumerate(sorted_notes):
       print(f"Processing note: {idx+1}/{len(sorted_notes)}", end="\r")
@@ -584,7 +583,7 @@ class PrettyMidiTokenizer(object):
 
       # Remove tokens that appear less than # times in the dataset
       for idx, count in enumerate(original_vocab.counter):
-        if original_vocab.idx2word[idx] in BCI_TOKENS.values(): 
+        if original_vocab.idx2word[idx] in [BCI_TOKENS.values(), SILENCE_TOKEN, NOTE_START_TOKEN, END_TOKEN]: 
           pass
         elif count < count_th:
           original_vocab.counter[idx] = 0
@@ -599,7 +598,7 @@ class PrettyMidiTokenizer(object):
       for seq_id, seq in enumerate(self.sequences):
         for i, tok in enumerate(seq):
           print(f'Processing token {i+1}/{len(seq)} of sequence {seq_id+1}/{len(self.sequences)}', end="\r")
-          if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in BCI_TOKENS.values():
+          if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in [BCI_TOKENS.values(), SILENCE_TOKEN, NOTE_START_TOKEN, END_TOKEN]:
             closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
             closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
             seq[i] = updated_vocab.word2idx[closest_token_string]

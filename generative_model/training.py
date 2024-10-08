@@ -20,11 +20,11 @@ DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'TCN'
 COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -66,7 +66,7 @@ LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for #
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_{idx}')
+    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_{idx}')
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -135,7 +135,7 @@ def tokenize_midi_files():
 
         in_tokens = INPUT_TOK.midi_to_tokens(in_file, 
                                              drum=not FROM_MELODY_TO_RHYTHM, 
-                                             rhythm=FROM_MELODY_TO_RHYTHM,
+                                             rhythm= True,
                                              update_vocab=not COMBINE_IN_OUT_TOKENS,
                                              convert_to_integers=not COMBINE_IN_OUT_TOKENS)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
