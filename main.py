@@ -29,7 +29,7 @@ VALIDATION_TIME = 5
 
 # APPLICATION PARAMETERS
 SKIP_TRAINING = True
-SAVE_SESSION = False
+SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
 
 
@@ -49,7 +49,7 @@ while True:
         if app is not None:
             if SAVE_SESSION:
                 app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-                app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+                app.save_hystory(os.path.join(SAVE_PATH))
             app.close()
             thread_app.join()
 
@@ -171,7 +171,7 @@ while True:
 if app is not None:
     if SAVE_SESSION:
         app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-        app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+        app.save_hystory(os.path.join(SAVE_PATH))
     app.close()
     thread_app.join()
 

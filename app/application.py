@@ -1,7 +1,7 @@
 import threading
 import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
-from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG, MOVE_CURSOR_MSG
+from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG, MOVE_CURSOR_TO_ITEM_END_MSG, MOVE_CURSOR_TO_NEXT_MEASURE_MSG
 from EEG.eeg_device import EEG_Device
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
 from generative_model.architectures.transformer import generate_square_subsequent_mask
@@ -190,7 +190,7 @@ class AI_AffectiveMusicImproviser():
                                                           max_len = 8 * self.BAR_LENGTH,
                                                           update_vocab=False,
                                                           convert_to_integers=not self.combine_in_out) 
-        self.init_tokens = self.init_tokens[-3*self.BAR_LENGTH:]  
+        self.init_tokens = self.init_tokens[:3*self.BAR_LENGTH]  
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
@@ -219,7 +219,8 @@ class AI_AffectiveMusicImproviser():
         return self.eeg_device
     
     def start_reaper_recording(self):
-        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, MOVE_CURSOR_MSG, 1)
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, MOVE_CURSOR_TO_ITEM_END_MSG, 1)
+        self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, MOVE_CURSOR_TO_NEXT_MEASURE_MSG, 1)
         self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
         self.set_application_status('IS_RECORDING', True)
 
@@ -230,19 +231,19 @@ class AI_AffectiveMusicImproviser():
     def save_hystory(self, path):
         path = os.path.join(path, 'hystory.txt')
         with open(path, 'w') as file:
-            for i, item in enumerate(self.hystory):
-                if i % 2 == 0:
-                    file.write("Input: \n")
-                    for bar_id, bar in enumerate(item):
-                        file.write(f"Bar {bar_id}: ")
-                        for tok in bar:
-                            file.write(self.INPUT_TOK.VOCAB.idx2word[tok] + ' ')
-                        file.write("\n")
-                else:
-                    file.write("Output: \n")
-                    for tok in item:
-                        file.write(self.OUTPUT_TOK.VOCAB.idx2word[tok] + ' ')
-                    file.write("\n\n")
+            for item in self.hystory:
+                in_bars, out_bars = item
+                for i in range(0, 4):
+                    file.write(f"bar_{i+1}_IN_OUT:\n")
+                    for tok in in_bars[(i)*self.BAR_LENGTH : (i+1)*self.BAR_LENGTH]:
+                        text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
+                        file.write(text)
+                    file.write("\n")
+                    for tok in out_bars[(i)*self.BAR_LENGTH: (i+1)*self.BAR_LENGTH]:
+                        text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
+                        file.write(text)
+                    file.write("\n")
+                file.write("\n")
 
     def run(self):
 
@@ -269,6 +270,7 @@ class AI_AffectiveMusicImproviser():
         last_output_string = self.init_tokens.tolist()
         last_output = last_output_string.copy()
         emotion_token = None
+        predicted_bar = None
 
         while True:
 
@@ -282,15 +284,17 @@ class AI_AffectiveMusicImproviser():
 
             # get the notes from the buffer
             notes = self.midi_in.get_note_buffer()
-
-            # clear the buffer
-            self.midi_in.clear_note_buffer()
+            for note in notes:
+                print(note)
+            print()
 
             # tokenize the input notes
             if len(notes) > 0:
                 input_tokens = self.INPUT_TOK.real_time_tokenization(notes, 
                                                                      rhythm=self.generate_rhythm,
                                                                      convert_to_integers=not self.combine_in_out)
+                print(input_tokens.tolist())    
+                print()
                 input_tokens_buffer.append(input_tokens)
 
             # if the buffer is full (4 bars), make the prediction
@@ -306,12 +310,12 @@ class AI_AffectiveMusicImproviser():
                         if self.INPUT_TOK.VOCAB.is_in_vocab(input_data[i]):
                             input_data[i] = self.INPUT_TOK.VOCAB.word2idx[input_data[i]] 
                         else:
-                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]
+                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN]
                             
                         if self.OUTPUT_TOK.VOCAB.is_in_vocab(last_output[i]):
                             last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[last_output_string[i]]
                         else: 
-                            last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]
+                            last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN]
 
                 input_data = np.array(input_data, dtype=np.int32)
                 last_output = np.array(last_output, dtype=np.int32)
@@ -390,8 +394,6 @@ class AI_AffectiveMusicImproviser():
                         predicted_bar[i] = predicted_bar[i].split(IN_OUT_SEPARATOR_TOKEN)[1]
                     last_output_string += predicted_bar
                     last_output_string = last_output_string[self.BAR_LENGTH:]                    
-                
-                logging.info(f"Generated sequence: {predicted_bar}")
 
                 # Get the confidence of the prediction withouth the temperature contribution.
                 confidence = torch.mean(predicted_proba).item() 
@@ -400,8 +402,7 @@ class AI_AffectiveMusicImproviser():
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
 
                 # # save the hystory
-                # self.hystory.append(input_tokens_buffer.copy())
-                # self.hystory.append(predicted_tokens)
+                self.hystory.append([input_data.squeeze().tolist(), torch.argmax(output, 1).tolist()])
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0, emotion_token=emotion_token)
@@ -409,11 +410,12 @@ class AI_AffectiveMusicImproviser():
                 # remove the first bar from the tokens buffer
                 input_tokens_buffer.pop(0)
 
-            if self.parse_message:
-                logging.info(f"Confidence: {confidence}")
-                logging.info(f"Temperature: {temperature}")
-                logging.info(f'Emotion: {emotion_token}')
-                logging.info(f"Elapsed time: {time.time() - start_time}")
+            # if self.parse_message:
+            #     logging.info(f"Confidence: {confidence}")
+            #     logging.info(f"Temperature: {temperature}")
+            #     logging.info(f'Emotion: {emotion_token}')
+            #     logging.info(f"Elapsed time: {time.time() - start_time}")
+            #     logging.info(f"Generated sequence: {predicted_bar}")
 
             if not self.STATUS['RUNNING']:
                 break

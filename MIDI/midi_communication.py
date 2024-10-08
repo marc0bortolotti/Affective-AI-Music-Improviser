@@ -92,16 +92,17 @@ class MIDI_Input:
             for msg in mid.play(): 
                 self.midi_simulation_port.send(msg)
                 if msg.type in ['note_on', 'note_off']:
+                    if msg.type == 'note_off':
+                        msg.velocity = 0
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
                 if self.exit:
                     break   
         self.midi_simulation_port.close()
 
     def get_note_buffer(self):
-        return self.note_buffer
-    
-    def clear_note_buffer(self):
-        self.note_buffer = []
+        notes = self.note_buffer.copy()
+        self.note_buffer = self.note_buffer[len(notes):]
+        return notes
 
     def close(self):
         self.exit = True
