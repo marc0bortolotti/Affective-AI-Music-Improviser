@@ -652,7 +652,7 @@ class PrettyMidiTokenizer(object):
 
       if velocity == 0:
         continue
-       
+
       end = start + 1
       
       if end > self.BAR_LENGTH :
@@ -719,6 +719,8 @@ if __name__ == '__main__':
         print('\n', tokens, '\n')
         i+=1
         note_buffer = []
+        if i == 4:
+          break
 
 
   # tok = PrettyMidiTokenizer()

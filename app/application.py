@@ -13,6 +13,7 @@ import logging
 import time
 import yaml
 import importlib
+from rapidfuzz import process
 import sys
 
 '''---------- CONNECTION PARAMETERS ------------'''
@@ -271,6 +272,7 @@ class AI_AffectiveMusicImproviser():
         last_output = last_output_string.copy()
         emotion_token = None
         predicted_bar = None
+        first_prediction = True
 
         while True:
 
@@ -284,17 +286,17 @@ class AI_AffectiveMusicImproviser():
 
             # get the notes from the buffer
             notes = self.midi_in.get_note_buffer()
-            for note in notes:
-                print(note)
-            print()
+            # for note in notes:
+            #     print(note)
+            # print()
 
             # tokenize the input notes
             if len(notes) > 0:
                 input_tokens = self.INPUT_TOK.real_time_tokenization(notes, 
                                                                      rhythm=self.generate_rhythm,
                                                                      convert_to_integers=not self.combine_in_out)
-                print(input_tokens.tolist())    
-                print()
+                # print(input_tokens.tolist())    
+                # print()
                 input_tokens_buffer.append(input_tokens)
 
             # if the buffer is full (4 bars), make the prediction
@@ -304,19 +306,31 @@ class AI_AffectiveMusicImproviser():
 
                 # Add the separator token between the input and the output 
                 if self.combine_in_out:
+                    count = 0
                     for i in range(len(last_output_string)):
                         input_data[i] = input_data[i] + IN_OUT_SEPARATOR_TOKEN + last_output_string[i]
+                        if first_prediction:
+                            last_output[i] = input_data[i]
+                            first_prediction = False
 
                         if self.INPUT_TOK.VOCAB.is_in_vocab(input_data[i]):
                             input_data[i] = self.INPUT_TOK.VOCAB.word2idx[input_data[i]] 
                         else:
-                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN]
+                            
+                            closest_token_string = process.extractOne(input_data[i], self.OUTPUT_TOK.VOCAB.word2idx.keys())
+                            if closest_token_string:
+                                closest_token_string = closest_token_string[0]
+                            else:
+                                count += 1
+                                closest_token_string = SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN
+                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[closest_token_string]
                             
                         if self.OUTPUT_TOK.VOCAB.is_in_vocab(last_output[i]):
                             last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[last_output_string[i]]
                         else: 
+                            # count += 1
                             last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN]
-
+                print(count)
                 input_data = np.array(input_data, dtype=np.int32)
                 last_output = np.array(last_output, dtype=np.int32)
                 input_data = torch.LongTensor(input_data).to(self.device)
@@ -410,12 +424,12 @@ class AI_AffectiveMusicImproviser():
                 # remove the first bar from the tokens buffer
                 input_tokens_buffer.pop(0)
 
-            # if self.parse_message:
-            #     logging.info(f"Confidence: {confidence}")
-            #     logging.info(f"Temperature: {temperature}")
-            #     logging.info(f'Emotion: {emotion_token}')
-            #     logging.info(f"Elapsed time: {time.time() - start_time}")
-            #     logging.info(f"Generated sequence: {predicted_bar}")
+            if self.parse_message:
+                logging.info(f"Confidence: {confidence}")
+                logging.info(f"Temperature: {temperature}")
+                logging.info(f'Emotion: {emotion_token}')
+                logging.info(f"Elapsed time: {time.time() - start_time}")
+                logging.info(f"Generated sequence: {predicted_bar}")
 
             if not self.STATUS['RUNNING']:
                 break
