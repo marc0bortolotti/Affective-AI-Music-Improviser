@@ -1,4 +1,4 @@
-DATE: 20241008-212034
+DATE: 20241008-213350
 
 -----------------DATASET------------------
 DATASET_PATH: /home/marco_bortolotti/project_official/Affective-AI-Music-Improviser/generative_model/dataset
@@ -24,7 +24,7 @@ EARLY STOP EPOCHS: 15
 USE_EEG: True
 ENTROPY_WEIGHT: 1.0
 PENALTY_WEIGHT: 1.0
-LEARNING_RATE: 0.002
+LEARNING_RATE: 0.0001
 BATCH_SIZE: 64
 EPOCHS: 1000
 

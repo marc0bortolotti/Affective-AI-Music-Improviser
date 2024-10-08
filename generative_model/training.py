@@ -20,7 +20,7 @@ DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'MT'
 COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
@@ -30,7 +30,7 @@ DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 SEED = 1111
 torch.manual_seed(SEED)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
@@ -432,16 +432,16 @@ def train():
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
-        with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
-            f.write(f'EPOCH: {epoch}\n')
-            emotion, input = input_sample[0], input_sample[1:] 
-            mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
-            input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
-            output = model(input.unsqueeze(0).to(device))
-            output = torch.argmax(output, -1)
-            f.write(f'INPUT: {input.tolist()}\n')
-            f.write(f'OUTPUT: {output.tolist()}\n')
-            f.write(f'TARGET: {target_sample.tolist()}\n')
+        # with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
+        #     f.write(f'EPOCH: {epoch}\n')
+        #     emotion, input = input_sample[0], input_sample[1:] 
+        #     mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
+        #     input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
+        #     output = model(input.unsqueeze(0).to(device))
+        #     output = torch.argmax(output, -1)
+        #     f.write(f'INPUT: {input.tolist()}\n')
+        #     f.write(f'OUTPUT: {output.tolist()}\n')
+        #     f.write(f'TARGET: {target_sample.tolist()}\n')
                     
 
         # Save the model if the validation loss is the best we've seen so far.
