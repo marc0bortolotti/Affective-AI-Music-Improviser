@@ -18,9 +18,9 @@ import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 
-MODEL_NAME = 'TCN'
-COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
+MODEL_NAME = 'MT'
+COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
@@ -34,7 +34,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
@@ -135,7 +135,7 @@ def tokenize_midi_files():
 
         in_tokens = INPUT_TOK.midi_to_tokens(in_file, 
                                              drum=not FROM_MELODY_TO_RHYTHM, 
-                                             rhythm= True,
+                                             rhythm= FROM_MELODY_TO_RHYTHM,
                                              update_vocab=not COMBINE_IN_OUT_TOKENS,
                                              convert_to_integers=not COMBINE_IN_OUT_TOKENS)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
