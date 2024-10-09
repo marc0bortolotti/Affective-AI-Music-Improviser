@@ -283,7 +283,7 @@ class PrettyMidiTokenizer(object):
 
     return tokens
   
-  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True, step = 0):
+  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
 
     sequences = []
     stop_index = len(tokens) - self.SEQ_LENGTH
@@ -291,7 +291,7 @@ class PrettyMidiTokenizer(object):
     if stop_index <= 0:
       stop_index = 1
 
-    for i in range(step, stop_index):
+    for i in range(0, stop_index):
       
       sequence = tokens[i : i+self.SEQ_LENGTH]
 
@@ -327,7 +327,7 @@ class PrettyMidiTokenizer(object):
 
     # generate sequences
     in_seq = self.generate_sequences(combined_tokens, emotion_token, update_sequences = False)
-    out_seq = self.generate_sequences(combined_tokens, update_sequences = False, step = 1)
+    out_seq = self.generate_sequences(combined_tokens, update_sequences = False)
 
     return in_seq, out_seq
     

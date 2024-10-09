@@ -24,7 +24,7 @@ FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_noBCI_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -43,7 +43,7 @@ try:
 except:
     raise Exception('Model not found, check the model name')
 
-USE_EEG = True # use the EEG data to condition the model
+USE_EEG = False # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
