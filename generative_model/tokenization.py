@@ -583,7 +583,7 @@ class PrettyMidiTokenizer(object):
 
       # Remove tokens that appear less than # times in the dataset
       for idx, count in enumerate(original_vocab.counter):
-        if original_vocab.idx2word[idx] in [BCI_TOKENS.values(), SILENCE_TOKEN, START_TOKEN, END_TOKEN]: 
+        if original_vocab.idx2word[idx] in [BCI_TOKENS.values()[0], BCI_TOKENS.values()[1], SILENCE_TOKEN, START_TOKEN, END_TOKEN]: 
           pass
         elif count < count_th:
           original_vocab.counter[idx] = 0
@@ -598,7 +598,7 @@ class PrettyMidiTokenizer(object):
       for seq_id, seq in enumerate(self.sequences):
         for i, tok in enumerate(seq):
           print(f'Processing token {i+1}/{len(seq)} of sequence {seq_id+1}/{len(self.sequences)}', end="\r")
-          if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in [BCI_TOKENS.values(), SILENCE_TOKEN, START_TOKEN, END_TOKEN]:
+          if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in [BCI_TOKENS.values()[0], BCI_TOKENS.values()[1], SILENCE_TOKEN, START_TOKEN, END_TOKEN]:
             # closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
             # closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
             closest_token_string = SILENCE_TOKEN
