@@ -500,9 +500,9 @@ if __name__ == '__main__':
 
     # update the sequences
     print('\nUpdating INPUT_TOK sequences and vocabulary')
-    INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    INPUT_TOK.remove_less_likely_tokens(TOKENS_FREQUENCY_THRESHOLD)
     print('\nUpdating OUTPUT_TOK sequences and vocabulary')
-    OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    OUTPUT_TOK.remove_less_likely_tokens(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
     dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),

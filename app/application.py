@@ -57,7 +57,7 @@ def load_model(model_param_path, model_module_path, model_class_name, ticks_per_
         params = yaml.safe_load(file)
         model = model_class(**params)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device('cpu') # torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     try:
         model.load_state_dict(torch.load(weights_path, map_location = device))
@@ -65,7 +65,6 @@ def load_model(model_param_path, model_module_path, model_class_name, ticks_per_
         print(f"Error loading model: {e}")
 
     model.eval()
-    model.to(device)
 
     logging.info(f"Model {model_class_name} loaded correctly")
 
@@ -258,7 +257,7 @@ class AI_AffectiveMusicImproviser():
         if self.STATUS['USE_EEG']:
             self.thread_eeg.start()
 
-        input_tokens_buffer = []
+        input_tokens_buffer = np.array([])
         generated_track = None
         confidence = 0.0
         temperature = 1.0
@@ -268,11 +267,11 @@ class AI_AffectiveMusicImproviser():
         softmax = torch.nn.Softmax(dim=-1)
 
         # initialize the target tensor for the transformer
-        last_output_string = self.init_tokens.tolist()
-        last_output = last_output_string.copy()
+        last_output_only_output = self.init_tokens.copy()
+        last_output =  self.init_tokens.copy()
         emotion_token = None
         predicted_bar = None
-        first_prediction = True
+        first_iter = True
 
         while True:
 
@@ -284,57 +283,44 @@ class AI_AffectiveMusicImproviser():
 
             start_time = time.time()
 
-            # get the notes from the buffer
+            # get the notes from the buffer and flush it
             notes = self.midi_in.get_note_buffer()
-            # for note in notes:
-            #     print(note)
-            # print()
 
             # tokenize the input notes
             if len(notes) > 0:
                 input_tokens = self.INPUT_TOK.real_time_tokenization(notes, 
                                                                      rhythm=self.generate_rhythm,
                                                                      convert_to_integers=not self.combine_in_out)
-                # print(input_tokens.tolist())    
-                # print()
-                input_tokens_buffer.append(input_tokens)
+
+                input_tokens_buffer = np.concatenate((input_tokens_buffer, input_tokens))
 
             # if the buffer is full (4 bars), make the prediction
-            if len(input_tokens_buffer) == 3:
-                # Flatten the tokens buffer
-                input_data = np.array(input_tokens_buffer).flatten().tolist()
+            if len(input_tokens_buffer) == 3*self.BAR_LENGTH:
 
-                # Add the separator token between the input and the output 
+                input_data = input_tokens_buffer.copy()
+
                 if self.combine_in_out:
-                    count = 0
-                    for i in range(len(last_output_string)):
-                        input_data[i] = input_data[i] + IN_OUT_SEPARATOR_TOKEN + last_output_string[i]
-                        if first_prediction:
-                            last_output[i] = input_data[i]
-                            first_prediction = False
+                    for i in range(len(input_tokens_buffer)):
+                        # Add the separator token between the input and the output 
+                        token_string = input_tokens_buffer[i] + IN_OUT_SEPARATOR_TOKEN + last_output_only_output[i]
 
-                        if self.INPUT_TOK.VOCAB.is_in_vocab(input_data[i]):
-                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[input_data[i]] 
-                        else:
+                        # Convert the token to the integer representation
+                        if not self.INPUT_TOK.VOCAB.is_in_vocab(token_string):
+                            if self.STATUS['USE_EEG']:
+                                token_string = self.get_last_eeg_classification()
+                            else:
+                                token_string = SILENCE_TOKEN
                             
-                            # closest_token_string = process.extractOne(input_data[i], self.OUTPUT_TOK.VOCAB.word2idx.keys())
-                            # if closest_token_string:
-                            #     closest_token_string = closest_token_string[0]
-                            # else:
-                            count += 1
-                            closest_token_string = SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN
-                            input_data[i] = self.INPUT_TOK.VOCAB.word2idx[closest_token_string]
-                            
-                        if self.OUTPUT_TOK.VOCAB.is_in_vocab(last_output[i]):
-                            last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[last_output_string[i]]
-                        else: 
-                            # count += 1
-                            last_output[i] = self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN+IN_OUT_SEPARATOR_TOKEN+SILENCE_TOKEN]
+                        input_data[i] = self.INPUT_TOK.VOCAB.word2idx[token_string] 
+
+                    if first_iter:
+                        last_output = input_data.copy()
+                        first_iter = False
                 
                 input_data = np.array(input_data, dtype=np.int32)
                 last_output = np.array(last_output, dtype=np.int32)
-                input_data = torch.LongTensor(input_data).to(self.device)
-                last_output = torch.LongTensor(last_output).to(self.device)
+                input_data = torch.LongTensor(input_data)
+                last_output = torch.LongTensor(last_output)
 
                 # add mask to the input data
                 if self.STATUS['USE_EEG']:
@@ -350,8 +336,8 @@ class AI_AffectiveMusicImproviser():
                 # Make the prediction 
                 if 'Transformer' in self.model_class_name:
 
-                    predicted_proba = []
-                    predicted_bar = []
+                    predicted_proba = torch.tensor([])
+                    predicted_bar = np.array([], dtype=np.int32)
 
                     for i in range(int(self.BAR_LENGTH/self.n_tokens)):
 
@@ -359,11 +345,10 @@ class AI_AffectiveMusicImproviser():
                         last_output = last_output.unsqueeze(0)
 
                         # Generate the mask for the target sequence
-                        last_output_mask = generate_square_subsequent_mask(last_output.size(1)).to(self.device)
+                        last_output_mask = generate_square_subsequent_mask(last_output.size(1))
 
                         # Make the prediction
-                        output = self.model(input_data, last_output, tgt_mask=last_output_mask)
-                        output = output.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
+                        output = self.model(input_data, last_output, tgt_mask=last_output_mask)[0]
 
                         # Apply the softmax function to the output
                         temperature = self.osc_server.get_temperature()
@@ -372,7 +357,7 @@ class AI_AffectiveMusicImproviser():
 
                         # Get the probability of the prediction
                         proba = torch.max(output_no_temp, dim=-1)[0][-self.n_tokens:]
-                        predicted_proba.append(proba)
+                        predicted_proba = torch.cat((predicted_proba, proba))
 
                         # Get the last token of the output
                         prediction = torch.argmax(output, 1)
@@ -380,17 +365,11 @@ class AI_AffectiveMusicImproviser():
                         last_output = torch.cat((last_output[0, self.n_tokens:], next_tokens))
 
                         # Update the target tensor
-                        predicted_bar+=next_tokens.cpu().numpy().tolist()
-                    
-                    # predicted_bar = last_output.squeeze(0).cpu().numpy().tolist() [-self.BAR_LENGTH:]
-                    # predicted_proba = torch.max(output, dim=-1)[0][-self.BAR_LENGTH:]
-                    predicted_proba = torch.cat(predicted_proba, dim=0)
+                        predicted_bar = np.concatenate((predicted_bar, next_tokens.numpy()))
 
                 else:
-                    output = self.model(input_data)
-
-                    # Remove the batch dimension.
-                    output = output.contiguous().view(-1, len(self.OUTPUT_TOK.VOCAB))
+                    # Make the prediction
+                    output = self.model(input_data)[0]
 
                     # Get the probability distribution of the prediction by applying the softmax function and the temperature.
                     temperature = self.osc_server.get_temperature()
@@ -399,15 +378,18 @@ class AI_AffectiveMusicImproviser():
                     predicted_proba = torch.max(output_no_temp, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
-                    predicted_bar = torch.argmax(output, 1) [-self.BAR_LENGTH:]
-                    predicted_bar = predicted_bar.cpu().numpy().tolist()
+                    predicted_bar = torch.argmax(output, 1).numpy()[-self.BAR_LENGTH:] 
 
                 if self.combine_in_out:
-                    for i in range(self.BAR_LENGTH):
-                        predicted_bar[i] = self.OUTPUT_TOK.VOCAB.idx2word[predicted_bar[i]]
-                        predicted_bar[i] = predicted_bar[i].split(IN_OUT_SEPARATOR_TOKEN)[1]
-                    last_output_string += predicted_bar
-                    last_output_string = last_output_string[self.BAR_LENGTH:]                    
+                    for tok in predicted_bar:
+                        # Convert the predicted tokens to the string representation
+                        tok = self.OUTPUT_TOK.VOCAB.idx2word[tok]
+                        # Split the string in input and output
+                        tok = tok.split(IN_OUT_SEPARATOR_TOKEN)[1]
+                        # Add the predicted tokens to the last output
+                        last_output_only_output = np.append(last_output_only_output, tok)
+                    # Remove the first bar from the last output
+                    last_output_only_output = last_output_only_output[self.BAR_LENGTH:]                    
 
                 # Get the confidence of the prediction withouth the temperature contribution.
                 confidence = torch.mean(predicted_proba).item() 
@@ -416,13 +398,13 @@ class AI_AffectiveMusicImproviser():
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
 
                 # # save the hystory
-                self.hystory.append([input_data.squeeze().tolist(), torch.argmax(output, 1).tolist()])
+                self.hystory.append([input_data[0], torch.argmax(output, 1)])
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0, emotion_token=emotion_token)
 
                 # remove the first bar from the tokens buffer
-                input_tokens_buffer.pop(0)
+                input_tokens_buffer = input_tokens_buffer[self.BAR_LENGTH:]
 
             if self.parse_message:
                 logging.info(f"Confidence: {confidence}")
