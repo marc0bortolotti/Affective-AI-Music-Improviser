@@ -599,8 +599,9 @@ class PrettyMidiTokenizer(object):
         for i, tok in enumerate(seq):
           print(f'Processing token {i+1}/{len(seq)} of sequence {seq_id+1}/{len(self.sequences)}', end="\r")
           if original_vocab.counter[tok] == 0 and original_vocab.idx2word[tok] not in [BCI_TOKENS.values(), SILENCE_TOKEN, START_TOKEN, END_TOKEN]:
-            closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
-            closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
+            # closest_token_string = process.extractOne(original_vocab.idx2word[tok], updated_vocab.word2idx.keys())
+            # closest_token_string = closest_token_string[0] if closest_token_string else SILENCE_TOKEN
+            closest_token_string = SILENCE_TOKEN
             seq[i] = updated_vocab.word2idx[closest_token_string]
             updated_vocab.add_word(closest_token_string)
           else:

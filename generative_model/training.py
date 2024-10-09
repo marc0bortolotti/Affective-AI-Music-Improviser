@@ -20,11 +20,11 @@ DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'MT'
 COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_noBCI_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_lessToken_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -43,7 +43,7 @@ try:
 except:
     raise Exception('Model not found, check the model name')
 
-USE_EEG = False # use the EEG data to condition the model
+USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
@@ -53,7 +53,7 @@ TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
 EMBEDDING_SIZE = 256
-TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
+TOKENS_FREQUENCY_THRESHOLD = 20 # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -281,12 +281,21 @@ def epoch_step(epoch, dataloader, mode):
 
         batch_idx += 1
 
-        # add mask to the input last bar
+        # extract the emotion and the input
         emotion, input = input[:, 0].unsqueeze(1), input[:, 1:]
+
+        # mask some tokens in the input to make the model more robust
+        n_tokens_masked = random.randint(1, INPUT_TOK.BAR_LENGTH)
+        mask_indices = torch.randint(0, len(3*INPUT_TOK.BAR_LENGTH), n_tokens_masked)
+        
         if USE_EEG:   
             mask = emotion.expand(-1, OUTPUT_TOK.BAR_LENGTH)
+            input[:, mask_indices] = emotion
         else:
             mask = torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)
+            input[:, mask_indices] = 0
+
+        # add mask to the input last bar
         input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], mask), dim = 1)
 
         # move the input and the target to the device
