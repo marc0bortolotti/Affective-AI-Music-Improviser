@@ -1,4 +1,4 @@
-DATE: 20241009-165927
+DATE: 20241009-215819
 
 -----------------DATASET------------------
 DATASET_PATH: /home/marco_bortolotti/project_official/Affective-AI-Music-Improviser/generative_model/dataset
@@ -8,7 +8,7 @@ TEST_SET_SIZE: 15414
 
 -----------------MODEL------------------
 MODEL: <class 'architectures.musicTransformer.MusicTransformer'>
-MODEL SIZE: 5793437
+MODEL SIZE: 77522
 N_TOKENS: 12
 
 ----------OPTIMIZATION PARAMETERS----------
@@ -30,5 +30,5 @@ EPOCHS: 1000
 
 ------------TOKENIZATION PARAMETERS--------------
 TICKS_PER_BEAT: 12
-TOKENS_FREQUENCY_THRESHOLD: 20
+TOKENS_FREQUENCY_THRESHOLD: None
 SILENCE_TOKEN_WEIGHT: 0.01

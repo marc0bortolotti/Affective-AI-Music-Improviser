@@ -24,7 +24,7 @@ FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_lessToken_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_mask_velocity_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -52,8 +52,8 @@ LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate 
 TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
-EMBEDDING_SIZE = 256
-TOKENS_FREQUENCY_THRESHOLD = 20 # remove tokens that appear less than # times in the dataset
+EMBEDDING_SIZE = 32
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -95,8 +95,8 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
         PARAMS = {  'in_vocab_size': len(INPUT_TOK.VOCAB),
                     'out_vocab_size': len(OUTPUT_TOK.VOCAB),
                     'embedding_dim': EMBEDDING_SIZE,
-                    'nhead': 4,
-                    'num_layers': 3,
+                    'nhead': 2,
+                    'num_layers': 2,
                     'dim_feedforward': 4 * EMBEDDING_SIZE,
                     'seq_length': INPUT_TOK.SEQ_LENGTH
                 }
@@ -139,6 +139,7 @@ def tokenize_midi_files():
                                              update_vocab=not COMBINE_IN_OUT_TOKENS,
                                              convert_to_integers=not COMBINE_IN_OUT_TOKENS)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
+                                               drum=FROM_MELODY_TO_RHYTHM,
                                                update_vocab=not COMBINE_IN_OUT_TOKENS,
                                                convert_to_integers=not COMBINE_IN_OUT_TOKENS)
 
@@ -286,7 +287,7 @@ def epoch_step(epoch, dataloader, mode):
 
         # mask some tokens in the input to make the model more robust
         n_tokens_masked = random.randint(1, INPUT_TOK.BAR_LENGTH)
-        mask_indices = torch.randint(0, len(3*INPUT_TOK.BAR_LENGTH), n_tokens_masked)
+        mask_indices = torch.randint(3*INPUT_TOK.BAR_LENGTH, [n_tokens_masked])
         
         if USE_EEG:   
             mask = emotion.expand(-1, OUTPUT_TOK.BAR_LENGTH)
