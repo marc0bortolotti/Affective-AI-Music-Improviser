@@ -5,7 +5,6 @@ class OSCClientServer{
   OscP5 oscP5;  
   int port = 7000;  
   int python_port = 9000;
-  float receivedValue;
   String messageAddress;
   
   OSCClientServer(){
@@ -18,9 +17,13 @@ class OSCClientServer{
   void oscEvent(OscMessage message) {
     messageAddress = message.addrPattern();
     if (message.checkAddrPattern("/confidence") == true) {
-      receivedValue = message.get(0).floatValue();  
-      println("Value: " + receivedValue);
-      confidence = receivedValue;
+      confidence = message.get(0).floatValue();
+      println("Value: " + confidence); 
+    }
+    
+    if (message.checkAddrPattern("/emotion") == true) {
+      emotion = message.get(0).floatValue();  
+      println("Emotion: " + emotion);
     }
   }
   

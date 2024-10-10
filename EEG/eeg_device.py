@@ -49,12 +49,6 @@ class EEG_Device:
             self.board = BoardShim(self.params.board_id, self.params)
             self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
             logging.info(f"EEG Device: connected to {self.params.serial_number}")
-
-            try:
-                self.board.prepare_session()
-            except Exception as e:
-                logging.error(f"EEG Device: {e}")
-                self.board.release_session()
         
     def stop_recording(self):
         self.recording_data = self.board.get_board_data()
@@ -62,6 +56,11 @@ class EEG_Device:
         logging.info('EEG Device: stop recording')
 
     def start_recording(self):
+        try:
+            self.board.prepare_session()
+        except Exception as e:
+            logging.error(f"EEG Device: {e}")
+            self.board.release_session()
         if self.params.serial_number == 'LSL':
             logging.info('LSLDevice: looking for a stream')
             while not self.streams:

@@ -20,7 +20,6 @@ class Emoticon{
     emoticonRadius = emoticonSize / 2; // Calculate the radius
     x = width / 2 - 50;     // Keep the emoticon horizontally centered 
     y = height / 2;     // Start in the middle vertically
-    println(x + " VALUES " + y);
   }
   
   // Draws the emoticon based on the current confidence level

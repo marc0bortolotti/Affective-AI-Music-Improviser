@@ -17,7 +17,14 @@ from losses import CrossEntropyWithPenaltyLoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/MT_melody_48tokens')
+
+MODEL_NAME = 'TCN'
+COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
+FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+
+GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
+TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_emb128_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -30,21 +37,23 @@ EPOCHS = 1000
 LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
-ARCHITECTURES = {'transformer': TransformerModel, 'tcn' : TCN, 'musicTransformer': MusicTransformer}
-MODEL = ARCHITECTURES['musicTransformer']
+ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
+try:
+    MODEL = ARCHITECTURES[MODEL_NAME]
+except:
+    raise Exception('Model not found, check the model name')
 
-FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 USE_EEG = True # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
-DATA_AUGMENTATION = True # augment the dataset by shifting the sequences
+DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-N_TOKENS = 48 # number of tokens to be predicted at each forward pass (only for the transformer model)
+TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4
+N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
-TICKS_PER_BEAT = 12
-EMBEDDING_SIZE = 256 
-TOKENS_FREQUENCY_THRESHOLD = 10 # remove tokens that appear less than # times in the dataset
+EMBEDDING_SIZE = 128
+TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
 PENALTY_WEIGHT = 1.0 # weight of the penalty term in the total loss (number of predictions equal to class SILENCE)
@@ -57,7 +66,7 @@ LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for #
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_{idx}')
+    RESULTS_PATH = RESULTS_PATH[:-1] + str(idx)
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -124,11 +133,24 @@ def tokenize_midi_files():
         else:
             emotion_token = None
 
-        in_tokens = INPUT_TOK.midi_to_tokens(in_file, update_vocab=True, instrument = 'Drum', rhythm=FROM_MELODY_TO_RHYTHM)
-        out_tokens = OUTPUT_TOK.midi_to_tokens(out_file, update_vocab=True)
+        in_tokens = INPUT_TOK.midi_to_tokens(in_file, 
+                                             drum = not FROM_MELODY_TO_RHYTHM, 
+                                             rhythm = FROM_MELODY_TO_RHYTHM,
+                                             update_vocab = not COMBINE_IN_OUT_TOKENS,
+                                             convert_to_integers = not COMBINE_IN_OUT_TOKENS)
+        out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
+                                               drum = FROM_MELODY_TO_RHYTHM,
+                                               update_vocab = not COMBINE_IN_OUT_TOKENS,
+                                               convert_to_integers = not COMBINE_IN_OUT_TOKENS)
 
-        in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token, update_sequences=True)
-        out_seq = OUTPUT_TOK.generate_sequences(out_tokens, update_sequences=True)
+        if COMBINE_IN_OUT_TOKENS:
+            in_seq, out_seq = INPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
+            OUTPUT_TOK.VOCAB = INPUT_TOK.VOCAB
+            INPUT_TOK.sequences+=in_seq
+            OUTPUT_TOK.sequences+=out_seq
+        else:
+            in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
+            out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
 
         if len(in_seq) != len(out_seq):
             min_len = min(len(INPUT_TOK.sequences), len(OUTPUT_TOK.sequences))
@@ -137,9 +159,11 @@ def tokenize_midi_files():
 
     print(f'\nNumber of input sequences: {len(INPUT_TOK.sequences)}')
     print(f'Input sequence length: {len(INPUT_TOK.sequences[0])}')
+    print(f'Input sequence example: {INPUT_TOK.sequences[0]}')
     print(f'Input vocabulars size: {len(INPUT_TOK.VOCAB)}')
     print(f'\nNumber of output sequences: {len(OUTPUT_TOK.sequences)}')
     print(f'Output sequence length: {len(OUTPUT_TOK.sequences[0])}')
+    print(f'Output sequence example: {OUTPUT_TOK.sequences[0]}')
     print(f'Output vocabulars size: {len(OUTPUT_TOK.VOCAB)}')
 
     return INPUT_TOK, OUTPUT_TOK
@@ -189,6 +213,7 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'SEED: {SEED}\n')
         f.write(f'GRADIENT_CLIP: {GRADIENT_CLIP}\n')
         f.write(f'FROM_MELODY_TO_RHYTHM: {FROM_MELODY_TO_RHYTHM}\n')
+        f.write(f'COMBINE_IN_OUT_TOKENS: {COMBINE_IN_OUT_TOKENS}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
         f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
         f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
@@ -259,8 +284,22 @@ def epoch_step(epoch, dataloader, mode):
 
         batch_idx += 1
 
+        # extract the emotion and the input
+        emotion, input = input[:, 0].unsqueeze(1), input[:, 1:]
+
+        # mask some tokens in the input to make the model more robust
+        n_tokens_masked = random.randint(1, INPUT_TOK.BAR_LENGTH)
+        mask_indices = torch.randint(3*INPUT_TOK.BAR_LENGTH, [n_tokens_masked])
+        
+        if USE_EEG:   
+            mask = emotion.expand(-1, OUTPUT_TOK.BAR_LENGTH)
+            input[:, mask_indices] = emotion
+        else:
+            mask = torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)
+            input[:, mask_indices] = 0
+
         # add mask to the input last bar
-        input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)), dim = 1)
+        input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], mask), dim = 1)
 
         # move the input and the target to the device
         input = input.to(device)
@@ -387,8 +426,9 @@ def train():
     eval_perplexities = []
 
     writer = SummaryWriter(RESULTS_PATH)
-    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=LR_PATIENCE)
     run = RESULTS_PATH.split('/')[-1]
+    run = run.split('_')[0]
 
     for epoch in range(1, EPOCHS+1):
 
@@ -403,6 +443,18 @@ def train():
         writer.add_scalar('Loss/eval', eval_loss, epoch)
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
+
+        # with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
+        #     f.write(f'EPOCH: {epoch}\n')
+        #     emotion, input = input_sample[0], input_sample[1:] 
+        #     mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
+        #     input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
+        #     output = model(input.unsqueeze(0).to(device))
+        #     output = torch.argmax(output, -1)
+        #     f.write(f'INPUT: {input.tolist()}\n')
+        #     f.write(f'OUTPUT: {output.tolist()}\n')
+        #     f.write(f'TARGET: {target_sample.tolist()}\n')
+                    
 
         # Save the model if the validation loss is the best we've seen so far.
         if train_loss < best_train_loss:
@@ -460,9 +512,9 @@ if __name__ == '__main__':
 
     # update the sequences
     print('\nUpdating INPUT_TOK sequences and vocabulary')
-    INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    INPUT_TOK.remove_less_likely_tokens(TOKENS_FREQUENCY_THRESHOLD)
     print('\nUpdating OUTPUT_TOK sequences and vocabulary')
-    OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    OUTPUT_TOK.remove_less_likely_tokens(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
     dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),
@@ -481,7 +533,8 @@ if __name__ == '__main__':
 
     # initialize the dataloaders
     print(f'\nInitializing the dataloaders...')
-    global train_dataloader, eval_dataloader, test_dataloader
+    global train_dataloader, eval_dataloader, test_dataloader, input_sample, target_sample
+    input_sample, target_sample = train_set[0][0], train_set[0][1]
     train_dataloader, eval_dataloader, test_dataloader = initialize_dataset(train_set, eval_set, test_set)
 
     # initialize the model
