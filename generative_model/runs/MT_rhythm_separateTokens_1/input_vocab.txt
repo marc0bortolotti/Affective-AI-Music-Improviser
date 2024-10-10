@@ -1,9 +1,0 @@
-O
-R
-C
-<START>
-<END>
-sf
-sp
-sff
-spp
