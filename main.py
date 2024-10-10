@@ -68,7 +68,7 @@ while True:
         instrument_out_port_name = setup_parameters['MELODY_OUT_PORT_NAME'] if generation_type == 'rhythm'  else setup_parameters['RHYTHM_OUT_PORT_NAME']
         generation_play_port_name = setup_parameters['RHYTHM_OUT_PORT_NAME'] if generation_type == 'rhythm' else setup_parameters['MELODY_OUT_PORT_NAME']
 
-        ticks_per_beat = 12 if generation_type == 'rhythm' else 4
+        ticks_per_beat = 4 if generation_type == 'rhythm' else 4
         generate_rhythm = True if generation_type == 'rhythm' else False
 
         module_name = 'musicTransformer.py' if 'MT' in setup_parameters['MODEL'] else 'tcn.py'
