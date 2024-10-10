@@ -1,0 +1,12 @@
+dropout: 0.45
+emb_dropout: 0.25
+embedding_size: 32
+emphasize_eeg: false
+feedback: false
+hidden_units: 192
+input_vocab_size: 957
+kernel_size: 3
+levels: 7
+output_vocab_size: 957
+seq_length: 192
+tied_weights: false

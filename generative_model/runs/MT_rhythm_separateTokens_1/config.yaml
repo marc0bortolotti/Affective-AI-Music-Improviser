@@ -1,0 +1,7 @@
+dim_feedforward: 128
+embedding_dim: 32
+in_vocab_size: 9
+nhead: 2
+num_layers: 2
+out_vocab_size: 389
+seq_length: 192

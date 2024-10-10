@@ -12,6 +12,7 @@ BEATS_PER_BAR = 4
 
 VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'} 
 NOTE_START_TOKEN = 'S' # 'S'
+NOTE_SUSTAINED_TOKEN = 's'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
@@ -258,8 +259,7 @@ class PrettyMidiTokenizer(object):
     velocity_token = self.compute_velocity_token(velocity)
 
     if rhythm:
-      pitch = '1'
-      end = start + 1
+      pitch = NOTE_SUSTAINED_TOKEN
     else:
       pitch = str(pitch)
 
@@ -267,11 +267,14 @@ class PrettyMidiTokenizer(object):
       if pitch in tokens[i]:
         break
       elif tokens[i] != SILENCE_TOKEN:
-        tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
+        if not rhythm:
+          tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
       else:
         tokens[i] = pitch + velocity_token
       if i == start and not rhythm: 
         tokens[i] += NOTE_START_TOKEN
+        if rhythm:
+          tokens[i] = NOTE_START_TOKEN
 
       # sort the tokens by pitch to avoid redundancy
       if NOTE_SEPARATOR_TOKEN in tokens[i]:
@@ -389,7 +392,7 @@ class PrettyMidiTokenizer(object):
       end = self.convert_time_to_ticks(note.end)
       if drum:
         end = start + 1
-        if velocity < 80:
+        if velocity < 40:
           continue 
       if start >= tokens_len or end >= tokens_len:
         break

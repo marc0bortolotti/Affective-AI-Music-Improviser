@@ -18,13 +18,13 @@ import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 
-MODEL_NAME = 'MT'
-COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
+MODEL_NAME = 'TCN'
+COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
 FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_mask_velocity_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_emb32_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -66,7 +66,7 @@ LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for #
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_{idx}')
+    RESULTS_PATH = RESULTS_PATH[:-1] + str(idx)
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -159,9 +159,11 @@ def tokenize_midi_files():
 
     print(f'\nNumber of input sequences: {len(INPUT_TOK.sequences)}')
     print(f'Input sequence length: {len(INPUT_TOK.sequences[0])}')
+    print(f'Input sequence example: {INPUT_TOK.sequences[0]}')
     print(f'Input vocabulars size: {len(INPUT_TOK.VOCAB)}')
     print(f'\nNumber of output sequences: {len(OUTPUT_TOK.sequences)}')
     print(f'Output sequence length: {len(OUTPUT_TOK.sequences[0])}')
+    print(f'Output sequence example: {OUTPUT_TOK.sequences[0]}')
     print(f'Output vocabulars size: {len(OUTPUT_TOK.VOCAB)}')
 
     return INPUT_TOK, OUTPUT_TOK
