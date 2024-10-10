@@ -1,21 +1,21 @@
-DATE: 20241010-094941
+DATE: 20241010-101022
 
 -----------------DATASET------------------
 DATASET_PATH: /home/marco_bortolotti/project_official/Affective-AI-Music-Improviser/generative_model/dataset
-TRAIN_SET_SIZE: 123312
-EVAL_SET_SIZE: 15414
-TEST_SET_SIZE: 15414
+TRAIN_SET_SIZE: 41104
+EVAL_SET_SIZE: 5138
+TEST_SET_SIZE: 5138
 
 -----------------MODEL------------------
-MODEL: <class 'architectures.tcn.TCN'>
-MODEL SIZE: 1335901
-N_TOKENS: 12
+MODEL: <class 'architectures.musicTransformer.MusicTransformer'>
+MODEL SIZE: 1517905
+N_TOKENS: 4
 
 ----------OPTIMIZATION PARAMETERS----------
 SEED: 1111
 GRADIENT_CLIP: 0.35
 FROM_MELODY_TO_RHYTHM: True
-COMBINE_IN_OUT_TOKENS: True
+COMBINE_IN_OUT_TOKENS: False
 FEEDBACK: False
 EMPHASIZE_EEG: False
 LR_SCHEDULER: True
@@ -29,6 +29,6 @@ BATCH_SIZE: 64
 EPOCHS: 1000
 
 ------------TOKENIZATION PARAMETERS--------------
-TICKS_PER_BEAT: 12
+TICKS_PER_BEAT: 4
 TOKENS_FREQUENCY_THRESHOLD: None
 SILENCE_TOKEN_WEIGHT: 0.01

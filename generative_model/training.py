@@ -24,13 +24,13 @@ FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_emb32_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_emb128_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
 torch.manual_seed(SEED)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
@@ -49,10 +49,10 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
+TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
-EMBEDDING_SIZE = 32
+EMBEDDING_SIZE = 128
 TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
@@ -95,8 +95,8 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
         PARAMS = {  'in_vocab_size': len(INPUT_TOK.VOCAB),
                     'out_vocab_size': len(OUTPUT_TOK.VOCAB),
                     'embedding_dim': EMBEDDING_SIZE,
-                    'nhead': 2,
-                    'num_layers': 2,
+                    'nhead': 4,
+                    'num_layers': 3,
                     'dim_feedforward': 4 * EMBEDDING_SIZE,
                     'seq_length': INPUT_TOK.SEQ_LENGTH
                 }
@@ -134,14 +134,14 @@ def tokenize_midi_files():
             emotion_token = None
 
         in_tokens = INPUT_TOK.midi_to_tokens(in_file, 
-                                             drum=not FROM_MELODY_TO_RHYTHM, 
-                                             rhythm= FROM_MELODY_TO_RHYTHM,
-                                             update_vocab=not COMBINE_IN_OUT_TOKENS,
-                                             convert_to_integers=not COMBINE_IN_OUT_TOKENS)
+                                             drum = not FROM_MELODY_TO_RHYTHM, 
+                                             rhythm = FROM_MELODY_TO_RHYTHM,
+                                             update_vocab = not COMBINE_IN_OUT_TOKENS,
+                                             convert_to_integers = not COMBINE_IN_OUT_TOKENS)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
-                                               drum=FROM_MELODY_TO_RHYTHM,
-                                               update_vocab=not COMBINE_IN_OUT_TOKENS,
-                                               convert_to_integers=not COMBINE_IN_OUT_TOKENS)
+                                               drum = FROM_MELODY_TO_RHYTHM,
+                                               update_vocab = not COMBINE_IN_OUT_TOKENS,
+                                               convert_to_integers = not COMBINE_IN_OUT_TOKENS)
 
         if COMBINE_IN_OUT_TOKENS:
             in_seq, out_seq = INPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
@@ -426,7 +426,7 @@ def train():
     eval_perplexities = []
 
     writer = SummaryWriter(RESULTS_PATH)
-    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=LR_PATIENCE)
     run = RESULTS_PATH.split('/')[-1]
     run = run.split('_')[0]
 
