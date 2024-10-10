@@ -31,6 +31,7 @@ VALIDATION_TIME = 5
 SKIP_TRAINING = True
 SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
+SAVE_PATH = os.path.join(PROJECT_PATH, 'user_study/user_0/test_0')
 
 
 
@@ -55,9 +56,10 @@ while True:
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
-            SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
-            if not os.path.exists(SAVE_PATH):
-                os.makedirs(SAVE_PATH)      
+            idx = 1
+            while os.path.exists(SAVE_PATH):
+                SAVE_PATH = SAVE_PATH[:-1] + str(idx)
+            os.makedirs(SAVE_PATH)      
 
         generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
         input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
