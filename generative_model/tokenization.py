@@ -57,25 +57,25 @@ class Dictionary(object):
 
   def __init__(self):
     self.word2idx = {} # to keep track of the index of each token
-    self.idx2word = [] # to keep track of the order of the tokens
-    self.counter = [] # to keep track of the frequency of each token
-    self.weights = [] # to keep track of the probability of each token
+    self.idx2word = np.array([]) # to keep track of the order of the tokens
+    self.counter = np.array([]) # to keep track of the frequency of each token
+    self.weights = np.array([]) # to keep track of the probability of each token
 
   def add_word(self, word):
     if not self.is_in_vocab(word):
-      self.idx2word.append(word)
+      self.idx2word = np.append(self.idx2word, word)
       self.word2idx[word] = len(self.idx2word) - 1
-      self.counter.append(1)
+      self.counter = np.append(self.counter, 1)
     else:
       self.counter[self.word2idx[word]] += 1
     
   def remove_word(self, word):
     if self.is_in_vocab(word):
       idx = self.word2idx[word]
-      self.idx2word.pop(idx)
-      self.counter.pop(idx)
+      self.idx2word = np.delete(self.idx2word, idx)
+      self.counter = np.delete(self.counter, idx)
       if idx < len(self.weights):
-        self.weights.pop(idx)
+        self.weights = np.delete(self.weights, idx)
         self.compute_weights()
       self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
 
@@ -146,7 +146,7 @@ class PrettyMidiTokenizer(object):
     self.BAR_DURATION_IN_TICKS = self.convert_time_to_ticks(self.BAR_DURATION)
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
-    self.sequences = []
+    self.sequences = np.array([]) 
     self.source_paths = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
@@ -290,7 +290,7 @@ class PrettyMidiTokenizer(object):
   
   def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
 
-    sequences = []
+    sequences = np.array([])
     stop_index = len(tokens) - self.SEQ_LENGTH
     
     if stop_index <= 0:
@@ -304,11 +304,11 @@ class PrettyMidiTokenizer(object):
         emotion_token_id = self.VOCAB.word2idx[emotion_token]
         sequence = self.append_emotion_token(sequence, emotion_token_id)
         
-      sequences.append(sequence)
+      sequences = np.append(sequences, sequence)
 
     # concatenate the sequences if necessary
     if update_sequences: 
-      self.sequences += sequences 
+      self.sequences = np.concatenate((self.sequences, sequences))
 
     return sequences
   
@@ -338,13 +338,13 @@ class PrettyMidiTokenizer(object):
     
   def get_in_out_tokens(self, tokens):
 
-    in_tokens = []
-    out_tokens = []
+    in_tokens = np.array([])
+    out_tokens = np.array([])
     for tok in tokens:
       if IN_OUT_SEPARATOR_TOKEN in tok:
         in_token, out_token = tok.split(IN_OUT_SEPARATOR_TOKEN)
-        in_tokens.append(in_token)
-        out_tokens.append(out_token)
+        in_tokens = np.append(in_tokens, in_token)
+        out_tokens = np.append(out_tokens, out_token)
     
     return in_tokens, out_tokens
 
@@ -430,7 +430,7 @@ class PrettyMidiTokenizer(object):
 
     
     notes_df = pd.DataFrame(columns = ['pitch', 'start', 'duration', 'velocity'])
-    prev_pitches = []
+    prev_pitches = np.array([])
 
     # convert the sequence of tokens into a list of tokens and their duration and velocity
     for token_idx, token in enumerate(sequence):
@@ -446,18 +446,28 @@ class PrettyMidiTokenizer(object):
       if NOTE_SEPARATOR_TOKEN in token_string:
         notes = token_string.split(NOTE_SEPARATOR_TOKEN)
       else:
-        notes = [token_string]
+        notes = np.array([token_string])
 
       # get current pitches in the token
-      pitches = re.findall('\d+', token_string)
+      pitches = np.array(re.findall('\d+', token_string))
 
       for note_string in notes:
 
         # check if the token is a silence token
         if SILENCE_TOKEN not in note_string:
 
-          pitch = re.findall('\d+', note_string) [0] # re.findall returns a list
-          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string] [0]
+          pitch = re.findall('\d+', note_string) # re.findall returns a list
+          if len(pitch) > 0:
+            pitch = pitch[0]
+          else:
+            pitch = 56
+
+          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string] 
+          if len(velocity) > 0:
+            velocity = velocity[0]
+          else:
+            velocity = 90
+
           start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
 
           if start is not None:
@@ -707,14 +717,13 @@ if __name__ == '__main__':
   tok = PrettyMidiTokenizer()
   tokens = tok.midi_to_tokens(file_path,
                               update_vocab = True, 
-                              rhythm = True, 
+                              rhythm = False, 
                               single_notes = False, 
                               max_len = None, 
                               drum = False,  
                               convert_to_integers = False)
 
   print(tokens[0:16])
-
   mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
 
 

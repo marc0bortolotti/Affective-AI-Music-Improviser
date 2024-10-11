@@ -30,6 +30,7 @@ VALIDATION_TIME = 40
 # APPLICATION PARAMETERS
 SKIP_TRAINING = False
 SAVE_SESSION = True
+FIXED_MOOD = True
 PROJECT_PATH = os.path.dirname(__file__)
 SAVE_BASE_PATH = os.path.join(PROJECT_PATH, 'user_study/greg/test_0')
 
@@ -83,7 +84,7 @@ while True:
         # Initialize the application
         app = AI_AffectiveMusicImproviser(  instrument_in_port_name = setup_parameters['INSTRUMENT_IN_PORT_NAME'], 
                                             instrument_out_port_name = instrument_out_port_name,
-                                            generation_play_port_name = generation_play_port_name,
+                                            generation_out_port_name = generation_play_port_name,
                                             eeg_device_type = setup_parameters['EEG_DEVICE_SERIAL_NUMBER'],
                                             window_duration = WINDOW_DURATION,
                                             model_param_path = model_param_path,
@@ -93,6 +94,7 @@ while True:
                                             ticks_per_beat = ticks_per_beat,
                                             generate_rhythm = generate_rhythm,
                                             n_tokens = int(setup_parameters['TOKENS']),
+                                            fixed_mood = FIXED_MOOD,
                                             parse_message=True)
 
         # Set starting mood
