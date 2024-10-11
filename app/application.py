@@ -100,6 +100,7 @@ def thread_function_midi(name, app):
 
     app.midi_in.open_port() 
     app.midi_out_play.open_port()
+
     
     if app.STATUS['SIMULATE_MIDI']:
         app.midi_in.set_simulation_event(SYNCH_EVENT)

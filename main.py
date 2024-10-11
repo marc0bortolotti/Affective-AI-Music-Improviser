@@ -23,29 +23,28 @@ WINDOW_OVERLAP = 0.875 # percentage
 WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
-TRAINING_SESSIONS = 1
-TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 5
+TRAINING_SESSIONS = 2
+TRAINING_TIME = 50 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 40
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = True
+SKIP_TRAINING = False
 SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
-SAVE_PATH = os.path.join(PROJECT_PATH, 'user_study/user_0/test_0')
-
+SAVE_BASE_PATH = os.path.join(PROJECT_PATH, 'user_study/greg/test_0')
 
 
 # Setup the application
 win = QtWidgets.QApplication([])
 app = None
-dialog = SetupDialog()
+setup_dialog = SetupDialog()
 
 while True:                    
 
-    if dialog.exec_() == QtWidgets.QDialog.Accepted:
+    if setup_dialog.exec_() == QtWidgets.QDialog.Accepted:
 
         # Get the setup parameters from the dialog window
-        setup_parameters = dialog.get_data()
+        setup_parameters = setup_dialog.get_data()
 
         if app is not None:
             if SAVE_SESSION:
@@ -57,8 +56,11 @@ while True:
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
             idx = 1
+            SAVE_PATH = SAVE_BASE_PATH
             while os.path.exists(SAVE_PATH):
+                print(f"Folder {SAVE_PATH} already exists.")
                 SAVE_PATH = SAVE_PATH[:-1] + str(idx)
+                idx += 1
             os.makedirs(SAVE_PATH)      
 
         generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
@@ -124,7 +126,7 @@ while True:
 
                 try:
                     # Load the EEG classifier from the file
-                    scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
+                    scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(SAVE_BASE_PATH)
                 except:
                     logging.error("No classifier found. Please, train the classifier first.")
                     break
@@ -151,13 +153,15 @@ while True:
             else:
                 app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
 
+            # Start the application
+            start_dialog = CustomDialog('Do you want to START the application?')
+            if start_dialog.exec_() == 0:
+                pass
+            else:
+                break
         else:
             scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
             app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
-
-        # # Start the application
-        # start_dialog = CustomDialog('Do you want to START the application?')
-        # if start_dialog.exec_() == 0:
 
         # Start the application in a separate thread
         thread_app = threading.Thread(target=app.run, args=())
