@@ -18,7 +18,10 @@ import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 
-MODEL_NAME = 'TCN'
+MODEL_NAME = 'MT'
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+print('\n', device)
+
 COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
 FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
@@ -29,9 +32,6 @@ DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
 torch.manual_seed(SEED)
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print('\n', device)
 
 EPOCHS = 1000 
 LEARNING_RATE = 0.0001 # 0.002
