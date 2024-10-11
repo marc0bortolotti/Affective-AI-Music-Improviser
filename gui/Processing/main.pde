@@ -6,7 +6,7 @@ Emoticon emoticon;
 CustomSlider temperatureSlider, confidenceSlider;
 ControlP5 cp5_temperature, cp5_confidence;  
 boolean confidenceSliderOn = false;
-boolean temperatureSliderOn = false;
+boolean temperatureSliderOn = true;
 float emotion = 0.0;
 
 void setup() {  

@@ -704,32 +704,6 @@ if __name__ == '__main__':
   file_path = os.path.join(os.path.dirname(__file__), 'tok_test/chords.mid')
   save_path = os.path.join(os.path.dirname(__file__), 'tok_test/chords_reconstructed.mid')
 
-  file_path = os.path.join(os.path.dirname(__file__), 'dataset/melody/melody_RELAXED.mid')
-  # tok = PrettyMidiTokenizer()
-  # import mido
-  # mid = mido.MidiFile(file_path)
-  # note_buffer = []
-  # duration = 0
-  # i = 1
-  # port = mido.open_output('rhythm_output 2')
-  # for msg in mid.play(): 
-  #   if msg.type in ['note_on', 'note_off']:
-  #     port.send(msg)
-  #     if msg.type == 'note_off':  
-  #       continue
-      
-  #     duration+=msg.time
-  #     print(msg, tok.convert_time_to_ticks(duration))
-  #     note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
-  #     if tok.convert_time_to_ticks(duration) >= i*tok.BAR_LENGTH:
-  #       tokens = tok.real_time_tokenization(note_buffer, emotion_token = 'R', convert_to_integers=False)
-  #       print('\n', tokens, '\n')
-  #       i+=1
-  #       note_buffer = []
-  #       if i == 4:
-  #         break
-
-
   tok = PrettyMidiTokenizer()
   tokens = tok.midi_to_tokens(file_path,
                               update_vocab = True, 
@@ -740,9 +714,8 @@ if __name__ == '__main__':
                               convert_to_integers = False)
 
   print(tokens[0:16])
-  print(tokens[16:32])
 
-  # mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
+  mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
 
 
 

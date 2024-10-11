@@ -18,7 +18,11 @@ class Emoticon{
   Emoticon(){
     emoticonSize = width * 3/5;
     emoticonRadius = emoticonSize / 2; // Calculate the radius
-    x = width / 2 ;     // Keep the emoticon horizontally centered 
+    int offset = 0;
+    if(temperatureSliderOn || confidenceSliderOn){
+      offset = - 50;
+    }
+    x = width / 2 + offset;     // Keep the emoticon horizontally centered 
     y = height / 2;     // Start in the middle vertically
   }
   
