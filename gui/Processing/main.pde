@@ -2,7 +2,7 @@ float confidence = 0.1;   // Confidence variable (0 to 1)
 float temperature = 1.0;  // Temperature value (0 to infinite)
 float newTemperature, newConfidence;
 OSCClientServer oscClientServer;
-Emoticon emoticon;
+Emoticon bouncingEmoticon;
 CustomSlider temperatureSlider, confidenceSlider;
 ControlP5 cp5_temperature, cp5_confidence;  
 boolean confidenceSliderOn = false;
@@ -16,7 +16,7 @@ void setup() {
   
   oscClientServer = new OSCClientServer();
   
-  emoticon = new Emoticon();
+  bouncingEmoticon = new Emoticon();
   
   cp5_temperature = new ControlP5(this);
   cp5_confidence = new ControlP5(this);
@@ -34,12 +34,18 @@ void setup() {
 
 void draw() {  
   
-  if (emotion == 0.0) {background(0, 255, 255);}
-  else {background(255, 70, 70);}
+  if (emotion == 0.0) {
+    background(0, 255, 255);
+    bouncingEmoticon.speed = 2;
+  }
+  else {
+    background(255, 70, 70);
+    bouncingEmoticon.speed = 4;
+  }
   
   
-  emoticon.drawEmoticon();  
-  emoticon.updatePosition();
+  bouncingEmoticon.drawEmoticon();  
+  bouncingEmoticon.updatePosition();
   
   if (temperatureSliderOn){
     newTemperature = exp(temperatureSlider.getValue());
