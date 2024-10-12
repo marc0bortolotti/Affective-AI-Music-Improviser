@@ -19,11 +19,11 @@ import random
 DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'TCN'
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
@@ -145,9 +145,8 @@ def tokenize_midi_files():
 
         if COMBINE_IN_OUT_TOKENS:
             in_seq, out_seq = INPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
+            OUTPUT_TOK.update_sequences(out_seq)
             OUTPUT_TOK.VOCAB = INPUT_TOK.VOCAB
-            INPUT_TOK.sequences+=in_seq
-            OUTPUT_TOK.sequences+=out_seq
         else:
             in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
             out_seq = OUTPUT_TOK.generate_sequences(out_tokens)

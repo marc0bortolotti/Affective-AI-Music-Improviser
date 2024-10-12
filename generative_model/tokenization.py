@@ -188,58 +188,9 @@ class PrettyMidiTokenizer(object):
     for i in range(0, len(tokens)):
       self.VOCAB.add_word(tokens[i])
 
-  def midi_to_df(self, midi_path):
-
-    pm = pretty_midi.PrettyMIDI(midi_path)
-
-    # Sort the notes by start time
-    sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
-
-    # create a dataframe from the notes dictionary
-    notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
-    
-    for idx, note in enumerate(sorted_notes):
-
-      print(f"Processing note: {idx}/{len(sorted_notes)}", end="\r")
-      pitch = note.pitch
-      velocity = note.velocity
-      start = self.convert_time_to_ticks(note.start)
-      end = self.convert_time_to_ticks(note.end)
-
-      # bar is the integer part of the start time divided by the duration of a bar
-      start_bar = start // self.BAR_DURATION_IN_TICKS
-      end_bar = end // self.BAR_DURATION_IN_TICKS
-
-      # update the start and end times to be with index of the bar
-      start -= start_bar * self.BAR_DURATION_IN_TICKS
-      end -= end_bar * self.BAR_DURATION_IN_TICKS
-
-      # split the note if it spans multiple bars
-      if start_bar != end_bar: 
-        for bar in range(start_bar, end_bar):
-          note = None
-          if bar == start_bar: 
-            if self.BAR_DURATION_IN_TICKS - start > 5: # filter notes with duration less than 5 ticks
-              note = self.new_note(pitch, velocity, start, self.BAR_DURATION_IN_TICKS, bar)
-          elif bar == end_bar: 
-            if end > 5: # filter notes with duration less than 5 ticks  
-              note = self.new_note(pitch, velocity, 0, end, bar)
-          else:
-            note = self.new_note(pitch, velocity, 0, self.BAR_DURATION_IN_TICKS, bar)
-          
-          if note is not None:
-            notes_df = pd.concat([notes_df, note], ignore_index=True)
-          
-      else:
-        bar = start_bar
-        note = self.new_note(pitch, velocity, start, end, bar)
-        notes_df = pd.concat([notes_df, note], ignore_index=True)
-      
-      # sort the notes by bar and start time
-      notes_df = notes_df.sort_values(by = ['bar', 'start'])
-      notes_df = notes_df.reset_index(drop=True)
-    
-    return notes_df
+  def update_sequences(self, sequences):
+    self.sequences = self.sequences.tolist() + sequences.tolist()
+    self.sequences = np.array(self.sequences)
 
   def note_to_string(self, tokens, pitch, velocity, start, end, rhythm = False, single_notes = False):
     '''
@@ -313,8 +264,7 @@ class PrettyMidiTokenizer(object):
 
     # concatenate the sequences if necessary
     if update_sequences: 
-      self.sequences = self.sequences.tolist() + sequences.tolist()
-      self.sequences = np.array(self.sequences)
+      self.update_sequences(sequences)
 
     return sequences
   
@@ -333,8 +283,8 @@ class PrettyMidiTokenizer(object):
     combined_tokens = self.from_string_to_integers_tokens(combined_tokens)
 
     # generate sequences
-    in_seq = self.generate_sequences(combined_tokens, emotion_token, update_sequences = False)
-    out_seq = self.generate_sequences(combined_tokens, update_sequences = False)
+    in_seq = self.generate_sequences(combined_tokens, emotion_token)
+    out_seq = self.generate_sequences(combined_tokens, update_sequences=False)
 
     return in_seq, out_seq
     
@@ -358,7 +308,6 @@ class PrettyMidiTokenizer(object):
     Parameters:
     - midi_path: the path to the MIDI file (str)
     - update_vocab: a boolean indicating whether to update the vocabulary (bool)
-    - update_sequences: a boolean indicating whether to update the sequences (bool)
     - emotion_token: the token representing the emotion of the user (str)
     - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
     - single_notes: a boolean indicating whether to keep only one note per token (bool)
@@ -411,6 +360,59 @@ class PrettyMidiTokenizer(object):
     print('\nDone!')       
 
     return tokens
+  
+  def midi_to_df(self, midi_path):
+
+    pm = pretty_midi.PrettyMIDI(midi_path)
+
+    # Sort the notes by start time
+    sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
+
+    # create a dataframe from the notes dictionary
+    notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
+    
+    for idx, note in enumerate(sorted_notes):
+
+      print(f"Processing note: {idx}/{len(sorted_notes)}", end="\r")
+      pitch = note.pitch
+      velocity = note.velocity
+      start = self.convert_time_to_ticks(note.start)
+      end = self.convert_time_to_ticks(note.end)
+
+      # bar is the integer part of the start time divided by the duration of a bar
+      start_bar = start // self.BAR_DURATION_IN_TICKS
+      end_bar = end // self.BAR_DURATION_IN_TICKS
+
+      # update the start and end times to be with index of the bar
+      start -= start_bar * self.BAR_DURATION_IN_TICKS
+      end -= end_bar * self.BAR_DURATION_IN_TICKS
+
+      # split the note if it spans multiple bars
+      if start_bar != end_bar: 
+        for bar in range(start_bar, end_bar):
+          note = None
+          if bar == start_bar: 
+            if self.BAR_DURATION_IN_TICKS - start > 5: # filter notes with duration less than 5 ticks
+              note = self.new_note(pitch, velocity, start, self.BAR_DURATION_IN_TICKS, bar)
+          elif bar == end_bar: 
+            if end > 5: # filter notes with duration less than 5 ticks  
+              note = self.new_note(pitch, velocity, 0, end, bar)
+          else:
+            note = self.new_note(pitch, velocity, 0, self.BAR_DURATION_IN_TICKS, bar)
+          
+          if note is not None:
+            notes_df = pd.concat([notes_df, note], ignore_index=True)
+          
+      else:
+        bar = start_bar
+        note = self.new_note(pitch, velocity, start, end, bar)
+        notes_df = pd.concat([notes_df, note], ignore_index=True)
+      
+      # sort the notes by bar and start time
+      notes_df = notes_df.sort_values(by = ['bar', 'start'])
+      notes_df = notes_df.reset_index(drop=True)
+    
+    return notes_df
   
   def tokens_to_notes_df(self, sequence, ticks_filter = 0):
     '''
