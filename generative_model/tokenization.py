@@ -145,7 +145,7 @@ class PrettyMidiTokenizer(object):
     self.BAR_DURATION_IN_TICKS = self.convert_time_to_ticks(self.BAR_DURATION)
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
-    self.sequences = np.array([]) 
+    self.sequences = np.array([])
     self.source_paths = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
@@ -294,13 +294,14 @@ class PrettyMidiTokenizer(object):
   
   def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
 
-    sequences = np.array([])
-    stop_index = len(tokens) - self.SEQ_LENGTH
-    
-    if stop_index <= 0:
-      stop_index = 1
+    seq_len = self.SEQ_LENGTH if emotion_token is None else self.SEQ_LENGTH + 1
+    n_seq = len(tokens) - self.SEQ_LENGTH
+    if n_seq <= 0:
+      n_seq = 1
 
-    for i in range(0, stop_index):
+    sequences = np.empty((n_seq, seq_len), dtype=np.int32)
+
+    for i in range(n_seq):
       
       sequence = tokens[i : i+self.SEQ_LENGTH]
 
@@ -308,11 +309,12 @@ class PrettyMidiTokenizer(object):
         emotion_token_id = self.VOCAB.word2idx[emotion_token]
         sequence = self.append_emotion_token(sequence, emotion_token_id)
         
-      sequences = np.append(sequences, sequence)
+      sequences[i] = sequence
 
     # concatenate the sequences if necessary
     if update_sequences: 
-      self.sequences = np.concatenate((self.sequences, sequences))
+      self.sequences = self.sequences.tolist() + sequences.tolist()
+      self.sequences = np.array(self.sequences)
 
     return sequences
   
@@ -328,11 +330,7 @@ class PrettyMidiTokenizer(object):
       self.update_vocab(combined_tokens)
 
     # convert string tokens into integer tokens
-    for i in range(len(combined_tokens)):
-      if self.VOCAB.is_in_vocab(combined_tokens[i]):
-        combined_tokens[i] = self.VOCAB.word2idx[combined_tokens[i]] 
-      else: 
-        combined_tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
+    combined_tokens = self.from_string_to_integers_tokens(combined_tokens)
 
     # generate sequences
     in_seq = self.generate_sequences(combined_tokens, emotion_token, update_sequences = False)
