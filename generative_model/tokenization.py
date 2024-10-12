@@ -12,7 +12,6 @@ BEATS_PER_BAR = 4
 
 VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'} 
 NOTE_START_TOKEN = 'S' # 'S'
-NOTE_SUSTAINED_TOKEN = 's'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
@@ -259,16 +258,16 @@ class PrettyMidiTokenizer(object):
     velocity_token = self.compute_velocity_token(velocity)
 
     if rhythm:
-      pitch = NOTE_SUSTAINED_TOKEN
+      pitch = '56'
+      tokens[start] = pitch + velocity_token + NOTE_START_TOKEN
     else:
       pitch = str(pitch)
 
     for i in range(start, end):
       if pitch in tokens[i]:
-        break
+        continue
       elif tokens[i] != SILENCE_TOKEN:
-        if not rhythm:
-          tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
+        tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
       else:
         tokens[i] = pitch + velocity_token
 
@@ -283,9 +282,14 @@ class PrettyMidiTokenizer(object):
         else:
           tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
 
-    if rhythm:
-      tokens[start] = NOTE_START_TOKEN
-
+    return tokens
+  
+  def from_string_to_integers_tokens(self, tokens):
+    for i in range(len(tokens)):
+      if self.VOCAB.is_in_vocab(tokens[i]):
+        tokens[i] = self.VOCAB.word2idx[tokens[i]] 
+      else: 
+        tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
     return tokens
   
   def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
@@ -396,8 +400,6 @@ class PrettyMidiTokenizer(object):
         end = start + 1
         if velocity < 40:
           continue 
-      if start >= tokens_len or end >= tokens_len:
-        break
       tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm, single_notes)
       
     # update the vocabulary if necessary
@@ -406,11 +408,7 @@ class PrettyMidiTokenizer(object):
 
     # convert string tokens into integer tokens
     if convert_to_integers:
-      for i in range(len(tokens)):
-        if self.VOCAB.is_in_vocab(tokens[i]):
-          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-        else: 
-          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
+      tokens = self.from_string_to_integers_tokens(tokens)
 
     print('\nDone!')       
 
@@ -456,17 +454,9 @@ class PrettyMidiTokenizer(object):
         # check if the token is a silence token
         if SILENCE_TOKEN not in note_string:
 
-          pitch = re.findall('\d+', note_string) # re.findall returns a list
-          if len(pitch) > 0:
-            pitch = pitch[0]
-          else:
-            pitch = 56
+          pitch = re.findall('\d+', note_string)[0] # re.findall returns a list
 
-          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string] 
-          if len(velocity) > 0:
-            velocity = velocity[0]
-          else:
-            velocity = 90
+          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string][0]
 
           start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
 
@@ -693,11 +683,7 @@ class PrettyMidiTokenizer(object):
         
     # convert string tokens into integer tokens
     if convert_to_integers:
-      for i in range(len(tokens)):      
-        if self.VOCAB.is_in_vocab(tokens[i]):
-          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-        else: 
-          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
+      tokens = self.from_string_to_integers_tokens(tokens)
 
     return tokens
   
@@ -717,13 +703,13 @@ if __name__ == '__main__':
   tok = PrettyMidiTokenizer()
   tokens = tok.midi_to_tokens(file_path,
                               update_vocab = True, 
-                              rhythm = False, 
+                              rhythm = True, 
                               single_notes = False, 
                               max_len = None, 
                               drum = False,  
                               convert_to_integers = False)
 
-  print(tokens[0:16])
+  print(tokens[-18:])
   mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
 
 

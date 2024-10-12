@@ -28,7 +28,7 @@ TRAINING_TIME = 50 # must be larger than 2*WINDOW_DURATION (>8sec)
 VALIDATION_TIME = 40
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = False
+SKIP_TRAINING = True
 SAVE_SESSION = True
 FIXED_MOOD = True
 PROJECT_PATH = os.path.dirname(__file__)
@@ -59,8 +59,7 @@ while True:
             idx = 1
             SAVE_PATH = SAVE_BASE_PATH
             while os.path.exists(SAVE_PATH):
-                print(f"Folder {SAVE_PATH} already exists.")
-                SAVE_PATH = SAVE_PATH[:-1] + str(idx)
+                SAVE_PATH = '_'.join(SAVE_PATH.split('_')[:-1])
                 idx += 1
             os.makedirs(SAVE_PATH)      
 
@@ -93,7 +92,7 @@ while True:
                                             init_track_path = init_track_path,
                                             ticks_per_beat = ticks_per_beat,
                                             generate_rhythm = generate_rhythm,
-                                            n_tokens = int(setup_parameters['TOKENS']),
+                                            n_tokens = ticks_per_beat,
                                             fixed_mood = FIXED_MOOD,
                                             parse_message=True)
 
