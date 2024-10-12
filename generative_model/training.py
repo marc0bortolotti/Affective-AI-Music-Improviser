@@ -19,7 +19,7 @@ import random
 DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'TCN'
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
@@ -49,7 +49,7 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4
+TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4 # resolution of the midi files
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
 EMBEDDING_SIZE = 128
