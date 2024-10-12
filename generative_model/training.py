@@ -18,11 +18,11 @@ import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 
-MODEL_NAME = 'MT'
+MODEL_NAME = 'TCN'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
-COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
+COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
 FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
