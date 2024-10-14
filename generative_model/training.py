@@ -19,7 +19,8 @@ import random
 DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'TCN'
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+CUDA = 1
+device = torch.device(f"cuda:{CUDA}" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
