@@ -240,17 +240,14 @@ class AI_AffectiveMusicImproviser():
         with open(path, 'w') as file:
             for item in self.hystory:
                 in_bars, out_bars = item
-                for i in range(0, 4):
-                    file.write(f"bar_{i+1}_IN_OUT:\n")
-                    for tok in in_bars[(i)*self.BAR_LENGTH : (i+1)*self.BAR_LENGTH]:
-                        text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
-                        file.write(text)
-                    file.write("\n")
-                    for tok in out_bars[(i)*self.BAR_LENGTH: (i+1)*self.BAR_LENGTH]:
-                        text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
-                        file.write(text)
-                    file.write("\n")
+                for tok in in_bars:
+                    text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
+                    file.write(text)
                 file.write("\n")
+                for tok in out_bars:
+                    text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
+                    file.write(text)
+                file.write("\n\n")
 
     def run(self):
 
@@ -314,7 +311,10 @@ class AI_AffectiveMusicImproviser():
                         # Convert the token to the integer representation
                         if not self.INPUT_TOK.VOCAB.is_in_vocab(token_string):
                             if self.STATUS['USE_EEG']:
-                                token_string = self.get_last_eeg_classification()
+                                if self.fixed_mood:
+                                    token_string = self.eeg_classification_buffer[0] 
+                                else:
+                                    token_string = self.get_last_eeg_classification()
                             else:
                                 token_string = SILENCE_TOKEN
                             
@@ -377,6 +377,9 @@ class AI_AffectiveMusicImproviser():
                         # Update the target tensor
                         predicted_bar = np.concatenate((predicted_bar, next_tokens.numpy()))
 
+                        # save the hystory
+                        self.hystory.append([input_data[0], prediction])
+
                 else:
                     # Make the prediction
                     output = self.model(input_data)[0]
@@ -388,7 +391,11 @@ class AI_AffectiveMusicImproviser():
                     predicted_proba = torch.max(output_no_temp, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
-                    predicted_bar = torch.argmax(output, 1).numpy()[-self.BAR_LENGTH:] 
+                    prediction = torch.argmax(output, 1)
+                    predicted_bar = prediction.numpy()[-self.BAR_LENGTH:] 
+
+                    # save the hystory
+                    self.hystory.append([input_data[0], prediction])
 
                 if self.combine_in_out:
                     for tok in predicted_bar:
@@ -406,9 +413,6 @@ class AI_AffectiveMusicImproviser():
 
                 # send the confidence to the processing application 
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
-
-                # # save the hystory
-                self.hystory.append([input_data[0], torch.argmax(output, 1)])
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0, emotion_token=emotion_token)

@@ -52,7 +52,7 @@ class SetupDialog(QtWidgets.QDialog):
 
         # Create dropdown for mood
         self.mood_combo = QtWidgets.QComboBox(self)
-        self.mood_combo.addItems(['RELAXED', 'CONCENTRATED'])
+        self.mood_combo.addItems(['RELAXED', 'CONCENTRATED', 'RELAXED-FIXED', 'CONCENTRATED-FIXED'])
         self.mood_combo.setCurrentText('RELAXED')
 
         # Create dropdown for eeg devices

@@ -343,6 +343,10 @@ class PrettyMidiTokenizer(object):
       velocity = note.velocity
       start = self.convert_time_to_ticks(note.start)
       end = self.convert_time_to_ticks(note.end)
+
+      if start >= tokens_len or end > tokens_len:
+        break
+
       if drum:
         end = start + 1
         if velocity < 40:
@@ -428,7 +432,7 @@ class PrettyMidiTokenizer(object):
 
     
     notes_df = pd.DataFrame(columns = ['pitch', 'start', 'duration', 'velocity'])
-    prev_pitches = np.array([])
+    prev_pitches = np.array([SILENCE_TOKEN])
 
     # convert the sequence of tokens into a list of tokens and their duration and velocity
     for token_idx, token in enumerate(sequence):
@@ -458,6 +462,8 @@ class PrettyMidiTokenizer(object):
 
           velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string][0]
 
+          if len(prev_pitches) == 0: 
+            prev_pitches = np.array([SILENCE_TOKEN])
           start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
 
           if start is not None:

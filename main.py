@@ -23,16 +23,16 @@ WINDOW_OVERLAP = 0.875 # percentage
 WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
-TRAINING_SESSIONS = 2
-TRAINING_TIME = 50 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 40
+TRAINING_SESSIONS = 1
+TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 10
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = True
+SKIP_TRAINING = False
 SAVE_SESSION = True
-FIXED_MOOD = True
 PROJECT_PATH = os.path.dirname(__file__)
-SAVE_BASE_PATH = os.path.join(PROJECT_PATH, 'user_study/greg/test_0')
+test_idx = 0
+SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'user_study/greg/test_{test_idx}')
 
 
 # Setup the application
@@ -56,16 +56,18 @@ while True:
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
-            idx = 1
             SAVE_PATH = SAVE_BASE_PATH
             while os.path.exists(SAVE_PATH):
-                SAVE_PATH = '_'.join(SAVE_PATH.split('_')[:-1])
-                idx += 1
+                SAVE_PATH = '_'.join(SAVE_PATH.split('_')[:-1]) + f'_{test_idx}'
+                test_idx += 1
             os.makedirs(SAVE_PATH)      
 
         generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
         input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
-        start_mood = setup_parameters['STARTING_MOOD']
+
+        start_mood = 'RELAXED' if 'RELAXED' in setup_parameters['STARTING_MOOD'] else 'CONCENTRATED'
+        fixed_mood = True if 'FIXED' in setup_parameters['STARTING_MOOD'] else False
+
         simulation_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{input_track_type}/{input_track_type}_{start_mood}.mid')
         init_track_path = os.path.join(PROJECT_PATH, f'generative_model/dataset/{generation_type}/{generation_type}_{start_mood}.mid')
 
@@ -93,7 +95,7 @@ while True:
                                             ticks_per_beat = ticks_per_beat,
                                             generate_rhythm = generate_rhythm,
                                             n_tokens = ticks_per_beat,
-                                            fixed_mood = FIXED_MOOD,
+                                            fixed_mood = fixed_mood,
                                             parse_message=True)
 
         # Set starting mood
@@ -177,7 +179,7 @@ while True:
 
 if app is not None:
     if SAVE_SESSION:
-        app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
+        app.eeg_device.save_session(os.path.join(SAVE_PATH, f'session_{test_idx}.csv'))
         app.save_hystory(os.path.join(SAVE_PATH))
     app.close()
     thread_app.join()
