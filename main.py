@@ -76,6 +76,7 @@ while True:
         model_module_path = os.path.join(PROJECT_PATH, 'generative_model/architectures', module_name)
         model_class_name = 'MusicTransformer' if 'MT' in setup_parameters['MODEL'] else 'TCN'
 
+        logging.info(f"Serial number: {setup_parameters['EEG_DEVICE_SERIAL_NUMBER']}")
         # Initialize the application
         app = AI_AffectiveMusicImproviser(  instrument_in_port_name = setup_parameters['INSTRUMENT_IN_PORT_NAME'], 
                                             instrument_out_port_name = instrument_out_port_name,

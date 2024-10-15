@@ -29,7 +29,7 @@ def retrieve_board_id(device_name):
     
 
 class EEG_Device:
-    def __init__(self, serial_number):
+    def __init__(self, serial_number, n_eeg_channels=8, sampling_rate=250):
 
         self.recording_data = None # recordings raw data
         self.streams = None
@@ -40,7 +40,7 @@ class EEG_Device:
     
         self.params = BrainFlowInputParams()
 
-        if not serial_number == 'LSL': 
+        if not serial_number == 'LSL':
 
             self.params.serial_number = serial_number
             self.params.board_id = retrieve_board_id(self.params.serial_number)
@@ -49,6 +49,12 @@ class EEG_Device:
             self.board = BoardShim(self.params.board_id, self.params)
             self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
             logging.info(f"EEG Device: connected to {self.params.serial_number}")
+        else:
+            self.params.serial_number = serial_number
+            self.sample_frequency = sampling_rate
+            self.n_eeg_channels = n_eeg_channels
+            self.ch_names = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
+            logging.info(f"EEG Device: connected to LSL")
         
     def stop_recording(self):
         self.recording_data = self.board.get_board_data()
@@ -56,31 +62,37 @@ class EEG_Device:
         logging.info('EEG Device: stop recording')
 
     def start_recording(self):
-        try:
-            self.board.prepare_session()
-        except Exception as e:
-            logging.error(f"EEG Device: {e}")
-            self.board.release_session()
         if self.params.serial_number == 'LSL':
             logging.info('LSLDevice: looking for a stream')
             while not self.streams:
-                self.streams = resolve_stream()
+                self.streams = resolve_stream('name', 'Cortex EEG')
                 time.sleep(1)
             logging.info("LSL stream found: {}".format(self.streams[0].name()))
             self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
         else:
+            try:
+                self.board.prepare_session()
+            except Exception as e:
+                logging.error(f"EEG Device: {e}")
+                self.board.release_session()
             self.board.start_stream()
         logging.info('EEG Device: start recording')
 
-    def get_eeg_data(self, recording_time=4, chunk = False):
+    def get_eeg_data(self, recording_time=4, chunk=False):
         if self.params.serial_number == 'LSL':
             try:
+                data = []
                 if chunk:
-                    data, timestamps = self.inlet.pull_chunk(timeout=recording_time, max_samples=int(recording_time * self.sr))
+                    data, timestamps = self.inlet.pull_chunk(timeout=recording_time, max_samples=int(recording_time * self.sample_frequency))
+                    data = np.array(data)
+                    data = data[:, 0:self.n_eeg_channels]
                 else:
-                    data, timestamps = self.inlet.pull_sample()
-                data = np.array(data)
-                data = data[:, 0:self.n_eeg_channels]
+                    for i in range(int(recording_time * self.sample_frequency)):
+                        sample, timestamps = self.inlet.pull_sample()
+                        data.append(sample)
+                    data = np.array(data)
+                    data = data[:, 0:self.n_eeg_channels]
+                logging.info(f"LSLDevice: {data.shape}")
             except Exception as e:
                 logging.error(f"LSLDevice: {e}")
         else:
