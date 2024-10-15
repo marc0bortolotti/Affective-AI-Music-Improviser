@@ -71,8 +71,6 @@ class EEG_Device:
             self.board.release_session()
 
     def start_recording(self):
-
-    def start_recording(self):
         if self.params.serial_number == 'LSL':
             logging.info('LSLDevice: looking for a stream')
             while not self.streams:
