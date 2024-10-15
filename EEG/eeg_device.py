@@ -49,17 +49,28 @@ class EEG_Device:
             self.board = BoardShim(self.params.board_id, self.params)
             self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
             logging.info(f"EEG Device: connected to {self.params.serial_number}")
+
+            self.prepare_session()
         else:
             self.params.serial_number = serial_number
             self.sample_frequency = sampling_rate
             self.n_eeg_channels = n_eeg_channels
             self.ch_names = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
             logging.info(f"EEG Device: connected to LSL")
-        
+
     def stop_recording(self):
         self.recording_data = self.board.get_board_data()
         self.board.stop_stream()
         logging.info('EEG Device: stop recording')
+
+    def prepare_session(self):
+        try:
+            self.board.prepare_session()
+        except Exception as e:
+            logging.error(f"EEG Device: {e}")
+            self.board.release_session()
+
+    def start_recording(self):
 
     def start_recording(self):
         if self.params.serial_number == 'LSL':

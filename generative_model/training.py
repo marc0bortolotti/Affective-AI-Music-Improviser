@@ -24,7 +24,7 @@ FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_emb128_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -34,7 +34,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.002 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
@@ -49,10 +49,10 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 12 if FROM_MELODY_TO_RHYTHM else 4
+TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
-EMBEDDING_SIZE = 256
+EMBEDDING_SIZE = 128
 TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
@@ -66,7 +66,7 @@ LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for #
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/run_{idx}')
+    RESULTS_PATH = RESULTS_PATH[:-1] + str(idx)
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -134,13 +134,14 @@ def tokenize_midi_files():
             emotion_token = None
 
         in_tokens = INPUT_TOK.midi_to_tokens(in_file, 
-                                             drum=not FROM_MELODY_TO_RHYTHM, 
-                                             rhythm=FROM_MELODY_TO_RHYTHM,
-                                             update_vocab=not COMBINE_IN_OUT_TOKENS,
-                                             convert_to_integers=not COMBINE_IN_OUT_TOKENS)
+                                             drum = not FROM_MELODY_TO_RHYTHM, 
+                                             rhythm = FROM_MELODY_TO_RHYTHM,
+                                             update_vocab = not COMBINE_IN_OUT_TOKENS,
+                                             convert_to_integers = not COMBINE_IN_OUT_TOKENS)
         out_tokens = OUTPUT_TOK.midi_to_tokens(out_file,
-                                               update_vocab=not COMBINE_IN_OUT_TOKENS,
-                                               convert_to_integers=not COMBINE_IN_OUT_TOKENS)
+                                               drum = FROM_MELODY_TO_RHYTHM,
+                                               update_vocab = not COMBINE_IN_OUT_TOKENS,
+                                               convert_to_integers = not COMBINE_IN_OUT_TOKENS)
 
         if COMBINE_IN_OUT_TOKENS:
             in_seq, out_seq = INPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
@@ -158,9 +159,11 @@ def tokenize_midi_files():
 
     print(f'\nNumber of input sequences: {len(INPUT_TOK.sequences)}')
     print(f'Input sequence length: {len(INPUT_TOK.sequences[0])}')
+    print(f'Input sequence example: {INPUT_TOK.sequences[0]}')
     print(f'Input vocabulars size: {len(INPUT_TOK.VOCAB)}')
     print(f'\nNumber of output sequences: {len(OUTPUT_TOK.sequences)}')
     print(f'Output sequence length: {len(OUTPUT_TOK.sequences[0])}')
+    print(f'Output sequence example: {OUTPUT_TOK.sequences[0]}')
     print(f'Output vocabulars size: {len(OUTPUT_TOK.VOCAB)}')
 
     return INPUT_TOK, OUTPUT_TOK
@@ -281,12 +284,21 @@ def epoch_step(epoch, dataloader, mode):
 
         batch_idx += 1
 
-        # add mask to the input last bar
+        # extract the emotion and the input
         emotion, input = input[:, 0].unsqueeze(1), input[:, 1:]
+
+        # mask some tokens in the input to make the model more robust
+        n_tokens_masked = random.randint(1, INPUT_TOK.BAR_LENGTH)
+        mask_indices = torch.randint(3*INPUT_TOK.BAR_LENGTH, [n_tokens_masked])
+        
         if USE_EEG:   
             mask = emotion.expand(-1, OUTPUT_TOK.BAR_LENGTH)
+            input[:, mask_indices] = emotion
         else:
             mask = torch.zeros([input.size(0), OUTPUT_TOK.BAR_LENGTH], dtype=torch.long)
+            input[:, mask_indices] = 0
+
+        # add mask to the input last bar
         input = torch.cat((input[:, :OUTPUT_TOK.BAR_LENGTH*3], mask), dim = 1)
 
         # move the input and the target to the device
@@ -414,7 +426,7 @@ def train():
     eval_perplexities = []
 
     writer = SummaryWriter(RESULTS_PATH)
-    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.8, patience=LR_PATIENCE)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=LR_PATIENCE)
     run = RESULTS_PATH.split('/')[-1]
     run = run.split('_')[0]
 
@@ -432,16 +444,16 @@ def train():
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
-        with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
-            f.write(f'EPOCH: {epoch}\n')
-            emotion, input = input_sample[0], input_sample[1:] 
-            mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
-            input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
-            output = model(input.unsqueeze(0).to(device))
-            output = torch.argmax(output, -1)
-            f.write(f'INPUT: {input.tolist()}\n')
-            f.write(f'OUTPUT: {output.tolist()}\n')
-            f.write(f'TARGET: {target_sample.tolist()}\n')
+        # with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
+        #     f.write(f'EPOCH: {epoch}\n')
+        #     emotion, input = input_sample[0], input_sample[1:] 
+        #     mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
+        #     input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
+        #     output = model(input.unsqueeze(0).to(device))
+        #     output = torch.argmax(output, -1)
+        #     f.write(f'INPUT: {input.tolist()}\n')
+        #     f.write(f'OUTPUT: {output.tolist()}\n')
+        #     f.write(f'TARGET: {target_sample.tolist()}\n')
                     
 
         # Save the model if the validation loss is the best we've seen so far.
@@ -500,9 +512,9 @@ if __name__ == '__main__':
 
     # update the sequences
     print('\nUpdating INPUT_TOK sequences and vocabulary')
-    INPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    INPUT_TOK.remove_less_likely_tokens(TOKENS_FREQUENCY_THRESHOLD)
     print('\nUpdating OUTPUT_TOK sequences and vocabulary')
-    OUTPUT_TOK.update_sequences(TOKENS_FREQUENCY_THRESHOLD)
+    OUTPUT_TOK.remove_less_likely_tokens(TOKENS_FREQUENCY_THRESHOLD)
 
     # create the dataset
     dataset = TensorDataset(torch.LongTensor(INPUT_TOK.sequences),

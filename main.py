@@ -29,8 +29,9 @@ VALIDATION_TIME = 5
 
 # APPLICATION PARAMETERS
 SKIP_TRAINING = True
-SAVE_SESSION = False
+SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
+SAVE_PATH = os.path.join(PROJECT_PATH, 'user_study/user_0/test_0')
 
 
 
@@ -49,15 +50,16 @@ while True:
         if app is not None:
             if SAVE_SESSION:
                 app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-                app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+                app.save_hystory(os.path.join(SAVE_PATH))
             app.close()
             thread_app.join()
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
-            SAVE_PATH = os.path.join(PROJECT_PATH, 'output', time.strftime("%Y%m%d-%H%M%S"))
-            if not os.path.exists(SAVE_PATH):
-                os.makedirs(SAVE_PATH)      
+            idx = 1
+            while os.path.exists(SAVE_PATH):
+                SAVE_PATH = SAVE_PATH[:-1] + str(idx)
+            os.makedirs(SAVE_PATH)      
 
         generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
         input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
@@ -68,7 +70,7 @@ while True:
         instrument_out_port_name = setup_parameters['MELODY_OUT_PORT_NAME'] if generation_type == 'rhythm'  else setup_parameters['RHYTHM_OUT_PORT_NAME']
         generation_play_port_name = setup_parameters['RHYTHM_OUT_PORT_NAME'] if generation_type == 'rhythm' else setup_parameters['MELODY_OUT_PORT_NAME']
 
-        ticks_per_beat = 12 if generation_type == 'rhythm' else 4
+        ticks_per_beat = 4 if generation_type == 'rhythm' else 4
         generate_rhythm = True if generation_type == 'rhythm' else False
 
         module_name = 'musicTransformer.py' if 'MT' in setup_parameters['MODEL'] else 'tcn.py'
@@ -172,7 +174,7 @@ while True:
 if app is not None:
     if SAVE_SESSION:
         app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-        app.save_hystory(os.path.join(SAVE_PATH, 'history.csv'))
+        app.save_hystory(os.path.join(SAVE_PATH))
     app.close()
     thread_app.join()
 

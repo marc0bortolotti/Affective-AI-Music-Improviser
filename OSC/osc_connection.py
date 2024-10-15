@@ -5,7 +5,8 @@ from pythonosc.udp_client import SimpleUDPClient
 import logging
 
 REC_MSG = '/action/40046'
-MOVE_CURSOR_MSG = '/action/41174'
+MOVE_CURSOR_TO_ITEM_END_MSG = '/action/41174'
+MOVE_CURSOR_TO_NEXT_MEASURE_MSG = '/action/41040'
 CONFIDENCE_MSG = '/confidence'
 EMOTION_MSG = '/emotion'
 

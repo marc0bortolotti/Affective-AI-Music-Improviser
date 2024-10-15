@@ -18,27 +18,10 @@ class MIDI_Input:
 
     def __init__(self, midi_in_port_name, midi_out_port_name = None, parse_message = False):
 
-        available_ports = rtmidi.MidiIn().get_ports()
-
-        if midi_in_port_name != SIMULATE_INSTRUMENT:
-            try:
-                self.midi_in_port = rtmidi.MidiIn().open_port(available_ports.index(midi_in_port_name))
-                logging.info(f'MIDI Input: Connected to port {midi_in_port_name}')
-            except:
-                self.midi_in_port = None
-                logging.error(f'MIDI Input: Could not connect to port {midi_in_port_name}, check if the port is available')
-                logging.error(f'MIDI Input Available ports: {available_ports}')
-
-        if midi_out_port_name is not None:
-            available_ports = rtmidi.MidiOut().get_ports()
-            try:
-                self.midi_out_port = rtmidi.MidiOut().open_port(available_ports.index(midi_out_port_name))
-                logging.info(f'MIDI Output: Connected to port {midi_out_port_name}')
-            except:
-                self.midi_out_port = None
-                logging.error(f'MIDI Output: Could not connect to port {midi_out_port_name}, check if the port is available')
-                logging.error(f'MIDI Output Available ports: {available_ports}')
-            
+        self.midi_in_port_name = midi_in_port_name
+        self.midi_out_port_name = midi_out_port_name        
+        self.midi_in_port = None
+        self.midi_out_port = None    
         self.note_buffer = []
         self.exit = False
         self.parse_message = parse_message
@@ -46,6 +29,29 @@ class MIDI_Input:
         self.simulation_event = None
         self.bar_duration = 4 * 60/120 # 4 beats per bar, 120 bpm
         self.simulation_track_path = None
+
+
+    def open_port(self):
+        available_ports = rtmidi.MidiIn().get_ports()
+
+        if self.midi_in_port_name != SIMULATE_INSTRUMENT:
+            try:
+                self.midi_in_port = rtmidi.MidiIn().open_port(available_ports.index(self.midi_in_port_name))
+                logging.info(f'MIDI Input: Connected to port {self.midi_in_port_name}')
+            except:
+                self.midi_in_port = None
+                logging.error(f'MIDI Input: Could not connect to port {self.midi_in_port_name}, check if the port is available')
+                logging.error(f'MIDI Input Available ports: {available_ports}')
+
+        if self.midi_out_port_name is not None:
+            available_ports = rtmidi.MidiOut().get_ports()
+            try:
+                self.midi_out_port = rtmidi.MidiOut().open_port(available_ports.index(self.midi_out_port_name))
+                logging.info(f'MIDI Output: Connected to port {self.midi_out_port_name}')
+            except:
+                self.midi_out_port = None
+                logging.error(f'MIDI Output: Could not connect to port {self.midi_out_port_name}, check if the port is available')
+                logging.error(f'MIDI Output Available ports: {available_ports}')
 
     def run(self):
         logging.info(f"MIDI Input: running")
@@ -92,16 +98,17 @@ class MIDI_Input:
             for msg in mid.play(): 
                 self.midi_simulation_port.send(msg)
                 if msg.type in ['note_on', 'note_off']:
+                    if msg.type == 'note_off':
+                        msg.velocity = 0
                     self.note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
                 if self.exit:
                     break   
         self.midi_simulation_port.close()
 
     def get_note_buffer(self):
-        return self.note_buffer
-    
-    def clear_note_buffer(self):
-        self.note_buffer = []
+        notes = self.note_buffer.copy()
+        self.note_buffer = self.note_buffer[len(notes):]
+        return notes
 
     def close(self):
         self.exit = True
@@ -120,14 +127,18 @@ class MIDI_Output:
 
     def __init__(self, midi_out_port_name, parse_message = False):
 
+        self.midi_out_port_name = midi_out_port_name
+        self.midi_out_port = None
+        self.parse_message = parse_message
+
+    def open_port(self):
         try:
-            self.midi_out_port = mido.open_output(midi_out_port_name) 
-            logging.info(f'MIDI Output: Connected to port {midi_out_port_name}')
+            self.midi_out_port = mido.open_output(self.midi_out_port_name) 
+            logging.info(f'MIDI Output: Connected to port {self.midi_out_port_name}')
         except:
             self.midi_out_port = None
-            logging.error(f'MIDI Output: Could not connect to port {midi_out_port_name}, check if the port is available')
-            logging.error(f'MIDI Output Available ports: {mido.get_output_names()}')
-        self.parse_message = parse_message
+            logging.error(f'MIDI Output: Could not connect to port {self.midi_out_port_name}, check if the port is available')
+            logging.error(f'MIDI Output Available ports: {mido.get_output_names()}')    
 
     def send_message(self, message):
         self.midi_out_port.send_message(message)
