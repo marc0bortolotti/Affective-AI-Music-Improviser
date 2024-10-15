@@ -19,19 +19,20 @@ import random
 DIRECTORY_PATH = os.path.dirname(__file__)
 
 MODEL_NAME = 'TCN'
-COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
+CUDA = 1
+device = torch.device(f"cuda:{CUDA}" if torch.cuda.is_available() else "cpu")
+print('\n', device)
+
+COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
 FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_emb128_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
 torch.manual_seed(SEED)
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print('\n', device)
 
 EPOCHS = 1000 
 LEARNING_RATE = 0.0001 # 0.002
@@ -49,7 +50,7 @@ EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
-TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4
+TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4 # resolution of the midi files
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
 EMBEDDING_SIZE = 128
@@ -145,9 +146,8 @@ def tokenize_midi_files():
 
         if COMBINE_IN_OUT_TOKENS:
             in_seq, out_seq = INPUT_TOK.combine_in_out_tokens(in_tokens, out_tokens, emotion_token)
+            OUTPUT_TOK.update_sequences(out_seq)
             OUTPUT_TOK.VOCAB = INPUT_TOK.VOCAB
-            INPUT_TOK.sequences+=in_seq
-            OUTPUT_TOK.sequences+=out_seq
         else:
             in_seq = INPUT_TOK.generate_sequences(in_tokens, emotion_token)
             out_seq = OUTPUT_TOK.generate_sequences(out_tokens)
@@ -427,8 +427,6 @@ def train():
 
     writer = SummaryWriter(RESULTS_PATH)
     scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=LR_PATIENCE)
-    run = RESULTS_PATH.split('/')[-1]
-    run = run.split('_')[0]
 
     for epoch in range(1, EPOCHS+1):
 
@@ -444,16 +442,41 @@ def train():
         writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
         writer.add_scalar('Perplexity/eval', eval_perplexity, epoch)
 
-        # with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
-        #     f.write(f'EPOCH: {epoch}\n')
-        #     emotion, input = input_sample[0], input_sample[1:] 
-        #     mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
-        #     input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
-        #     output = model(input.unsqueeze(0).to(device))
-        #     output = torch.argmax(output, -1)
-        #     f.write(f'INPUT: {input.tolist()}\n')
-        #     f.write(f'OUTPUT: {output.tolist()}\n')
-        #     f.write(f'TARGET: {target_sample.tolist()}\n')
+        with open(os.path.join(RESULTS_PATH, 'test_sample.txt'), 'a') as f:
+
+            f.write(f'EPOCH: {epoch}\n')
+
+            n_tokens_masked = random.randint(1, INPUT_TOK.BAR_LENGTH)
+            mask_indices = torch.randint(3*INPUT_TOK.BAR_LENGTH, [n_tokens_masked])
+
+            if USE_EEG:
+                emotion, input = input_sample[0], input_sample[1:] 
+            else:
+                input = input_sample
+                emotion = 0
+
+            mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
+            input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
+            input[mask_indices] = emotion
+
+            if MODEL_NAME == 'TCN':
+                output = model(input.unsqueeze(0).to(device))
+                output = torch.argmax(output, -1)
+                f.write(f'INPUT: {input.tolist()}\n')
+                f.write(f'OUTPUT: {output.tolist()}\n')
+                f.write(f'TARGET: {target_sample.tolist()}\n')
+            else:
+                for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS + 1, N_TOKENS):
+                    input_target = target_sample[i : OUTPUT_TOK.BAR_LENGTH * 3 + i]
+                    output = model(input.unsqueeze(0).to(device), input_target.unsqueeze(0).to(device))
+                    output = torch.argmax(output, -1)
+                    actual_target = target_sample[i + N_TOKENS : 3 * OUTPUT_TOK.BAR_LENGTH + i + N_TOKENS]
+                    f.write(f'STEP: {i}\n')
+                    f.write(f'INPUT: {input.tolist()}\n')
+                    f.write(f'OUTPUT: {output.tolist()}\n')
+                    f.write(f'TARGET: {actual_target.tolist()}\n\n')
+                f.write('\n')
+            f.write('\n')
                     
 
         # Save the model if the validation loss is the best we've seen so far.
@@ -490,7 +513,7 @@ def train():
         lr = optimizer.param_groups[0]['lr']
         print('{} | epoch {:3d}/{:3d} | lr {:02.7f} | ms/epoch {:5.5f} | train_acc {:5.2f} | eval_acc {:5.2f} | train_loss {:5.2f} | eval_loss {:5.2f} |' \
               'train_perp {:5.2f} | eval_perp {:5.2f}' \
-                .format(run, epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
+                .format(MODEL_NAME, epoch, EPOCHS, lr, elapsed * 1000, train_accuracy, eval_accuracy, train_loss, eval_loss, train_perplexity, eval_perplexity))   
 
     print('\n\n TRAINING FINISHED:\n\n\tBest Loss: {:5.2f}\tBest Model saved at epoch: {:3d} \n\n' \
             .format(best_eval_loss, best_model_epoch))
