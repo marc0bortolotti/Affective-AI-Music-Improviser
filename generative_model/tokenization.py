@@ -12,7 +12,6 @@ BEATS_PER_BAR = 4
 
 VELOCITY_TOKENS = {40:'pp', 60:'p', 90:'f', 110:'ff'} 
 NOTE_START_TOKEN = 'S' # 'S'
-NOTE_SUSTAINED_TOKEN = 's'
 SILENCE_TOKEN = 'O'
 BCI_TOKENS = {0: 'R', 1: 'C'} # relaxed, concentrated
 NOTE_SEPARATOR_TOKEN = '_'
@@ -57,25 +56,25 @@ class Dictionary(object):
 
   def __init__(self):
     self.word2idx = {} # to keep track of the index of each token
-    self.idx2word = [] # to keep track of the order of the tokens
-    self.counter = [] # to keep track of the frequency of each token
-    self.weights = [] # to keep track of the probability of each token
+    self.idx2word = np.array([]) # to keep track of the order of the tokens
+    self.counter = np.array([]) # to keep track of the frequency of each token
+    self.weights = np.array([]) # to keep track of the probability of each token
 
   def add_word(self, word):
     if not self.is_in_vocab(word):
-      self.idx2word.append(word)
+      self.idx2word = np.append(self.idx2word, word)
       self.word2idx[word] = len(self.idx2word) - 1
-      self.counter.append(1)
+      self.counter = np.append(self.counter, 1)
     else:
       self.counter[self.word2idx[word]] += 1
     
   def remove_word(self, word):
     if self.is_in_vocab(word):
       idx = self.word2idx[word]
-      self.idx2word.pop(idx)
-      self.counter.pop(idx)
+      self.idx2word = np.delete(self.idx2word, idx)
+      self.counter = np.delete(self.counter, idx)
       if idx < len(self.weights):
-        self.weights.pop(idx)
+        self.weights = np.delete(self.weights, idx)
         self.compute_weights()
       self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
 
@@ -146,7 +145,7 @@ class PrettyMidiTokenizer(object):
     self.BAR_DURATION_IN_TICKS = self.convert_time_to_ticks(self.BAR_DURATION)
     self.TEMPO = int(self.BEAT_DURATION * 1000000)
 
-    self.sequences = []
+    self.sequences = np.array([])
     self.source_paths = []
     self.notes_df = pd.DataFrame(columns=['pitch', 'velocity', 'start', 'end', 'bar'])
     self.VOCAB = Dictionary()
@@ -189,6 +188,183 @@ class PrettyMidiTokenizer(object):
     for i in range(0, len(tokens)):
       self.VOCAB.add_word(tokens[i])
 
+  def update_sequences(self, sequences):
+    self.sequences = self.sequences.tolist() + sequences.tolist()
+    self.sequences = np.array(self.sequences)
+
+  def note_to_string(self, tokens, pitch, velocity, start, end, rhythm = False, single_notes = False):
+    '''
+    Converts a note into a string token and adds it to the time serie of tokens.
+
+    Parameters:
+    - tokens: the time serie of tokens (np.array(dtype=object))
+    - pitch: the pitch of the note (int)
+    - velocity: the velocity of the note (int)
+    - start: the start time of the note (int)
+    - end: the end time of the note (int)
+    - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
+    - single_notes: a boolean indicating whether to keep only one note per token (bool)
+    '''
+
+    velocity_token = self.compute_velocity_token(velocity)
+
+    if rhythm:
+      pitch = '56'
+      tokens[start] = pitch + velocity_token + NOTE_START_TOKEN
+    else:
+      pitch = str(pitch)
+
+    for i in range(start, end):
+      if pitch in tokens[i]:
+        continue
+      elif tokens[i] != SILENCE_TOKEN:
+        tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
+      else:
+        tokens[i] = pitch + velocity_token
+
+      if i == start:
+        tokens[start] += NOTE_START_TOKEN
+
+      # sort the tokens by pitch to avoid redundancy
+      if NOTE_SEPARATOR_TOKEN in tokens[i]:
+        sorted_tokens = sorted(tokens[i].split(NOTE_SEPARATOR_TOKEN)) # sort the tokens by pitch
+        if single_notes:
+          tokens[i] = sorted_tokens[-1] # keep only the note with the highest pitch
+        else:
+          tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
+
+    return tokens
+  
+  def from_string_to_integers_tokens(self, tokens):
+    for i in range(len(tokens)):
+      if self.VOCAB.is_in_vocab(tokens[i]):
+        tokens[i] = self.VOCAB.word2idx[tokens[i]] 
+      else: 
+        tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
+    return tokens
+  
+  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
+
+    seq_len = self.SEQ_LENGTH if emotion_token is None else self.SEQ_LENGTH + 1
+    n_seq = len(tokens) - self.SEQ_LENGTH
+    if n_seq <= 0:
+      n_seq = 1
+
+    sequences = np.empty((n_seq, seq_len), dtype=np.int32)
+
+    for i in range(n_seq):
+      
+      sequence = tokens[i : i+self.SEQ_LENGTH]
+
+      if emotion_token is not None:
+        emotion_token_id = self.VOCAB.word2idx[emotion_token]
+        sequence = self.append_emotion_token(sequence, emotion_token_id)
+        
+      sequences[i] = sequence
+
+    # concatenate the sequences if necessary
+    if update_sequences: 
+      self.update_sequences(sequences)
+
+    return sequences
+  
+  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True):
+    
+    min_len = min(len(string_tokens_in), len(string_tokens_out))
+    combined_tokens = np.empty((min_len), dtype=object)
+    for i in range(min_len):
+      combined_tokens[i] = string_tokens_in[i] + IN_OUT_SEPARATOR_TOKEN + string_tokens_out[i]
+    
+    # update the vocabulary 
+    if update_vocab:
+      self.update_vocab(combined_tokens)
+
+    # convert string tokens into integer tokens
+    combined_tokens = self.from_string_to_integers_tokens(combined_tokens)
+
+    # generate sequences
+    in_seq = self.generate_sequences(combined_tokens, emotion_token)
+    out_seq = self.generate_sequences(combined_tokens, update_sequences=False)
+
+    return in_seq, out_seq
+    
+  def get_in_out_tokens(self, tokens):
+
+    in_tokens = np.array([])
+    out_tokens = np.array([])
+    for tok in tokens:
+      if IN_OUT_SEPARATOR_TOKEN in tok:
+        in_token, out_token = tok.split(IN_OUT_SEPARATOR_TOKEN)
+        in_tokens = np.append(in_tokens, in_token)
+        out_tokens = np.append(out_tokens, out_token)
+    
+    return in_tokens, out_tokens
+
+  def midi_to_tokens(self, midi_path, update_vocab = True, rhythm = False, single_notes = False, max_len = None, drum = False,  convert_to_integers = True):
+
+    '''
+    Converts a MIDI file into a sequence of tokens.
+
+    Parameters:
+    - midi_path: the path to the MIDI file (str)
+    - update_vocab: a boolean indicating whether to update the vocabulary (bool)
+    - emotion_token: the token representing the emotion of the user (str)
+    - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
+    - single_notes: a boolean indicating whether to keep only one note per token (bool)
+    - max_len: the maximum length of the sequence (int)
+    - drum: a boolean indicating whether the MIDI file contains drum notes (bool)
+    - convert_to_integers: a boolean indicating whether to convert the tokens into integers (bool)
+
+    Returns:
+    - tokens: a sequence of tokens (np.array)
+    '''
+
+    filename = midi_path.split('\\')[-1]
+    print(f'Processing MIDI file: {filename}')
+
+    pm = pretty_midi.PrettyMIDI(midi_path)
+    sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
+    
+    # create a sequence of string tokens
+    last_note = sorted_notes[-1]
+
+    if max_len is None:
+      tokens_len = self.convert_time_to_ticks(last_note.end)
+    else:
+      tokens_len = max_len
+
+    pad = tokens_len % self.BAR_LENGTH
+
+    tokens = np.empty((tokens_len + pad), dtype=object)
+    tokens[:] = SILENCE_TOKEN
+    for idx, note in enumerate(sorted_notes):
+      print(f"Processing note: {idx+1}/{len(sorted_notes)}", end="\r")
+      pitch = note.pitch
+      velocity = note.velocity
+      start = self.convert_time_to_ticks(note.start)
+      end = self.convert_time_to_ticks(note.end)
+
+      if start >= tokens_len or end > tokens_len:
+        break
+
+      if drum:
+        end = start + 1
+        if velocity < 40:
+          continue 
+      tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm, single_notes)
+      
+    # update the vocabulary if necessary
+    if update_vocab:
+      self.update_vocab(tokens)
+
+    # convert string tokens into integer tokens
+    if convert_to_integers:
+      tokens = self.from_string_to_integers_tokens(tokens)
+
+    print('\nDone!')       
+
+    return tokens
+  
   def midi_to_df(self, midi_path):
 
     pm = pretty_midi.PrettyMIDI(midi_path)
@@ -241,180 +417,6 @@ class PrettyMidiTokenizer(object):
       notes_df = notes_df.reset_index(drop=True)
     
     return notes_df
-
-  def note_to_string(self, tokens, pitch, velocity, start, end, rhythm = False, single_notes = False):
-    '''
-    Converts a note into a string token and adds it to the time serie of tokens.
-
-    Parameters:
-    - tokens: the time serie of tokens (np.array(dtype=object))
-    - pitch: the pitch of the note (int)
-    - velocity: the velocity of the note (int)
-    - start: the start time of the note (int)
-    - end: the end time of the note (int)
-    - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
-    - single_notes: a boolean indicating whether to keep only one note per token (bool)
-    '''
-
-    velocity_token = self.compute_velocity_token(velocity)
-
-    if rhythm:
-      pitch = NOTE_SUSTAINED_TOKEN
-    else:
-      pitch = str(pitch)
-
-    for i in range(start, end):
-      if pitch in tokens[i]:
-        break
-      elif tokens[i] != SILENCE_TOKEN:
-        if not rhythm:
-          tokens[i] += NOTE_SEPARATOR_TOKEN + pitch + velocity_token
-      else:
-        tokens[i] = pitch + velocity_token
-
-      if i == start:
-        tokens[start] += NOTE_START_TOKEN
-
-      # sort the tokens by pitch to avoid redundancy
-      if NOTE_SEPARATOR_TOKEN in tokens[i]:
-        sorted_tokens = sorted(tokens[i].split(NOTE_SEPARATOR_TOKEN)) # sort the tokens by pitch
-        if single_notes:
-          tokens[i] = sorted_tokens[-1] # keep only the note with the highest pitch
-        else:
-          tokens[i] = NOTE_SEPARATOR_TOKEN.join(sorted_tokens) # add the separator token between the tokens
-
-    if rhythm:
-      tokens[start] = NOTE_START_TOKEN
-
-    return tokens
-  
-  def generate_sequences(self, tokens, emotion_token = None, update_sequences = True):
-
-    sequences = []
-    stop_index = len(tokens) - self.SEQ_LENGTH
-    
-    if stop_index <= 0:
-      stop_index = 1
-
-    for i in range(0, stop_index):
-      
-      sequence = tokens[i : i+self.SEQ_LENGTH]
-
-      if emotion_token is not None:
-        emotion_token_id = self.VOCAB.word2idx[emotion_token]
-        sequence = self.append_emotion_token(sequence, emotion_token_id)
-        
-      sequences.append(sequence)
-
-    # concatenate the sequences if necessary
-    if update_sequences: 
-      self.sequences += sequences 
-
-    return sequences
-  
-  def combine_in_out_tokens(self, string_tokens_in, string_tokens_out, emotion_token=None, update_vocab = True):
-    
-    min_len = min(len(string_tokens_in), len(string_tokens_out))
-    combined_tokens = np.empty((min_len), dtype=object)
-    for i in range(min_len):
-      combined_tokens[i] = string_tokens_in[i] + IN_OUT_SEPARATOR_TOKEN + string_tokens_out[i]
-    
-    # update the vocabulary 
-    if update_vocab:
-      self.update_vocab(combined_tokens)
-
-    # convert string tokens into integer tokens
-    for i in range(len(combined_tokens)):
-      if self.VOCAB.is_in_vocab(combined_tokens[i]):
-        combined_tokens[i] = self.VOCAB.word2idx[combined_tokens[i]] 
-      else: 
-        combined_tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
-
-    # generate sequences
-    in_seq = self.generate_sequences(combined_tokens, emotion_token, update_sequences = False)
-    out_seq = self.generate_sequences(combined_tokens, update_sequences = False)
-
-    return in_seq, out_seq
-    
-  def get_in_out_tokens(self, tokens):
-
-    in_tokens = []
-    out_tokens = []
-    for tok in tokens:
-      if IN_OUT_SEPARATOR_TOKEN in tok:
-        in_token, out_token = tok.split(IN_OUT_SEPARATOR_TOKEN)
-        in_tokens.append(in_token)
-        out_tokens.append(out_token)
-    
-    return in_tokens, out_tokens
-
-  def midi_to_tokens(self, midi_path, update_vocab = True, rhythm = False, single_notes = False, max_len = None, drum = False,  convert_to_integers = True):
-
-    '''
-    Converts a MIDI file into a sequence of tokens.
-
-    Parameters:
-    - midi_path: the path to the MIDI file (str)
-    - update_vocab: a boolean indicating whether to update the vocabulary (bool)
-    - update_sequences: a boolean indicating whether to update the sequences (bool)
-    - emotion_token: the token representing the emotion of the user (str)
-    - rhythm: a boolean indicating whether to consider only the rhythm of the notes (bool)
-    - single_notes: a boolean indicating whether to keep only one note per token (bool)
-    - max_len: the maximum length of the sequence (int)
-    - drum: a boolean indicating whether the MIDI file contains drum notes (bool)
-    - convert_to_integers: a boolean indicating whether to convert the tokens into integers (bool)
-
-    Returns:
-    - tokens: a sequence of tokens (np.array)
-    '''
-
-    filename = midi_path.split('\\')[-1]
-    print(f'Processing MIDI file: {filename}')
-
-    pm = pretty_midi.PrettyMIDI(midi_path)
-    sorted_notes = sorted(pm.instruments[0].notes, key=lambda note: note.start)
-    
-    # create a sequence of string tokens
-    last_note = sorted_notes[-1]
-
-    if max_len is None:
-      tokens_len = self.convert_time_to_ticks(last_note.end)
-    else:
-      tokens_len = max_len
-
-    pad = tokens_len % self.BAR_LENGTH
-
-    tokens = np.empty((tokens_len + pad), dtype=object)
-    tokens[:] = SILENCE_TOKEN
-    for idx, note in enumerate(sorted_notes):
-      print(f"Processing note: {idx+1}/{len(sorted_notes)}", end="\r")
-      pitch = note.pitch
-      velocity = note.velocity
-      start = self.convert_time_to_ticks(note.start)
-      end = self.convert_time_to_ticks(note.end)
-      if drum:
-        end = start + 1
-        if velocity < 40:
-          continue 
-      if start >= tokens_len or end >= tokens_len:
-        break
-      tokens = self.note_to_string(tokens, pitch, velocity, start, end, rhythm, single_notes)
-      
-    # update the vocabulary if necessary
-    if update_vocab:
-      self.update_vocab(tokens)
-
-    # convert string tokens into integer tokens
-    if convert_to_integers:
-      for i in range(len(tokens)):
-        if self.VOCAB.is_in_vocab(tokens[i]):
-          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-        else: 
-          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN]
-
-    print('\nDone!')       
-
-    return tokens
   
   def tokens_to_notes_df(self, sequence, ticks_filter = 0):
     '''
@@ -430,7 +432,7 @@ class PrettyMidiTokenizer(object):
 
     
     notes_df = pd.DataFrame(columns = ['pitch', 'start', 'duration', 'velocity'])
-    prev_pitches = []
+    prev_pitches = np.array([SILENCE_TOKEN])
 
     # convert the sequence of tokens into a list of tokens and their duration and velocity
     for token_idx, token in enumerate(sequence):
@@ -446,18 +448,22 @@ class PrettyMidiTokenizer(object):
       if NOTE_SEPARATOR_TOKEN in token_string:
         notes = token_string.split(NOTE_SEPARATOR_TOKEN)
       else:
-        notes = [token_string]
+        notes = np.array([token_string])
 
       # get current pitches in the token
-      pitches = re.findall('\d+', token_string)
+      pitches = np.array(re.findall('\d+', token_string))
 
       for note_string in notes:
 
         # check if the token is a silence token
         if SILENCE_TOKEN not in note_string:
 
-          pitch = re.findall('\d+', note_string) [0] # re.findall returns a list
-          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string] [0]
+          pitch = re.findall('\d+', note_string)[0] # re.findall returns a list
+
+          velocity = [key for key in VELOCITY_TOKENS.keys() if VELOCITY_TOKENS[key] in note_string][0]
+
+          if len(prev_pitches) == 0: 
+            prev_pitches = np.array([SILENCE_TOKEN])
           start = token_idx if (NOTE_START_TOKEN in note_string or pitch not in prev_pitches) else None
 
           if start is not None:
@@ -683,11 +689,7 @@ class PrettyMidiTokenizer(object):
         
     # convert string tokens into integer tokens
     if convert_to_integers:
-      for i in range(len(tokens)):      
-        if self.VOCAB.is_in_vocab(tokens[i]):
-          tokens[i] = self.VOCAB.word2idx[tokens[i]] 
-        else: 
-          tokens[i] = self.VOCAB.word2idx[SILENCE_TOKEN] 
+      tokens = self.from_string_to_integers_tokens(tokens)
 
     return tokens
   
@@ -704,32 +706,6 @@ if __name__ == '__main__':
   file_path = os.path.join(os.path.dirname(__file__), 'tok_test/chords.mid')
   save_path = os.path.join(os.path.dirname(__file__), 'tok_test/chords_reconstructed.mid')
 
-  file_path = os.path.join(os.path.dirname(__file__), 'dataset/melody/melody_RELAXED.mid')
-  # tok = PrettyMidiTokenizer()
-  # import mido
-  # mid = mido.MidiFile(file_path)
-  # note_buffer = []
-  # duration = 0
-  # i = 1
-  # port = mido.open_output('rhythm_output 2')
-  # for msg in mid.play(): 
-  #   if msg.type in ['note_on', 'note_off']:
-  #     port.send(msg)
-  #     if msg.type == 'note_off':  
-  #       continue
-      
-  #     duration+=msg.time
-  #     print(msg, tok.convert_time_to_ticks(duration))
-  #     note_buffer.append({'pitch' : msg.note, 'velocity' : msg.velocity, 'dt': msg.time})
-  #     if tok.convert_time_to_ticks(duration) >= i*tok.BAR_LENGTH:
-  #       tokens = tok.real_time_tokenization(note_buffer, emotion_token = 'R', convert_to_integers=False)
-  #       print('\n', tokens, '\n')
-  #       i+=1
-  #       note_buffer = []
-  #       if i == 4:
-  #         break
-
-
   tok = PrettyMidiTokenizer()
   tokens = tok.midi_to_tokens(file_path,
                               update_vocab = True, 
@@ -739,10 +715,8 @@ if __name__ == '__main__':
                               drum = False,  
                               convert_to_integers = False)
 
-  print(tokens[0:16])
-  print(tokens[16:32])
-
-  # mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
+  print(tokens[-18:])
+  mid = tok.tokens_to_midi(tokens, out_file_path = save_path, ticks_filter = 0, instrument_name = 'Piano')
 
 
 

@@ -19,7 +19,7 @@ def generate_samples(eeg, window_size, window_overlap, parse=False):
     return samples
 
 
-def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False):
+def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False, transpose=True):
     """
     Convert the data to MNE format
     :param eeg: numpy array of shape (n_samples, n_channels)
@@ -31,7 +31,8 @@ def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False):
     :return: MNE RawArray object
     """
 
-    this_rec = RawArray(eeg.T / rescale, create_info(chs, fs, ch_types='eeg'))
+    eeg = eeg.T if transpose else eeg
+    this_rec = RawArray(eeg / rescale, create_info(chs, fs, ch_types='eeg'))
 
     # Get event indexes where value is not 0, i.e. -1 or 1
     pos = np.nonzero(trigger)[0]

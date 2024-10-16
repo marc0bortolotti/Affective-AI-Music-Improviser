@@ -13,7 +13,6 @@ import logging
 import time
 import yaml
 import importlib
-from rapidfuzz import process
 import sys
 
 '''---------- CONNECTION PARAMETERS ------------'''
@@ -23,6 +22,7 @@ OSC_REAPER_PORT = 8000
 OSC_PROCESSING_PORT = 7000
 '''---------------------------------------------'''
 
+FIXED_EMOTION = True
 
 def load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat):
 
@@ -78,13 +78,14 @@ def thread_function_eeg(name, app):
 
     while True:
         time.sleep(app.WINDOW_DURATION)
-        if app.eeg_device.params.serial_number == 'Synthetic Board':
-            prediction = 0 if app.get_last_eeg_classification() == 'R' else 1
-        else:
-            eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
-            prediction = app.eeg_device.get_prediction(eeg) 
 
+        # get the EEG data
+        eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
+        # get the predictied emotion
+        prediction = app.eeg_device.get_prediction(eeg) 
+        # send the emotion to the processing application
         app.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, EMOTION_MSG, float(prediction))
+        # append the emotion to the buffer
         app.append_eeg_classification(BCI_TOKENS[prediction])
 
         if not app.STATUS['RUNNING']:
@@ -121,24 +122,23 @@ class AI_AffectiveMusicImproviser():
 
     def __init__(self,  instrument_in_port_name,
                         instrument_out_port_name,
-                        generation_play_port_name,
-                        # generation_record_port_name,
+                        generation_out_port_name,
                         eeg_device_type,
                         window_duration,
                         model_param_path,
                         model_module_path,
                         model_class_name,
-                        init_track_path,
-                        ticks_per_beat,
-                        generate_rhythm,
-                        n_tokens,
+                        init_track_path=None,
+                        ticks_per_beat=4,
+                        generate_rhythm=True,
+                        n_tokens=4,
+                        fixed_mood=False,
                         parse_message=False):
         '''
         Parameters:
         - instrument_in_port_name: name of the MIDI input port for the instrument
-        - instrument_out_port_name: name of the MIDI output port for the instrument
+        - generation_out_port_name: name of the MIDI output port for the instrument
         - generation_play_port_name: name of the MIDI output port for the generated melody
-        - generation_record_port_name: name of the MIDI output port for the generated melody
         - window_duration: duration of the window in seconds
         - model_dict: path to the model dictionary
         - init_track_path: path to the initial track to start the generation
@@ -158,11 +158,11 @@ class AI_AffectiveMusicImproviser():
         # GENERATION 
         self.generate_rhythm = generate_rhythm
         self.n_tokens = n_tokens
+        self.fixed_mood = fixed_mood
 
         # MIDI
         self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
-        self.midi_out_play = MIDI_Output(generation_play_port_name)
-        # self.midi_out_rec = MIDI_Output(generation_record_port_name)
+        self.midi_out_play = MIDI_Output(generation_out_port_name)
 
         # SYNCHRONIZATION
         BPM = 120
@@ -190,11 +190,14 @@ class AI_AffectiveMusicImproviser():
             if IN_OUT_SEPARATOR_TOKEN in word:
                 self.combine_in_out = True
                 break
-        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, 
-                                                          max_len = 8 * self.BAR_LENGTH,
-                                                          update_vocab=False,
-                                                          convert_to_integers=not self.combine_in_out) 
-        self.init_tokens = self.init_tokens[:3*self.BAR_LENGTH]  
+        if init_track_path is not None:
+            self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, 
+                                                            max_len = 8 * self.BAR_LENGTH,
+                                                            update_vocab=False,
+                                                            convert_to_integers=not self.combine_in_out) 
+            self.init_tokens = self.init_tokens[:3*self.BAR_LENGTH]  
+        else:
+            self.init_tokens = np.array([self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] * 3*self.BAR_LENGTH)
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
@@ -237,17 +240,14 @@ class AI_AffectiveMusicImproviser():
         with open(path, 'w') as file:
             for item in self.hystory:
                 in_bars, out_bars = item
-                for i in range(0, 4):
-                    file.write(f"bar_{i+1}_IN_OUT:\n")
-                    for tok in in_bars[(i)*self.BAR_LENGTH : (i+1)*self.BAR_LENGTH]:
-                        text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
-                        file.write(text)
-                    file.write("\n")
-                    for tok in out_bars[(i)*self.BAR_LENGTH: (i+1)*self.BAR_LENGTH]:
-                        text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
-                        file.write(text)
-                    file.write("\n")
+                for tok in in_bars:
+                    text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
+                    file.write(text)
                 file.write("\n")
+                for tok in out_bars:
+                    text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
+                    file.write(text)
+                file.write("\n\n")
 
     def run(self):
 
@@ -311,7 +311,10 @@ class AI_AffectiveMusicImproviser():
                         # Convert the token to the integer representation
                         if not self.INPUT_TOK.VOCAB.is_in_vocab(token_string):
                             if self.STATUS['USE_EEG']:
-                                token_string = self.get_last_eeg_classification()
+                                if self.fixed_mood:
+                                    token_string = self.eeg_classification_buffer[0] 
+                                else:
+                                    token_string = self.get_last_eeg_classification()
                             else:
                                 token_string = SILENCE_TOKEN
                             
@@ -328,7 +331,10 @@ class AI_AffectiveMusicImproviser():
 
                 # add mask to the input data
                 if self.STATUS['USE_EEG']:
-                    emotion_token = self.get_last_eeg_classification()
+                    if self.fixed_mood:
+                        emotion_token = self.eeg_classification_buffer[0]
+                    else:
+                        emotion_token = self.get_last_eeg_classification()
                     mask = torch.ones(self.BAR_LENGTH, dtype=torch.long) * self.INPUT_TOK.VOCAB.word2idx[emotion_token]
                 else:
                     mask = torch.zeros(self.BAR_LENGTH, dtype=torch.long)
@@ -371,6 +377,9 @@ class AI_AffectiveMusicImproviser():
                         # Update the target tensor
                         predicted_bar = np.concatenate((predicted_bar, next_tokens.numpy()))
 
+                        # save the hystory
+                        self.hystory.append([input_data[0], prediction])
+
                 else:
                     # Make the prediction
                     output = self.model(input_data)[0]
@@ -382,7 +391,11 @@ class AI_AffectiveMusicImproviser():
                     predicted_proba = torch.max(output_no_temp, 1)[0] # torch.max returns a tuple (values, indices)
 
                     # Get the predicted tokens.
-                    predicted_bar = torch.argmax(output, 1).numpy()[-self.BAR_LENGTH:] 
+                    prediction = torch.argmax(output, 1)
+                    predicted_bar = prediction.numpy()[-self.BAR_LENGTH:] 
+
+                    # save the hystory
+                    self.hystory.append([input_data[0], prediction])
 
                 if self.combine_in_out:
                     for tok in predicted_bar:
@@ -400,9 +413,6 @@ class AI_AffectiveMusicImproviser():
 
                 # send the confidence to the processing application 
                 self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
-
-                # # save the hystory
-                self.hystory.append([input_data[0], torch.argmax(output, 1)])
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0, emotion_token=emotion_token)
