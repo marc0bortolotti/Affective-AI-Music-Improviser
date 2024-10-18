@@ -4,7 +4,6 @@ import pandas as pd
 import pretty_midi
 from mido import MidiFile, MidiTrack, Message, MetaMessage
 from rapidfuzz import process
-from math import floor
 
 BPM = 120
 TICKS_PER_BEAT = 4 # resolution of the MIDI file

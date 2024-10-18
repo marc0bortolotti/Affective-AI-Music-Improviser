@@ -25,11 +25,11 @@ WINDOW_DURATION = 4 # seconds
 # TRAINING AND VALIDATION PARAMETERS
 TRAINING_SESSIONS = 1
 TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 10
+VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
 SKIP_TRAINING = False
-SAVE_SESSION = True
+SAVE_SESSION = False
 PROJECT_PATH = os.path.dirname(__file__)
 test_idx = 0
 SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'user_study/greg/test_{test_idx}')
@@ -40,7 +40,7 @@ win = QtWidgets.QApplication([])
 app = None
 setup_dialog = SetupDialog()
 
-while True:                    
+while True:              
 
     if setup_dialog.exec_() == QtWidgets.QDialog.Accepted:
 
@@ -113,7 +113,7 @@ while True:
             app.set_application_status('USE_EEG', True)
 
         # Train the EEG classifier
-        if not SKIP_TRAINING:
+        if not SKIP_TRAINING and app.get_application_status()['USE_EEG']:
             dialog = CustomDialog('Do you want to TRAIN EEG classifiers?', buttons=['Yes', 'No'])
             if dialog.exec_() == 0:
 
@@ -179,7 +179,7 @@ while True:
 
 if app is not None:
     if SAVE_SESSION:
-        app.eeg_device.save_session(os.path.join(SAVE_PATH, f'session_{test_idx}.csv'))
+        app.eeg_device.save_session(os.path.join(SAVE_PATH, f'session.csv'))
         app.save_hystory(os.path.join(SAVE_PATH))
     app.close()
     thread_app.join()
