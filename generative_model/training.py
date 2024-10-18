@@ -18,17 +18,17 @@ import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 
-MODEL_NAME = 'TCN'
+MODEL_NAME = 'MT'
 CUDA = 1
 device = torch.device(f"cuda:{CUDA}" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
 COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_NO_EEG_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -44,7 +44,7 @@ try:
 except:
     raise Exception('Model not found, check the model name')
 
-USE_EEG = True # use the EEG data to condition the model
+USE_EEG = False # use the EEG data to condition the model
 FEEDBACK = False # use the feedback mechanism in the model
 EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
@@ -67,7 +67,7 @@ LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for #
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH = RESULTS_PATH[:-1] + str(idx)
+    RESULTS_PATH = '_'.join(RESULTS_PATH.split('_')[:-1]) + f'_{idx}'
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -453,7 +453,7 @@ def train():
                 emotion, input = input_sample[0], input_sample[1:] 
             else:
                 input = input_sample
-                emotion = 0
+                emotion = torch.tensor(0)
 
             mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
             input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
