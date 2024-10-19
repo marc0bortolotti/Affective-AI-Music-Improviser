@@ -53,3 +53,16 @@ class CrossEntropyLoss():
 
     def __call__(self, outputs, targets):
         return self.loss(outputs, targets)
+    
+class VAELoss():
+
+    def __init__(self, recon_x, x, mu, logvar):
+        self.recon_x = recon_x
+        self.x = x
+        self.mu = mu
+        self.logvar = logvar
+        
+    def __call__(self):
+        BCE = nn.functional.binary_cross_entropy(self.recon_x, self.x, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + self.logvar - self.mu.pow(2) - self.logvar.exp())
+        return BCE + KLD

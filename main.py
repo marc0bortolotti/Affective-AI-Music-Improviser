@@ -78,7 +78,7 @@ while True:
         generate_rhythm = True if generation_type == 'rhythm' else False
 
         module_name = 'musicTransformer.py' if 'MT' in setup_parameters['MODEL'] else 'tcn.py'
-        model_param_path = os.path.join(PROJECT_PATH, 'generative_model/runs', setup_parameters['MODEL'])
+        model_param_path = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models', setup_parameters['MODEL'])
         model_module_path = os.path.join(PROJECT_PATH, 'generative_model/architectures', module_name)
         model_class_name = 'MusicTransformer' if 'MT' in setup_parameters['MODEL'] else 'TCN'
 
