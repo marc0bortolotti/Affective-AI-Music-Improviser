@@ -1,24 +1,17 @@
 import torch
 import torch.nn as nn
 
-# Define the VAE model
 class VAE(nn.Module):
-    def __init__(self, input_dim, hidden_dim, latent_dim, vocab_size, embed_dim):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, latent_dim):
         super(VAE, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, latent_dim * 2)  # Output mean and log variance
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim),
-            nn.Sigmoid()  # Output must be in [0, 1] for binary cross-entropy
-        )
+        self.encoder_lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True)
+        self.fc_mu = nn.Linear(hidden_dim, latent_dim)
+        self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
+        self.decoder_lstm = nn.LSTM(latent_dim, hidden_dim, batch_first=True)
+        self.fc_out = nn.Linear(hidden_dim, vocab_size)
 
-        self.PARAMS = { 'input_dim': input_dim,
+        self.PARAMS = { 
                         'hidden_dim': hidden_dim,
                         'latent_dim': latent_dim,
                         'vocab_size': vocab_size,
@@ -30,12 +23,26 @@ class VAE(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps * std
 
+    def encode(self, x):
+        x = self.embedding(x)  # Convert token indices to embeddings
+        _, (h_n, _) = self.encoder_lstm(x)
+        h_n = h_n[-1]  # Get the last hidden state
+        mu = self.fc_mu(h_n)
+        logvar = self.fc_logvar(h_n)
+        return mu, logvar
+
+    def decode(self, z, seq_length):
+        z = z.unsqueeze(1).repeat(1, seq_length, 1)  # Repeat z for the length of the sequence
+        out, _ = self.decoder_lstm(z)
+        return self.fc_out(out)
+
     def forward(self, x):
-        # Encode
-        h1 = self.encoder(x)
-        mu, logvar = h1.chunk(2, dim=-1)  # Split into mean and log variance
-        z = self.reparameterize(mu, logvar)  # Sample from latent space
-        # Decode
-        output = self.decoder(z)
-        return output, mu, logvar
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        reconstructed_x = self.decode(z, x.size(1))
+        return reconstructed_x, mu, logvar
+    
+    def size(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
 
