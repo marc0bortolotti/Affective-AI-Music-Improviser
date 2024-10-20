@@ -37,7 +37,7 @@ SEED = 1111
 torch.manual_seed(SEED)
 
 EPOCHS = 1000 
-LEARNING_RATE = 0.00001 # 0.002
+LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
 ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer, 'VAE': VAE}
