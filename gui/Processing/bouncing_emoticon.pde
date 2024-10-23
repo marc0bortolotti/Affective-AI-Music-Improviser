@@ -135,8 +135,26 @@ class Emoticon{
   }
   
   void updatePosition(){
-    // Update the vertical position of the emoticon
+    // Update the vertical position of the emoticon  
     y += ySpeed;
+    
+    // Update speed base on emotion
+    if (emotion == 0.0) {
+      if (ySpeed < 0){
+        ySpeed = -2;
+      }
+      else{
+        ySpeed = 2;
+      }
+    }
+    else {
+      if (ySpeed < 0){
+        ySpeed = -4;
+      }
+      else{
+        ySpeed = 4;
+      }
+    }
   
     // Reverse direction when hitting the top or bottom of the screen
     if (this.y > height - this.emoticonRadius || this.y < this.emoticonRadius) {

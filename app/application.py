@@ -196,7 +196,7 @@ class AI_AffectiveMusicImproviser():
                                                             update_vocab=False,
                                                             convert_to_integers=not self.combine_in_out) 
             i = np.random.randint(0, len(self.init_tokens) - 3*self.BAR_LENGTH)
-            self.init_tokens = self.init_tokens[i*self.BAR_LENGTH:(i+3)*self.BAR_LENGTH]  
+            self.init_tokens = self.init_tokens[i:i+3*self.BAR_LENGTH]  
         else:
             self.init_tokens = np.array([self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] * 3*self.BAR_LENGTH)
 
@@ -237,8 +237,8 @@ class AI_AffectiveMusicImproviser():
         self.set_application_status('IS_RECORDING', False)
     
     def save_hystory(self, path):
-        path = os.path.join(path, 'hystory.txt')
-        with open(path, 'w') as file:
+        history_path = os.path.join(path, 'hystory.txt')
+        with open(history_path, 'w') as file:
             for item in self.hystory:
                 in_bars, out_bars = item
                 for tok in in_bars:
@@ -250,8 +250,8 @@ class AI_AffectiveMusicImproviser():
                     file.write(text)
                 file.write("\n\n")
                 
-        path = os.path.join(path, 'emotions.txt')
-        with open(path, 'w') as file:
+        emotion_path = os.path.join(path, 'emotions.txt')
+        with open(emotion_path, 'w') as file:
             for emotion in self.eeg_classification_buffer:
                 file.write(f'{emotion}\n')
 
@@ -376,7 +376,7 @@ class AI_AffectiveMusicImproviser():
                         predicted_proba = torch.cat((predicted_proba, proba))
 
                         # Get the last token of the output
-                        prediction = torch.multinomial(output, 1).squeeze(1)
+                        prediction = torch.multinomial(output, 1).squeeze(1)    
                         next_tokens = prediction[-self.n_tokens:]
                         last_output = torch.cat((last_output[0, self.n_tokens:], next_tokens))
 

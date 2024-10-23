@@ -1,10 +1,9 @@
 import logging
-import time
 import mne
 import os
 from app.application import AI_AffectiveMusicImproviser
-from EEG.pretraining import pretraining
-from EEG.validation import validation
+from app.pretraining import pretraining
+from app.validation import validation
 from generative_model.tokenization import BCI_TOKENS
 import threading
 import brainflow
@@ -28,17 +27,18 @@ TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = False
-SAVE_SESSION = False
+SKIP_TRAINING = True
+SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
+MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 test_idx = 0
-SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'user_study/greg/test_{test_idx}')
+SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'runs/greg/test_{test_idx}')
 
 
 # Setup the application
 win = QtWidgets.QApplication([])
 app = None
-setup_dialog = SetupDialog()
+setup_dialog = SetupDialog(models_path=MODELS_PATH)
 
 while True:              
 
@@ -78,7 +78,7 @@ while True:
         generate_rhythm = True if generation_type == 'rhythm' else False
 
         module_name = 'musicTransformer.py' if 'MT' in setup_parameters['MODEL'] else 'tcn.py'
-        model_param_path = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models', setup_parameters['MODEL'])
+        model_param_path = os.path.join(MODELS_PATH, setup_parameters['MODEL'])
         model_module_path = os.path.join(PROJECT_PATH, 'generative_model/architectures', module_name)
         model_class_name = 'MusicTransformer' if 'MT' in setup_parameters['MODEL'] else 'TCN'
 
@@ -163,7 +163,7 @@ while True:
             else:
                 break
         else:
-            scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(os.path.join(PROJECT_PATH, 'eeg/pretrained_classifier'))
+            scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(SAVE_BASE_PATH)
             app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
 
         # Start the application in a separate thread

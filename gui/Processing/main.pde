@@ -5,7 +5,7 @@ OSCClientServer oscClientServer;
 Emoticon bouncingEmoticon;
 CustomSlider temperatureSlider, confidenceSlider;
 ControlP5 cp5_temperature, cp5_confidence;  
-boolean confidenceSliderOn = false;
+boolean confidenceSliderOn = ture;
 boolean temperatureSliderOn = true;
 float emotion = 0.0;
 
@@ -36,11 +36,9 @@ void draw() {
   
   if (emotion == 0.0) {
     background(0, 255, 255);
-    bouncingEmoticon.speed = 2;
   }
   else {
     background(255, 70, 70);
-    bouncingEmoticon.speed = 4;
   }
   
   

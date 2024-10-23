@@ -684,8 +684,6 @@ class PrettyMidiTokenizer(object):
     # add the BCI token at the beginning
     if emotion_token is not None:
       tokens = self.append_emotion_token(tokens, emotion_token)
-
-    print(tokens)
         
     # convert string tokens into integer tokens
     if convert_to_integers:
