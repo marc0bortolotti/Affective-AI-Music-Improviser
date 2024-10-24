@@ -72,11 +72,11 @@ class SetupDialog(QtWidgets.QDialog):
 
         self.rhythm_combo = QtWidgets.QComboBox(self)
         self.rhythm_combo.addItems([port for port in output_ports])
-        self.rhythm_combo.setCurrentText(output_ports[2])
+        self.rhythm_combo.setCurrentText(output_ports[1])
 
         self.melody_combo = QtWidgets.QComboBox(self)
         self.melody_combo.addItems([port for port in output_ports])
-        self.melody_combo.setCurrentText(output_ports[3])
+        self.melody_combo.setCurrentText(output_ports[2])
 
         # Add OK and Cancel buttons
         self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)
