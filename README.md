@@ -4,7 +4,8 @@
 ## Description
 The Imporviser acquires data from both the musician's instrument and a BCI device. 
 The instrument sound must be in **MIDI** format while the BCI measures the **EEG** signal coming from the user.
-Data are processed in parallel, in real-time and fed into a [TCN](https://github.com/marc0bortolotti/Affective-AI-Music-Improviser/blob/main/generative_model/model.py) architecture that produce the affective music.
+Data are processed in parallel, in real-time and fed into the generative model that produce the affective music.
+You can choose among two different architectures: [TCN](generative_model/architectures/tcn.py) and [Transformer](generative_model/architectures/musicTransformer.py).
 Depending on the application, the AI-Affective Music Improviser can compose an accompaniament melody with chords or play a drum pattern following the rithm of the input instrument.
 In both cases, the output of the network is leaded by the musichan's emotive state which is classified as "relaxed" or "excited".
 
@@ -49,17 +50,15 @@ pip install -r requirements.txt
 
 4. Open loopMIDI and create Virtual MIDI Ports by entering the name and clicking on **+**.
 
-<img src="images/loopMIDI.png" alt="Alt text" width="400"/>
+<!-- <img src="images/loopMIDI.png" alt="Alt text" width="400"/> -->
 
-At this step, you should create 3 virtual ports for: 
-- **PORT_1**: OUTPUT port for playing the instrument on Reaper
-- **PORT_2**: OUTPUT port for playing the generated melody/rithm on Reaper
-- **PORT_3**: INPUT port for get the MIDI from the instrument you are playing (used in the Python Env for processing)
+At this step, you should create 2 virtual ports for: 
+- **PORT_1**: OUTPUT port for playing the melody on Reaper
+- **PORT_2**: OUTPUT port for playing the rhythm on Reaper
 
 5. Open Reaper and ensures that those ports are active (Options->Preferences->Audio->MIDI Inputs). 
-6. Create 2 new tracks (Track->Insert New Track) and arm them. Set  **PORT_1** and **PORT_2** respectively as INPUT sources. Set
-
-<img src="images/midiInput.png" alt="Alt text" width="400"/>
+6. Create 2 new tracks (Track->Insert New Track) and arm them. Set  **PORT_1** and **PORT_2** respectively as INPUT sources.
+<!-- <img src="images/midiInput.png" alt="Alt text" width="400"/> -->
 
 
 ## Usage
