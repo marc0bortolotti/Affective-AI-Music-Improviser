@@ -5,7 +5,6 @@ import rtmidi
 from PyQt5.QtWidgets import QApplication, QMessageBox
 import os
 
-MODELS_PATH = os.path.join(os.path.dirname(__file__), '../generative_model/runs')
 SIMULATE_INSTRUMENT = 'Simulate Instrument'
 
 def retrieve_eeg_devices():
@@ -29,14 +28,14 @@ def retrieve_midi_ports():
         available_output_ports.append(port)
     return available_input_ports, available_output_ports
 
-def retrieve_models():
+def retrieve_models(models_path):
     available_models = []
-    for model in os.listdir(MODELS_PATH):
+    for model in os.listdir(models_path):
         available_models.append(model)
     return available_models
 
 class SetupDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, models_path=None):
         super(SetupDialog, self).__init__(parent)
 
         self.setWindowTitle('Setup')
@@ -45,7 +44,10 @@ class SetupDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
 
         # Create dropdown for models
-        models = retrieve_models()
+        if models_path is None:
+            models=[]
+        else:
+            models = retrieve_models(models_path)
         self.model_combo = QtWidgets.QComboBox(self)
         self.model_combo.addItems(models)
         self.model_combo.setCurrentText(models[0])
@@ -70,11 +72,11 @@ class SetupDialog(QtWidgets.QDialog):
 
         self.rhythm_combo = QtWidgets.QComboBox(self)
         self.rhythm_combo.addItems([port for port in output_ports])
-        self.rhythm_combo.setCurrentText(output_ports[2])
+        self.rhythm_combo.setCurrentText(output_ports[1])
 
         self.melody_combo = QtWidgets.QComboBox(self)
         self.melody_combo.addItems([port for port in output_ports])
-        self.melody_combo.setCurrentText(output_ports[3])
+        self.melody_combo.setCurrentText(output_ports[2])
 
         # Add OK and Cancel buttons
         self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, self)

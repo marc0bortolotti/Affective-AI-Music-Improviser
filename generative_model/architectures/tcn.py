@@ -74,7 +74,7 @@ class TemporalConvNet(nn.Module):
 
 class TCN(nn.Module):
 
-    def __init__(self, input_vocab_size, embedding_size, output_vocab_size, hidden_units, seq_length, emphasize_eeg=False, feedback=False,
+    def __init__(self, input_vocab_size, embedding_size, output_vocab_size, hidden_units, seq_length, feedback=False,
                  levels = None, kernel_size=3, dropout=0.45, emb_dropout=0.25, tied_weights=False):
         
         super(TCN, self).__init__()
@@ -98,7 +98,6 @@ class TCN(nn.Module):
                         'output_vocab_size' : output_vocab_size,
                         'embedding_size' : embedding_size,
                         'levels' : levels,
-                        'emphasize_eeg' : emphasize_eeg,
                         'hidden_units' : hidden_units,
                         'feedback' : feedback,
                         'dropout' : dropout,
@@ -108,10 +107,7 @@ class TCN(nn.Module):
                         'seq_length' : seq_length
                     }
 
-        if emphasize_eeg:
-            self.encoder = nn.Embedding(input_vocab_size, embedding_size, padding_idx=0) # padding_idx is the index of the token to ignore in weight updates
-        else:
-            self.encoder = nn.Embedding(input_vocab_size, embedding_size)
+        self.encoder = nn.Embedding(input_vocab_size, embedding_size)
 
         self.tcn = TemporalConvNet(embedding_size, num_channels, kernel_size, dropout=dropout)
 
@@ -125,7 +121,6 @@ class TCN(nn.Module):
             
         self.drop = nn.Dropout(emb_dropout)
         self.emb_dropout = emb_dropout
-        self.emphasize_eeg = emphasize_eeg
         self.init_weights()
 
     def size(self):
@@ -136,9 +131,6 @@ class TCN(nn.Module):
         self.decoder.bias.data.fill_(0)
         self.decoder.weight.data.normal_(0, 0.01)
 
-        if self.emphasize_eeg:
-            with torch.no_grad():
-                self.encoder.weight[0] = torch.ones(self.encoder.weight[0].shape)*0.1
 
     def forward(self, input):
         """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""

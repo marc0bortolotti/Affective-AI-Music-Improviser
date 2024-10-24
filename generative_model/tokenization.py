@@ -4,7 +4,6 @@ import pandas as pd
 import pretty_midi
 from mido import MidiFile, MidiTrack, Message, MetaMessage
 from rapidfuzz import process
-from math import floor
 
 BPM = 120
 TICKS_PER_BEAT = 4 # resolution of the MIDI file
@@ -210,7 +209,8 @@ class PrettyMidiTokenizer(object):
 
     if rhythm:
       pitch = '56'
-      tokens[start] = pitch + velocity_token + NOTE_START_TOKEN
+      end = start + 1
+      #tokens[start] = pitch + velocity_token + NOTE_START_TOKEN
     else:
       pitch = str(pitch)
 
@@ -665,16 +665,16 @@ class PrettyMidiTokenizer(object):
       if velocity < 10:
         continue
 
-      step = 0
-      if rhythm:
-        for i in range (note_id+1, len(notes)):
-          step += notes[i]['dt']
-          if notes[i]['velocity'] == 0 and notes[i]['pitch'] == pitch: 
-            step = self.convert_time_to_ticks(step)
-            break
-        end = int(start + step)
-      else:
-        end = start + 1
+      # step = 0
+      # if rhythm:
+      #   for i in range (note_id+1, len(notes)):
+      #     step += notes[i]['dt']
+      #     if notes[i]['velocity'] == 0 and notes[i]['pitch'] == pitch: 
+      #       step = self.convert_time_to_ticks(step)
+      #       break
+      #   end = int(start + step)
+      # else:
+      end = start + 1
 
       if end > self.BAR_LENGTH :
         break
@@ -684,8 +684,6 @@ class PrettyMidiTokenizer(object):
     # add the BCI token at the beginning
     if emotion_token is not None:
       tokens = self.append_emotion_token(tokens, emotion_token)
-
-    print(tokens)
         
     # convert string tokens into integer tokens
     if convert_to_integers:

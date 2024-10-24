@@ -51,5 +51,15 @@ class CrossEntropyLoss():
     def __init__(self, weight=None):
         self.loss = nn.CrossEntropyLoss(weight)
 
-    def __call__(self, outputs, targets):
-        return self.loss(outputs, targets)
+    def __call__(self, output, target):
+        return self.loss(output, target)
+    
+class VAELoss():
+
+    def __init__(self):
+        self.ce_loss = nn.CrossEntropyLoss()
+
+    def __call__(self, output, target, mu, logvar):
+        CE = self.ce_loss(output, target)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return CE + KLD
