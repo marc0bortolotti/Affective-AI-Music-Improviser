@@ -15,6 +15,7 @@ In both cases, the output of the network is leaded by the musichan's emotive sta
   - [Installation](#installation)
   <!-- - [Issues](#issues) -->
 - [Usage](#usage)
+  - [Gui](#gui)
 
 ## Getting Started
 The following lines describe how to setup the environment to play the Improviser in local.
@@ -70,7 +71,7 @@ The command will open a window in which you have to select the corresponding MID
 **NOTE:** If you want to run a simulated MIDI instruments, select "Simulate Instrument" as INPUT port.
 
 ### GUI
-If you want to see the internal state of the Improviser, you can run the sketch in the folder Processing. 
+If you want to see the internal state of the Improviser, you can run this [Processing sketch](gui/Processing/main.pde). 
 The state is represented through a bouncing emoticon that indicates the level of satisfation of the Improviser.
 
 
