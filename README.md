@@ -49,18 +49,16 @@ venv\Scripts\activate      # On Windows
 pip install -r requirements.txt
 ```
 
-4. Open loopMIDI and create Virtual MIDI Ports by entering the name and clicking on **+**.
-
-<!-- <img src="images/loopMIDI.png" alt="Alt text" width="400"/> -->
-
-At this step, you should create 2 virtual ports for: 
+4. Open loopMIDI and create Virtual MIDI Ports by entering the name and clicking on **+**. At this step, you should create 2 virtual ports for: 
 - **PORT_1**: OUTPUT port for playing the melody on Reaper
 - **PORT_2**: OUTPUT port for playing the rhythm on Reaper
 
 5. Open Reaper and ensures that those ports are active (Options->Preferences->Audio->MIDI Inputs). 
 6. Create 2 new tracks (Track->Insert New Track) and arm them. Set  **PORT_1** and **PORT_2** respectively as INPUT sources.
-<!-- <img src="images/midiInput.png" alt="Alt text" width="400"/> -->
 
+**IMPORTANT NOTE:** Virtual instruments (VSTi) of piano and drum are required to reproduce MIDI notes sent on PORT_1 and PORT_2. They have to be assigned as FX on the respective track:
+- drum VSTi on rhythm track (PORT_1)
+- piano VSTi on melody track (PORT_2)
 
 ## Usage
 Run the following command to play the AI-Affective Music Improviser, 
