@@ -7,7 +7,7 @@ CustomSlider temperatureSlider, confidenceSlider;
 ControlP5 cp5_temperature, cp5_confidence;  
 boolean confidenceSliderOn = true;
 boolean temperatureSliderOn = true;
-float emotion = 1.0;
+float emotion = 0.0;
 
 void setup() {  
   
