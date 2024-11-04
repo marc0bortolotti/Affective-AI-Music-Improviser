@@ -57,8 +57,8 @@ pip install -r requirements.txt
 6. Create 2 new tracks (Track->Insert New Track) and arm them. Set  **PORT_1** and **PORT_2** respectively as INPUT sources.
 
 **IMPORTANT NOTE:** Virtual instruments (VSTi) of piano and drum are required to reproduce MIDI notes sent on PORT_1 and PORT_2. They have to be assigned as FX on the respective track:
-- drum VSTi on rhythm track (PORT_1)
-- piano VSTi on melody track (PORT_2)
+- [drum VSTi](https://www.powerdrumkit.com/download76187.php) on rhythm track (PORT_1). 
+- [piano VSTi](https://www.studiologic-music.com/products/numaplayer/) on melody track (PORT_2)
 
 ## Usage
 Run the following command to play the AI-Affective Music Improviser, 
