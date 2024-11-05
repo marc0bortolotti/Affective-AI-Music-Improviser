@@ -22,17 +22,19 @@ WINDOW_OVERLAP = 0.875 # percentage
 WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
-TRAINING_SESSIONS = 1
-TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
+TRAINING_SESSIONS = 2
+TRAINING_TIME = 50 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 30 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = True
+SKIP_TRAINING = False
 SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
 MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 test_idx = 0
-SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'runs/greg/test_{test_idx}')
+test_name_idx = 0
+test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG']
+SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'runs/marco/test_{test_names[test_name_idx]}_{test_idx}')
 
 
 # Setup the application
@@ -61,6 +63,9 @@ while True:
                 SAVE_PATH = '_'.join(SAVE_PATH.split('_')[:-1]) + f'_{test_idx}'
                 test_idx += 1
             os.makedirs(SAVE_PATH)      
+            test_name_idx += 1
+            if test_name_idx >= len(test_names):
+                test_name_idx = 0
 
         generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
         input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
