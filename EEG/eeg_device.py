@@ -10,10 +10,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn import svm
 from pylsl import resolve_stream, StreamInlet
-import pylsl 
+import pylsl
 import pickle
 import os
 from brainflow.data_filter import DataFilter
+
 
 def retrieve_board_id(device_name):
     if re.search(r'UN-\d{4}.\d{2}.\d{2}', device_name):
@@ -26,37 +27,39 @@ def retrieve_board_id(device_name):
         return BoardIds.ANT_NEURO_EE_411_BOARD
     else:
         return BoardIds.SYNTHETIC_BOARD
-    
+
+
+markers_dict = {
+    'RS': 1,  #resting state
+    'PTR': 2,  #pretraining  relaxed
+    'PTE': 3,  #pretraining  excited
+    'WN': 4,  #white noise
+    'P': 5,  #prediction
+    'T': 98,  #training mode
+    'A': 99,  #application mode
+}
+
 
 class EEG_Device:
-    def __init__(self, serial_number, n_eeg_channels=8, sampling_rate=250):
+    def __init__(self, serial_number):
 
-        self.recording_data = None # recordings raw data
+        self.recording_data = None  # recordings raw data
         self.streams = None
 
         self.classifier = None
         self.scaler = None
         self.baseline = None
-    
+
         self.params = BrainFlowInputParams()
+        self.params.serial_number = serial_number
+        self.params.board_id = retrieve_board_id(self.params.serial_number)
+        self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
+        self.ch_names = self.ch_names if len(self.ch_names) <= 8 else self.ch_names[:8]
+        self.board = BoardShim(self.params.board_id, self.params)
+        self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
+        logging.info(f"EEG Device: connected to {self.params.serial_number}")
 
-        if not serial_number == 'LSL':
-
-            self.params.serial_number = serial_number
-            self.params.board_id = retrieve_board_id(self.params.serial_number)
-            self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
-            self.ch_names = self.ch_names if len(self.ch_names) <= 8 else self.ch_names[:8] 
-            self.board = BoardShim(self.params.board_id, self.params)
-            self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
-            logging.info(f"EEG Device: connected to {self.params.serial_number}")
-
-            self.prepare_session()
-        else:
-            self.params.serial_number = serial_number
-            self.sample_frequency = sampling_rate
-            self.n_eeg_channels = n_eeg_channels
-            self.ch_names = ["Fz", "C3", "Cz", "C4", "Pz", "PO7", "Oz", "PO8"]
-            logging.info(f"EEG Device: connected to LSL")
+        self.prepare_session()
 
     def stop_recording(self):
         self.recording_data = self.board.get_board_data()
@@ -87,31 +90,20 @@ class EEG_Device:
             self.board.start_stream()
         logging.info('EEG Device: start recording')
 
-    def get_eeg_data(self, recording_time=4, chunk=False):
-        if self.params.serial_number == 'LSL':
-            try:
-                data = []
-                if chunk:
-                    data, timestamps = self.inlet.pull_chunk(timeout=recording_time, max_samples=int(recording_time * self.sample_frequency))
-                    data = np.array(data)
-                    data = data[:, 0:self.n_eeg_channels]
-                else:
-                    for i in range(int(recording_time * self.sample_frequency)):
-                        sample, timestamps = self.inlet.pull_sample()
-                        data.append(sample)
-                    data = np.array(data)
-                    data = data[:, 0:self.n_eeg_channels]
-                logging.info(f"LSLDevice: {data.shape}")
-            except Exception as e:
-                logging.error(f"LSLDevice: {e}")
-        else:
-            num_samples = int(self.sample_frequency * recording_time)
-            data = self.board.get_current_board_data(num_samples=num_samples)
-            data = np.array(data).T
-            data = data[:, 0:len(self.ch_names)]
-            data = data[- num_samples : ]
+    def insert_marker(self, marker):
+        try:
+            self.board.insert_marker(markers_dict[marker])
+        except Exception as e:
+            logging.error(f"EEG Device: Could not insert marker! {e}")
+
+    def get_eeg_data(self, recording_time=4):
+        num_samples = int(self.sample_frequency * recording_time)
+        data = self.board.get_current_board_data(num_samples=num_samples)
+        data = np.array(data).T
+        data = data[:, 0:len(self.ch_names)]
+        data = data[- num_samples:]
         return data
-    
+
     def close(self):
         if self.params.serial_number == 'LSL':
             self.inlet.close_stream()
@@ -119,10 +111,10 @@ class EEG_Device:
             self.recording_data = self.board.get_board_data()
             self.board.release_session()
         logging.info('EEG Device: disconnected')
-    
+
     def get_classifier(self):
         return self.classifier, self.scaler, self.baseline
-    
+
     def save_classifier(self, path, scaler, lda_model, svm_model, baseline):
         # Save the scaler 
         with open(os.path.join(path, 'scaler.pkl'), 'wb') as pickle_file:
@@ -136,7 +128,7 @@ class EEG_Device:
         # Save the baseline
         with open(os.path.join(path, 'baseline.pkl'), 'wb') as pickle_file:
             pickle.dump(baseline, pickle_file)
-    
+
     def load_classifier(self, path):
         lda_model = pickle.load(open(os.path.join(path, 'LDA_model.pkl'), 'rb'))
         svm_model = pickle.load(open(os.path.join(path, 'SVM_model.pkl'), 'rb'))
@@ -179,7 +171,7 @@ class EEG_Device:
         y = np.concatenate([np.ones(samples.shape[0]) * i for i, samples in enumerate(eeg_features_classes)])
 
         # Normalization
-        X = self.scaler.transform(X) 
+        X = self.scaler.transform(X)
 
         # LDA
         y_pred = self.classifier.predict(X)
@@ -187,7 +179,7 @@ class EEG_Device:
         f1 = f1_score(y, y_pred, average='macro')
 
         return accuracy, f1
-    
+
     def fit_classifier(self, eeg_samples_baseline, eeg_samples_classes):
         # Preprocessing (Feature extraction and Baseline correction)
         baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names, parse=True)
@@ -208,7 +200,7 @@ class EEG_Device:
         # Normalization
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test) 
+        X_test = scaler.transform(X_test)
 
         # LDA
         lda_model = LinearDiscriminantAnalysis()
@@ -220,8 +212,8 @@ class EEG_Device:
         logging.info(f'LDA\tAccuracy: {accuracy_lda:.2f} F1 Score: {f1_lda:.2f}')
 
         # SVM
-        svm_model = svm.SVC(kernel = 'linear')
-        svm_model.fit(X_train, y_train) 
+        svm_model = svm.SVC(kernel='linear')
+        svm_model.fit(X_train, y_train)
         y_svm_pred = svm_model.predict(X_test)
         accuracy_svm = accuracy_score(y_test, y_svm_pred)
         f1_svm = f1_score(y_test, y_svm_pred, average='macro')
@@ -232,5 +224,3 @@ class EEG_Device:
     def save_session(self, path):
         if self.recording_data is not None:
             DataFilter.write_file(self.recording_data, path, "w")
-        
-

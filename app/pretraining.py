@@ -14,6 +14,7 @@ session_types = ['listening', 'playing']
 
 
 def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60):
+    eeg_device.insert_marker('T')
     logging.info("Pretraining: Start Training")
 
     # start recording eeg
@@ -33,6 +34,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             # Baseline (max 20 seconds)
             baseline_time = min(rec_time/2, 20)
             logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
+            eeg_device.insert_marker('WN')
             play = white_noise.play()
             start = time.time() 
             while True:
@@ -46,6 +48,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
 
             # Relax (1 minute)
             logging.info(f"Pretraining: Play a relaxed rythm for {rec_time} seconds")
+            eeg_device.insert_marker('PTR')
             if session_type == 'listening':
                 play = relax_music.play()
             start = time.time() 
@@ -61,6 +64,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
 
             # Baseline (max 20 seconds)
             logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
+            eeg_device.insert_marker('WN')
             play = white_noise.play()
             start = time.time() 
             while True:
@@ -74,6 +78,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
 
             # Excited (1 minute)
             logging.info(f"Pretraining: Play an excited rythm for {rec_time} seconds")
+            eeg_device.insert_marker('PTE')
             if session_type == 'listening':
                 play = excited_music.play()
             start = time.time() 
