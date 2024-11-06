@@ -10,25 +10,27 @@ from tokenization import PrettyMidiTokenizer, BCI_TOKENS
 from architectures.transformer import TransformerModel, generate_square_subsequent_mask
 from architectures.musicTransformer import MusicTransformer
 from architectures.tcn import TCN   
+from architectures.vae import VAE
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 from data_augmentation import data_augmentation_shift
-from losses import CrossEntropyWithPenaltyLoss
+from losses import CrossEntropyWithPenaltyLoss, VAELoss
 import random
 
 DIRECTORY_PATH = os.path.dirname(__file__)
 
-MODEL_NAME = 'TCN'
+USE_EEG = True # use the EEG data to condition the model
+MODEL_NAME = 'VAE'
 CUDA = 1
 device = torch.device(f"cuda:{CUDA}" if torch.cuda.is_available() else "cpu")
 print('\n', device)
 
-COMBINE_IN_OUT_TOKENS = False # combine the input and the output tokens in the same sequence
-FROM_MELODY_TO_RHYTHM = True # train the model to generate rythms from melodies
+COMBINE_IN_OUT_TOKENS = True # combine the input and the output tokens in the same sequence
+FROM_MELODY_TO_RHYTHM = False # train the model to generate rythms from melodies
 
 GEN_TYPE = 'rhythm' if FROM_MELODY_TO_RHYTHM else 'melody'
 TOK_TYPE = 'uniqueTokens' if COMBINE_IN_OUT_TOKENS else 'separateTokens'
-RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'runs/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_0')
+RESULTS_PATH = os.path.join(DIRECTORY_PATH, f'pretrained_models/{MODEL_NAME}_{GEN_TYPE}_{TOK_TYPE}_0')
 DATASET_PATH = os.path.join(DIRECTORY_PATH, 'dataset')
 
 SEED = 1111
@@ -38,22 +40,22 @@ EPOCHS = 1000
 LEARNING_RATE = 0.0001 # 0.002
 BATCH_SIZE = 64 # 64
 
-ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer}
+ARCHITECTURES = {'T': TransformerModel, 'TCN' : TCN, 'MT': MusicTransformer, 'VAE': VAE}
 try:
     MODEL = ARCHITECTURES[MODEL_NAME]
 except:
     raise Exception('Model not found, check the model name')
 
-USE_EEG = True # use the EEG data to condition the model
-FEEDBACK = False # use the feedback mechanism in the model
-EMPHASIZE_EEG = False # emphasize the EEG data in the model (increase weights)
 DATA_AUGMENTATION = False # augment the dataset by shifting the sequences
 LR_SCHEDULER = True # use a learning rate scheduler to reduce the learning rate when the loss plateaus
 
 TICKS_PER_BEAT = 4 if FROM_MELODY_TO_RHYTHM else 4 # resolution of the midi files
 N_TOKENS = TICKS_PER_BEAT # number of tokens to be predicted at ea@ch forward pass (only for the transformer model)
 
+FEEDBACK = False # use the feedback mechanism in the model for the TCN model
 EMBEDDING_SIZE = 128
+HIDDEN_DIM = 256
+LATENT_DIM = 64
 TOKENS_FREQUENCY_THRESHOLD = None # remove tokens that appear less than # times in the dataset
 SILENCE_TOKEN_WEIGHT = 0.01 # weight of the silence token in the loss function
 CROSS_ENTROPY_WEIGHT = 1.0  # weight of the cross entropy loss in the total loss
@@ -67,7 +69,7 @@ LR_PATIENCE = 10   # reduce the learning rate if the loss does not improve for #
 # create a unique results path
 idx = 1
 while os.path.exists(RESULTS_PATH):
-    RESULTS_PATH = RESULTS_PATH[:-1] + str(idx)
+    RESULTS_PATH = '_'.join(RESULTS_PATH.split('_')[:-1]) + f'_{idx}'
     idx += 1
 os.makedirs(RESULTS_PATH)
 
@@ -78,7 +80,6 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
                     'embedding_size': EMBEDDING_SIZE,
                     'output_vocab_size': len(OUTPUT_TOK.VOCAB), 
                     'hidden_units': INPUT_TOK.SEQ_LENGTH,
-                    'emphasize_eeg': EMPHASIZE_EEG,
                     'feedback': FEEDBACK,
                     'seq_length': INPUT_TOK.SEQ_LENGTH
                 }
@@ -100,6 +101,14 @@ def initialize_model(INPUT_TOK, OUTPUT_TOK):
                     'num_layers': 3,
                     'dim_feedforward': 4 * EMBEDDING_SIZE,
                     'seq_length': INPUT_TOK.SEQ_LENGTH
+                }
+
+    elif MODEL == VAE:
+        PARAMS = {  
+                    'hidden_dim': HIDDEN_DIM,
+                    'latent_dim': LATENT_DIM,
+                    'vocab_size': len(INPUT_TOK.VOCAB),
+                    'embed_dim': EMBEDDING_SIZE
                 }
     else:
         raise Exception('Model not found')
@@ -215,7 +224,6 @@ def save_parameters(INPUT_TOK, OUTPUT_TOK):
         f.write(f'FROM_MELODY_TO_RHYTHM: {FROM_MELODY_TO_RHYTHM}\n')
         f.write(f'COMBINE_IN_OUT_TOKENS: {COMBINE_IN_OUT_TOKENS}\n')
         f.write(f'FEEDBACK: {FEEDBACK}\n')
-        f.write(f'EMPHASIZE_EEG: {EMPHASIZE_EEG}\n')
         f.write(f'LR_SCHEDULER: {LR_SCHEDULER}\n')
         f.write(f'DATA AUGMENTATION: {DATA_AUGMENTATION}\n')
         f.write(f'EARLY STOP EPOCHS: {EARLY_STOP_EPOCHS}\n')
@@ -369,15 +377,23 @@ def epoch_step(epoch, dataloader, mode):
             total_loss += loss_tmp
             
         else:
+
             # forward pass
-            output = model(input)
+            if MODEL == VAE:
+                output, mu, logvar = model(input)
+            else:
+                output = model(input)
+
 
             # reshape the output and the target to calculate the loss (flatten the sequences)
             target = target.reshape(-1) # the size -1 is inferred from other dimensions
             output = output.reshape(-1, len(OUTPUT_TOK.VOCAB))
 
             # calculate the loss
-            loss = criterion(output, target)
+            if MODEL == VAE:
+                loss = criterion(output, target, mu, logvar)
+            else:
+                loss = criterion(output, target)
 
             if mode == 'train':
                 # calculate the gradients
@@ -453,18 +469,28 @@ def train():
                 emotion, input = input_sample[0], input_sample[1:] 
             else:
                 input = input_sample
-                emotion = 0
+                emotion = torch.tensor(0)
 
             mask = emotion.expand(OUTPUT_TOK.BAR_LENGTH)
             input = torch.cat((input[:OUTPUT_TOK.BAR_LENGTH*3], mask))
             input[mask_indices] = emotion
 
-            if MODEL_NAME == 'TCN':
+            if MODEL == TCN:
                 output = model(input.unsqueeze(0).to(device))
                 output = torch.argmax(output, -1)
                 f.write(f'INPUT: {input.tolist()}\n')
                 f.write(f'OUTPUT: {output.tolist()}\n')
                 f.write(f'TARGET: {target_sample.tolist()}\n')
+
+            elif MODEL == VAE:
+                output, mu, logvar = model(input.unsqueeze(0).to(device))
+                output = torch.argmax(output, -1)
+                f.write(f'INPUT: {input.tolist()}\n')
+                f.write(f'OUTPUT: {output.tolist()}\n')
+                f.write(f'TARGET: {target_sample.tolist()}\n')
+                f.write(f'MU: {mu.tolist()}\n')
+                f.write(f'LOGVAR: {logvar.tolist()}\n')
+
             else:
                 for i in range(0, OUTPUT_TOK.BAR_LENGTH - N_TOKENS + 1, N_TOKENS):
                     input_target = target_sample[i : OUTPUT_TOK.BAR_LENGTH * 3 + i]
@@ -563,7 +589,10 @@ if __name__ == '__main__':
     # initialize the model
     print(f'\nInitializing the model...')
     model = initialize_model(INPUT_TOK, OUTPUT_TOK)
-    criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
+    if MODEL == VAE:
+        criterion = VAELoss()
+    else:
+        criterion = CrossEntropyWithPenaltyLoss(weight_ce=CROSS_ENTROPY_WEIGHT, weight_penalty=PENALTY_WEIGHT)
     optimizer = getattr(optim, 'Adam')(model.parameters(), lr=LEARNING_RATE)
     global MODEL_SIZE
     MODEL_SIZE = model.size()
