@@ -31,10 +31,14 @@ def retrieve_board_id(device_name):
 
 markers_dict = {
     'RS': 1,  #resting state
-    'PTR': 2,  #pretraining  relaxed
-    'PTE': 3,  #pretraining  excited
+    'PTR': 2, #pretraining  relaxed
+    'PTE': 3, #pretraining  excited
     'WN': 4,  #white noise
-    'P': 5,  #prediction
+    'P': 5,   #prediction
+    'WD': 6,  #window
+    'VR': 2,  #validation  relaxed
+    'VE': 3,  #validation  excited
+    'V': 97,  #validation mode
     'T': 98,  #training mode
     'A': 99,  #application mode
 }

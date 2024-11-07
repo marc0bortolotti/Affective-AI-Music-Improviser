@@ -73,12 +73,14 @@ def load_model(model_param_path, model_module_path, model_class_name, ticks_per_
 def thread_function_eeg(name, app):
     logging.info("Thread %s: starting", name)
 
+    app.eeg_device.insert_marker('A')
     app.eeg_device.start_recording()
     time.sleep(5)  # wait for signal to stabilize
 
     while True:
         time.sleep(app.WINDOW_DURATION)
 
+        app.eeg_device.insert_marker('WD')
         # get the EEG data
         eeg = app.eeg_device.get_eeg_data(recording_time=app.WINDOW_DURATION)
         # get the predictied emotion

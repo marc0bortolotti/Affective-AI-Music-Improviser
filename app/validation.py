@@ -11,15 +11,18 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     
     logging.info("Validation: Start Validation")
 
+    eeg_device.insert_marker('V')
+
     # start recording eeg
     eeg_device.start_recording()
-    time.sleep(7)  # wait for signal to stabilize
+    time.sleep(5)  # wait for signal to stabilize
 
     eeg_samples_classes = []
 
     # Baseline (max 20 seconds)
     baseline_time = min(rec_time/2, 20)
     logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
+    eeg_device.insert_marker('WN')
     play = white_noise.play()
     start = time.time() 
     while True:
@@ -31,6 +34,7 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     
     # Relaxed (1 minute)
     logging.info(f"Validation: Play a relaxed rythm for {rec_time} seconds")
+    eeg_device.insert_marker('VR')
     start = time.time() 
     while True:
         if time.time() - start < rec_time:
@@ -43,6 +47,7 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     # Baseline (max 20 seconds)
     baseline_time = min(rec_time/2, 20)
     logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
+    eeg_device.insert_marker('WN')
     play = white_noise.play()
     start = time.time() 
     while True:
@@ -54,6 +59,7 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
 
     # Excited (1 minute)
     logging.info(f"Validation: Play an excited rythm for {rec_time} seconds")
+    eeg_device.insert_marker('VE')
     start = time.time() 
     while True:
         if time.time() - start < rec_time:
