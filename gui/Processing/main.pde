@@ -1,5 +1,6 @@
-float confidence = 0.1;   // Confidence variable (0 to 1)
+float confidence = 0.8;   // Confidence variable (0 to 1)
 float temperature = 1.0;  // Temperature value (0 to infinite)
+float emotion = 1.0; // 0 relaxed, excited otherwise
 float newTemperature, newConfidence;
 OSCClientServer oscClientServer;
 Emoticon bouncingEmoticon;
@@ -7,7 +8,6 @@ CustomSlider temperatureSlider, confidenceSlider;
 ControlP5 cp5_temperature, cp5_confidence;  
 boolean confidenceSliderOn = true;
 boolean temperatureSliderOn = true;
-float emotion = 0.0;
 
 void setup() {  
   
