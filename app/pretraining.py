@@ -19,7 +19,16 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
 
     # start recording eeg
     eeg_device.start_recording()
-    time.sleep(7)  # wait for signal to stabilize
+    time.sleep(5)  # wait for signal to stabilize
+
+    # rest for 1 minute
+    eeg_device.insert_marker('RS')
+    start = time.time() 
+    while True:
+        if time.time() - start < rec_time:
+            time.sleep(0.2)
+        else:
+            break    
 
     eeg_samples_baseline = []
     eeg_samples_relax = []
