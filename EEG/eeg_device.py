@@ -36,8 +36,8 @@ markers_dict = {
     'WN': 4,  #white noise
     'P': 5,   #prediction
     'WD': 6,  #window
-    'VR': 2,  #validation  relaxed
-    'VE': 3,  #validation  excited
+    'VR': 7,  #validation  relaxed
+    'VE': 8,  #validation  excited
     'V': 97,  #validation mode
     'T': 98,  #training mode
     'A': 99,  #application mode
