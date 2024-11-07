@@ -14,8 +14,10 @@ session_types = ['listening', 'playing']
 
 
 def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60):
-    eeg_device.insert_marker('T')
+    
     logging.info("Pretraining: Start Training")
+
+    eeg_device.insert_marker('T')
 
     # start recording eeg
     eeg_device.start_recording()
