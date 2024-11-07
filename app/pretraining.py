@@ -24,6 +24,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
     time.sleep(5)  # wait for signal to stabilize
 
     # rest for 1 minute
+    logging.info(f"Pretraining: Rest for {rec_time} seconds")
     eeg_device.insert_marker('RS')
     start = time.time() 
     while True:
