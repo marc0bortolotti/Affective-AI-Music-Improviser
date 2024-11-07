@@ -2,8 +2,7 @@
 **AI-Affective Music Improviser** is a deep neural network-based system that establishes a direct connection with the minds of musichans to create music in real-time. 
 
 ## Description
-The Imporviser acquires data from both the musician's instrument and a BCI device. 
-The instrument sound must be in **MIDI** format while the BCI measures the **EEG** signal coming from the user.
+The Virtual Musician acquires the **MIDI** signal from the instrument while measuring the musician's **EEG** signal through a BCI system.
 Data are processed in parallel, in real-time and fed into the generative model that produce the affective music.
 You can choose among two different architectures: [TCN](generative_model/architectures/tcn.py) and [Transformer](generative_model/architectures/musicTransformer.py).
 Depending on the application, the AI-Affective Music Improviser can compose an accompaniament melody with chords or play a drum pattern following the rithm of the input instrument.
