@@ -49,6 +49,7 @@ class EEG_Device:
 
         self.recording_data = None  # recordings raw data
         self.streams = None
+        self.asr = None # artifact removal 
 
         self.classifier = None
         self.scaler = None
@@ -99,6 +100,9 @@ class EEG_Device:
             self.board.insert_marker(markers_dict[marker])
         except Exception as e:
             logging.error(f"EEG Device: Could not insert marker! {e}")
+    
+    def set_asr(self, asr):
+        self.asr = asr
 
     def get_eeg_data(self, recording_time=4):
         num_samples = int(self.sample_frequency * recording_time)
@@ -106,6 +110,8 @@ class EEG_Device:
         data = np.array(data).T
         data = data[:, 0:len(self.ch_names)]
         data = data[- num_samples:]
+        if self.asr is not None:
+            data = self.asr.transform(data)
         return data
 
     def close(self):
