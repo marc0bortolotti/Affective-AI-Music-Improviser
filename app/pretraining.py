@@ -1,7 +1,7 @@
 import time
 import numpy as np
 import logging
-from EEG.processing import generate_samples
+from EEG.processing import generate_samples, convert_to_mne
 import simpleaudio
 import os
 import asrpy
@@ -18,10 +18,9 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
     
     logging.info("Pretraining: Start Training")
 
-    eeg_device.insert_marker('T')
-
     # start recording eeg
     eeg_device.start_recording()
+    eeg_device.insert_marker('T')
     time.sleep(5)  # wait for signal to stabilize
 
     # rest for 1 minute
@@ -35,6 +34,9 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             break    
 
     eeg_rest = eeg_device.get_eeg_data(recording_time=rec_time)
+    trigger = np.zeros(len(eeg_rest))
+    eeg_rest = convert_to_mne(eeg_rest, trigger, eeg_device.sample_frequency, eeg_device.ch_names)
+    print(eeg_rest)
     asr = asrpy.ASR(sfreq=eeg_device.sample_frequency, cutoff=15)
     asr.fit(eeg_rest)
     eeg_device.set_asr(asr)

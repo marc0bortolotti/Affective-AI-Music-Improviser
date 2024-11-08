@@ -87,11 +87,6 @@ class EEG_Device:
             logging.info("LSL stream found: {}".format(self.streams[0].name()))
             self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
         else:
-            try:
-                self.board.prepare_session()
-            except Exception as e:
-                logging.error(f"EEG Device: {e}")
-                self.board.release_session()
             self.board.start_stream()
         logging.info('EEG Device: start recording')
 
@@ -110,8 +105,6 @@ class EEG_Device:
         data = np.array(data).T
         data = data[:, 0:len(self.ch_names)]
         data = data[- num_samples:]
-        if self.asr is not None:
-            data = self.asr.transform(data)
         return data
 
     def close(self):
@@ -153,7 +146,7 @@ class EEG_Device:
 
     def get_prediction(self, eeg):
 
-        eeg_features = extract_features([eeg], self.sample_frequency, self.ch_names)
+        eeg_features = extract_features([eeg], self.sample_frequency, self.ch_names, self.asr)
         eeg_features_corrected = baseline_correction(eeg_features, self.baseline)
 
         # Prediction
@@ -192,10 +185,10 @@ class EEG_Device:
 
     def fit_classifier(self, eeg_samples_baseline, eeg_samples_classes):
         # Preprocessing (Feature extraction and Baseline correction)
-        baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names, parse=True)
+        baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names, self.asr, parse=True)
         eeg_features_list = []
         for eeg_samples in eeg_samples_classes:
-            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names, parse=True)
+            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names, self.asr, parse=True)
             # Apply baseline correction
             eeg_features_corrected = baseline_correction(eeg_features, baseline)
             eeg_features_list.append(eeg_features_corrected)

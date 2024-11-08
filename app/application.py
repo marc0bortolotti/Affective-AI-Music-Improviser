@@ -156,6 +156,7 @@ class AI_AffectiveMusicImproviser():
                        'IS_RECORDING': False}
         
         self.parse_message = parse_message 
+        self.hystory = []
 
         # GENERATION 
         self.generate_rhythm = generate_rhythm
@@ -239,23 +240,24 @@ class AI_AffectiveMusicImproviser():
         self.set_application_status('IS_RECORDING', False)
     
     def save_hystory(self, path):
-        history_path = os.path.join(path, 'hystory.txt')
-        with open(history_path, 'w') as file:
-            for item in self.hystory:
-                in_bars, out_bars = item
-                for tok in in_bars:
-                    text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
-                    file.write(text)
-                file.write("\n")
-                for tok in out_bars:
-                    text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
-                    file.write(text)
-                file.write("\n\n")
-                
-        emotion_path = os.path.join(path, 'emotions.txt')
-        with open(emotion_path, 'w') as file:
-            for emotion in self.eeg_classification_buffer:
-                file.write(f'{emotion}\n')
+        if len(self.hystory) > 0:
+            history_path = os.path.join(path, 'hystory.txt')
+            with open(history_path, 'w') as file:
+                for item in self.hystory:
+                    in_bars, out_bars = item
+                    for tok in in_bars:
+                        text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
+                        file.write(text)
+                    file.write("\n")
+                    for tok in out_bars:
+                        text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
+                        file.write(text)
+                    file.write("\n\n")
+                    
+            emotion_path = os.path.join(path, 'emotions.txt')
+            with open(emotion_path, 'w') as file:
+                for emotion in self.eeg_classification_buffer:
+                    file.write(f'{emotion}\n')
 
     def run(self):
 
@@ -273,8 +275,6 @@ class AI_AffectiveMusicImproviser():
         generated_track = None
         confidence = 0.0
         temperature = 1.0
-
-        self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
 
