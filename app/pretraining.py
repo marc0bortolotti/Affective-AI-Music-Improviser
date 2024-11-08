@@ -4,6 +4,7 @@ import logging
 from EEG.processing import generate_samples
 import simpleaudio
 import os
+import asrpy
 
 file_path = os.path.dirname(__file__)
 relax_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/The_Scientist.wav')
@@ -32,6 +33,11 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             time.sleep(0.2)
         else:
             break    
+
+    eeg_rest = eeg_device.get_eeg_data(recording_time=rec_time)
+    asr = asrpy.ASR(sfreq=eeg_device.sample_frequency, cutoff=15)
+    asr.fit(eeg_rest)
+    eeg_device.set_asr(asr)
 
     eeg_samples_baseline = []
     eeg_samples_relax = []
