@@ -59,7 +59,6 @@ class EEG_Device:
         self.params.serial_number = serial_number
         self.params.board_id = retrieve_board_id(self.params.serial_number)
         self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
-        self.ch_names = self.ch_names if len(self.ch_names) <= 8 else self.ch_names[:8]
         self.board = BoardShim(self.params.board_id, self.params)
         self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
         logging.info(f"EEG Device: connected to {self.params.serial_number}")
@@ -103,7 +102,10 @@ class EEG_Device:
         num_samples = int(self.sample_frequency * recording_time)
         data = self.board.get_current_board_data(num_samples=num_samples)
         data = np.array(data).T
-        data = data[:, 0:len(self.ch_names)]
+        if self.params.serial_number == 'Synthetic Board':
+            data = data[:, 1:(len(self.ch_names)+1)]
+        else:
+            data = data[:, 0:len(self.ch_names)]
         data = data[- num_samples:]
         return data
 
