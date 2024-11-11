@@ -69,9 +69,6 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     eeg = eeg_device.get_eeg_data(recording_time=rec_time)
     eeg_samples_classes.append(generate_samples(eeg, window_size, window_overlap))
 
-    # stop recording eeg
-    eeg_device.stop_recording()
-
     # classification
     accuracy, f1 = eeg_device.get_metrics(eeg_samples_classes)
 

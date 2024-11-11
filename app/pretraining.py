@@ -117,9 +117,6 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
     eeg_samples_excited = np.concatenate(eeg_samples_excited)
     eeg_samples_classes = [eeg_samples_relax, eeg_samples_excited]
 
-    # stop recording eeg
-    eeg_device.stop_recording()
-
     #------------CLASSIFICATION----------------
     scaler, svm_model, lda_model, baseline = eeg_device.fit_classifier(eeg_samples_baseline, eeg_samples_classes)
     logging.info("Pretraining: Training Finished")

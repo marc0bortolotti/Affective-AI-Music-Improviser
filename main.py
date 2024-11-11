@@ -138,7 +138,6 @@ while True:
 
                 # Save the EEG classifier and the EEG raw data
                 if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'pretraining.csv'))
                     app.eeg_device.save_classifier(TRAINING_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
 
             else:
@@ -156,14 +155,10 @@ while True:
                 app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
                 print('\nLDA')
                 accuracy_lda, f1_lda = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
-                if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'lda_validation.csv'))
 
                 app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
                 print('\nSVM')
                 accuracy_svm, f1_svm = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
-                if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'svm_validation.csv'))
 
             # Set the classifier to be used in the application
             dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
