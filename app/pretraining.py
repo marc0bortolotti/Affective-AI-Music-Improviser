@@ -112,6 +112,9 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             eeg = eeg_device.get_eeg_data(recording_time=rec_time)
             eeg_samples_excited.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
+    # stop recording eeg
+    eeg_device.stop_recording()
+
     eeg_samples_baseline = np.concatenate(eeg_samples_baseline)
     eeg_samples_relax = np.concatenate(eeg_samples_relax)
     eeg_samples_excited = np.concatenate(eeg_samples_excited)

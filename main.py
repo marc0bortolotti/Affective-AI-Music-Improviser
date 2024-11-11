@@ -9,6 +9,7 @@ import threading
 import brainflow
 from PyQt5 import QtWidgets
 from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
+import time
 
 # Set log levels
 mne.set_log_level(verbose='WARNING', return_old_level=False, add_frames=None)
@@ -26,7 +27,7 @@ WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
 TRAINING_SESSIONS = 1
-TRAINING_TIME = 20 # must be larger than 2*WINDOW_DURATION (>8sec)
+TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
@@ -56,11 +57,11 @@ while True:
         setup_parameters = setup_dialog.get_data()
 
         if app is not None:
+            app.close()
+            thread_app.join()
             if SAVE_SESSION:
                 app.eeg_device.save_session(os.path.join(TEST_PATH, 'session.csv'))
                 app.save_hystory(os.path.join(TEST_PATH))
-            app.close()
-            thread_app.join()
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
@@ -139,7 +140,7 @@ while True:
                 # Save the EEG classifier and the EEG raw data
                 if SAVE_SESSION:
                     app.eeg_device.save_classifier(TRAINING_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
-
+                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'training.csv'))
             else:
 
                 try:
@@ -155,10 +156,14 @@ while True:
                 app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
                 print('\nLDA')
                 accuracy_lda, f1_lda = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
+                if SAVE_SESSION:
+                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_lda.csv'))
 
                 app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
                 print('\nSVM')
                 accuracy_svm, f1_svm = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
+                if SAVE_SESSION:
+                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_svm.csv'))
 
             # Set the classifier to be used in the application
             dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
@@ -189,11 +194,11 @@ while True:
         break   
 
 if app is not None:
+    app.close()
+    thread_app.join()
     if SAVE_SESSION:
         app.eeg_device.save_session(os.path.join(TEST_PATH, f'session.csv'))
         app.save_hystory(os.path.join(TEST_PATH))
-    app.close()
-    thread_app.join()
 
 
 

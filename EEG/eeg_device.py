@@ -47,6 +47,9 @@ markers_dict = {
 class EEG_Device:
     def __init__(self, serial_number):
 
+        if serial_number == 'None':
+            serial_number = 'Synthetic Board'
+
         self.recording_data = None  # recordings raw data
         self.streams = None
         self.asr = None # artifact removal 
@@ -65,7 +68,10 @@ class EEG_Device:
 
         self.prepare_session()
 
+        self.is_recording = False
+
     def stop_recording(self):
+        self.is_recording = False
         self.recording_data = self.board.get_board_data()
         self.board.stop_stream()
         logging.info('EEG Device: stop recording')
@@ -78,16 +84,18 @@ class EEG_Device:
             self.board.release_session()
 
     def start_recording(self):
-        if self.params.serial_number == 'LSL':
-            logging.info('LSLDevice: looking for a stream')
-            while not self.streams:
-                self.streams = resolve_stream('name', 'Cortex EEG')
-                time.sleep(1)
-            logging.info("LSL stream found: {}".format(self.streams[0].name()))
-            self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
-        else:
-            self.board.start_stream()
-        logging.info('EEG Device: start recording')
+        if not self.is_recording:
+            if self.params.serial_number == 'LSL':
+                logging.info('LSLDevice: looking for a stream')
+                while not self.streams:
+                    self.streams = resolve_stream('name', 'Cortex EEG')
+                    time.sleep(1)
+                logging.info("LSL stream found: {}".format(self.streams[0].name()))
+                self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
+            else:
+                self.board.start_stream()
+            self.is_recording = True
+            logging.info('EEG Device: start recording')
 
     def insert_marker(self, marker):
         try:
@@ -113,7 +121,6 @@ class EEG_Device:
         if self.params.serial_number == 'LSL':
             self.inlet.close_stream()
         else:
-            self.recording_data = self.board.get_board_data()
             self.board.release_session()
         logging.info('EEG Device: disconnected')
 
@@ -227,5 +234,6 @@ class EEG_Device:
         return scaler, svm_model, lda_model, baseline
 
     def save_session(self, path):
+        logging.info(f'Saving EEG session to {path}') 
         if self.recording_data is not None:
             DataFilter.write_file(self.recording_data, path, "w")
