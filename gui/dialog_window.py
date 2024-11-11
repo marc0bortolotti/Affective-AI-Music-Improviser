@@ -32,7 +32,7 @@ def retrieve_models(models_path):
     available_models = []
     for model in os.listdir(models_path):
         available_models.append(model)
-    return available_models
+    return available_models[:2]
 
 class SetupDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, models_path=None):

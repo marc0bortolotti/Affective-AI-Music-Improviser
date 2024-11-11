@@ -11,10 +11,9 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     
     logging.info("Validation: Start Validation")
 
-    eeg_device.insert_marker('V')
-
     # start recording eeg
     eeg_device.start_recording()
+    eeg_device.insert_marker('V')
     time.sleep(5)  # wait for signal to stabilize
 
     eeg_samples_classes = []

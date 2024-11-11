@@ -58,13 +58,13 @@ def convert_to_mne(eeg, trigger, fs, chs, rescale=1e6, recompute=False, transpos
     return this_rec
 
 
-def extract_features(eeg_samples, fs, ch_names, parse=False):
+def extract_features(eeg_samples, fs, ch_names, asr = None, parse=False):
     eeg_features = []
 
     for i, sample in enumerate(eeg_samples):
         if parse:
             print(f'Processing sample: {i+1}/{len(eeg_samples)}', end='\r')
-        filtered_sample = apply_filters(sample, fs, ch_names)
+        filtered_sample = apply_filters(sample, fs, ch_names, asr)
         log_var_sample = log_var_transform(filtered_sample)
         eeg_features.append(log_var_sample)
 
@@ -76,18 +76,22 @@ def extract_features(eeg_samples, fs, ch_names, parse=False):
     return eeg_features
 
 
-def calculate_baseline(eeg_samples, fs, ch_names, parse=False):
-    eeg_features = extract_features(eeg_samples, fs, ch_names, parse=parse)
+def calculate_baseline(eeg_samples, fs, ch_names, asr = None, parse=False):
+    eeg_features = extract_features(eeg_samples, fs, ch_names, asr, parse)
     baseline = np.mean(eeg_features, axis=0)
     return np.array(baseline)
 
 
-def apply_filters(eeg, fs, chs):
+def apply_filters(eeg, fs, chs, asr=None):
 
     # extract bands from the EEG samples: theta, alpha, low beta, high beta, gamma
 
     trigger = np.zeros(len(eeg))
     raw_data = convert_to_mne(eeg, trigger, fs=fs, chs=chs, recompute=False) 
+
+    # Apply ASR to remove artifacts
+    if asr is not None:
+        raw_data = asr.transform(raw_data)
     
     filtered_theta = raw_data.copy() 
     filtered_theta.filter(4, 7)

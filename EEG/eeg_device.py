@@ -47,6 +47,9 @@ markers_dict = {
 class EEG_Device:
     def __init__(self, serial_number):
 
+        if serial_number == 'None':
+            serial_number = 'Synthetic Board'
+
         self.recording_data = None  # recordings raw data
         self.streams = None
         self.asr = None # artifact removal 
@@ -59,14 +62,16 @@ class EEG_Device:
         self.params.serial_number = serial_number
         self.params.board_id = retrieve_board_id(self.params.serial_number)
         self.ch_names = BoardShim.get_eeg_names(self.params.board_id)
-        self.ch_names = self.ch_names if len(self.ch_names) <= 8 else self.ch_names[:8]
         self.board = BoardShim(self.params.board_id, self.params)
         self.sample_frequency = self.board.get_sampling_rate(self.params.board_id)
         logging.info(f"EEG Device: connected to {self.params.serial_number}")
 
         self.prepare_session()
 
+        self.is_recording = False
+
     def stop_recording(self):
+        self.is_recording = False
         self.recording_data = self.board.get_board_data()
         self.board.stop_stream()
         logging.info('EEG Device: stop recording')
@@ -79,21 +84,18 @@ class EEG_Device:
             self.board.release_session()
 
     def start_recording(self):
-        if self.params.serial_number == 'LSL':
-            logging.info('LSLDevice: looking for a stream')
-            while not self.streams:
-                self.streams = resolve_stream('name', 'Cortex EEG')
-                time.sleep(1)
-            logging.info("LSL stream found: {}".format(self.streams[0].name()))
-            self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
-        else:
-            try:
-                self.board.prepare_session()
-            except Exception as e:
-                logging.error(f"EEG Device: {e}")
-                self.board.release_session()
-            self.board.start_stream()
-        logging.info('EEG Device: start recording')
+        if not self.is_recording:
+            if self.params.serial_number == 'LSL':
+                logging.info('LSLDevice: looking for a stream')
+                while not self.streams:
+                    self.streams = resolve_stream('name', 'Cortex EEG')
+                    time.sleep(1)
+                logging.info("LSL stream found: {}".format(self.streams[0].name()))
+                self.inlet = StreamInlet(self.streams[0], pylsl.proc_threadsafe)
+            else:
+                self.board.start_stream()
+            self.is_recording = True
+            logging.info('EEG Device: start recording')
 
     def insert_marker(self, marker):
         try:
@@ -108,17 +110,17 @@ class EEG_Device:
         num_samples = int(self.sample_frequency * recording_time)
         data = self.board.get_current_board_data(num_samples=num_samples)
         data = np.array(data).T
-        data = data[:, 0:len(self.ch_names)]
+        if self.params.serial_number == 'Synthetic Board':
+            data = data[:, 1:(len(self.ch_names)+1)]
+        else:
+            data = data[:, 0:len(self.ch_names)]
         data = data[- num_samples:]
-        if self.asr is not None:
-            data = self.asr.transform(data)
         return data
 
     def close(self):
         if self.params.serial_number == 'LSL':
             self.inlet.close_stream()
         else:
-            self.recording_data = self.board.get_board_data()
             self.board.release_session()
         logging.info('EEG Device: disconnected')
 
@@ -153,7 +155,7 @@ class EEG_Device:
 
     def get_prediction(self, eeg):
 
-        eeg_features = extract_features([eeg], self.sample_frequency, self.ch_names)
+        eeg_features = extract_features([eeg], self.sample_frequency, self.ch_names, self.asr)
         eeg_features_corrected = baseline_correction(eeg_features, self.baseline)
 
         # Prediction
@@ -192,10 +194,10 @@ class EEG_Device:
 
     def fit_classifier(self, eeg_samples_baseline, eeg_samples_classes):
         # Preprocessing (Feature extraction and Baseline correction)
-        baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names, parse=True)
+        baseline = calculate_baseline(eeg_samples_baseline, self.sample_frequency, self.ch_names, self.asr, parse=True)
         eeg_features_list = []
         for eeg_samples in eeg_samples_classes:
-            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names, parse=True)
+            eeg_features = extract_features(eeg_samples, self.sample_frequency, self.ch_names, self.asr, parse=True)
             # Apply baseline correction
             eeg_features_corrected = baseline_correction(eeg_features, baseline)
             eeg_features_list.append(eeg_features_corrected)
@@ -232,5 +234,6 @@ class EEG_Device:
         return scaler, svm_model, lda_model, baseline
 
     def save_session(self, path):
+        logging.info(f'Saving EEG session to {path}') 
         if self.recording_data is not None:
             DataFilter.write_file(self.recording_data, path, "w")

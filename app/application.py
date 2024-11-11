@@ -22,7 +22,6 @@ OSC_REAPER_PORT = 8000
 OSC_PROCESSING_PORT = 7000
 '''---------------------------------------------'''
 
-FIXED_EMOTION = True
 
 def load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat):
 
@@ -73,8 +72,8 @@ def load_model(model_param_path, model_module_path, model_class_name, ticks_per_
 def thread_function_eeg(name, app):
     logging.info("Thread %s: starting", name)
 
-    app.eeg_device.insert_marker('A')
     app.eeg_device.start_recording()
+    app.eeg_device.insert_marker('A')
     time.sleep(5)  # wait for signal to stabilize
 
     while True:
@@ -136,19 +135,7 @@ class AI_AffectiveMusicImproviser():
                         n_tokens=4,
                         fixed_mood=False,
                         parse_message=False):
-        '''
-        Parameters:
-        - instrument_in_port_name: name of the MIDI input port for the instrument
-        - generation_out_port_name: name of the MIDI output port for the instrument
-        - generation_play_port_name: name of the MIDI output port for the generated melody
-        - window_duration: duration of the window in seconds
-        - model_dict: path to the model dictionary
-        - init_track_path: path to the initial track to start the generation
-        - ticks_per_beat: number of ticks per beat
-        - generate_rhythm: boolean to generate melody or rhythm
-        - n_tokens: number of tokens to generate at each step
-        '''
-
+        
         self.STATUS = {'READY': False, 
                        'RUNNING': False, 
                        'SIMULATE_MIDI': False,
@@ -156,6 +143,7 @@ class AI_AffectiveMusicImproviser():
                        'IS_RECORDING': False}
         
         self.parse_message = parse_message 
+        self.hystory = []
 
         # GENERATION 
         self.generate_rhythm = generate_rhythm
@@ -239,23 +227,24 @@ class AI_AffectiveMusicImproviser():
         self.set_application_status('IS_RECORDING', False)
     
     def save_hystory(self, path):
-        history_path = os.path.join(path, 'hystory.txt')
-        with open(history_path, 'w') as file:
-            for item in self.hystory:
-                in_bars, out_bars = item
-                for tok in in_bars:
-                    text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
-                    file.write(text)
-                file.write("\n")
-                for tok in out_bars:
-                    text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
-                    file.write(text)
-                file.write("\n\n")
-                
-        emotion_path = os.path.join(path, 'emotions.txt')
-        with open(emotion_path, 'w') as file:
-            for emotion in self.eeg_classification_buffer:
-                file.write(f'{emotion}\n')
+        if len(self.hystory) > 0:
+            history_path = os.path.join(path, 'hystory.txt')
+            with open(history_path, 'w') as file:
+                for item in self.hystory:
+                    in_bars, out_bars = item
+                    for tok in in_bars:
+                        text = '{:<30} \t'.format(self.INPUT_TOK.VOCAB.idx2word[tok]) 
+                        file.write(text)
+                    file.write("\n")
+                    for tok in out_bars:
+                        text = '{:<30} \t'.format(self.OUTPUT_TOK.VOCAB.idx2word[tok]) 
+                        file.write(text)
+                    file.write("\n\n")
+                    
+            emotion_path = os.path.join(path, 'emotions.txt')
+            with open(emotion_path, 'w') as file:
+                for emotion in self.eeg_classification_buffer:
+                    file.write(f'{emotion}\n')
 
     def run(self):
 
@@ -273,8 +262,6 @@ class AI_AffectiveMusicImproviser():
         generated_track = None
         confidence = 0.0
         temperature = 1.0
-
-        self.hystory = []
 
         softmax = torch.nn.Softmax(dim=-1)
 
@@ -432,8 +419,8 @@ class AI_AffectiveMusicImproviser():
                 logging.info(f"Confidence: {confidence}")
                 logging.info(f"Temperature: {temperature}")
                 logging.info(f'Emotion: {emotion_token}')
-                logging.info(f"Elapsed time: {time.time() - start_time}")
-                logging.info(f"Generated sequence: {predicted_bar}")
+                logging.info(f"Elapsed time: {time.time() - start_time}\n")
+                # logging.info(f"Generated sequence: {predicted_bar}")
 
             if not self.STATUS['RUNNING']:
                 break

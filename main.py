@@ -9,6 +9,7 @@ import threading
 import brainflow
 from PyQt5 import QtWidgets
 from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
+import time
 
 # Set log levels
 mne.set_log_level(verbose='WARNING', return_old_level=False, add_frames=None)
@@ -17,25 +18,31 @@ brainflow.BoardShim.set_log_level(3)
 format = "%(asctime)s: %(message)s"
 logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
 
+asr_logger = logging.getLogger('asrpy')
+asr_logger.setLevel(logging.ERROR)
+
 # EEG PARAMETERS
 WINDOW_OVERLAP = 0.875 # percentage
 WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
-TRAINING_SESSIONS = 2
-TRAINING_TIME = 50 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 30 # must be larger than 2*WINDOW_DURATION (>8sec)
+TRAINING_SESSIONS = 1
+TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
 SKIP_TRAINING = False
 SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
 MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
+
+# TEST AND TRAINING PATHS
+user_name = 'user_0'
 test_idx = 0
 test_name_idx = 0
-test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG']
-SAVE_BASE_PATH = os.path.join(PROJECT_PATH, f'runs/marco/test_{test_names[test_name_idx]}_{test_idx}')
-
+test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG', 'UTENTE_NO_EEG', 'UTENTE_EEG']
+TRAINING_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/training')
+TEST_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/test_{test_names[test_name_idx]}_{test_idx}')
 
 # Setup the application
 win = QtWidgets.QApplication([])
@@ -50,19 +57,23 @@ while True:
         setup_parameters = setup_dialog.get_data()
 
         if app is not None:
-            if SAVE_SESSION:
-                app.eeg_device.save_session(os.path.join(SAVE_PATH, 'session.csv'))
-                app.save_hystory(os.path.join(SAVE_PATH))
             app.close()
             thread_app.join()
+            if SAVE_SESSION:
+                app.eeg_device.save_session(os.path.join(TEST_PATH, 'session.csv'))
+                app.save_hystory(os.path.join(TEST_PATH))
 
         # Check if the session should be saved and create the folder
         if SAVE_SESSION == True:
-            SAVE_PATH = SAVE_BASE_PATH
-            while os.path.exists(SAVE_PATH):
-                SAVE_PATH = '_'.join(SAVE_PATH.split('_')[:-1]) + f'_{test_idx}'
-                test_idx += 1
-            os.makedirs(SAVE_PATH)      
+            
+            if not os.path.exists(TRAINING_PATH):
+                os.makedirs(TRAINING_PATH)
+
+            while os.path.exists(TEST_PATH):
+                TEST_PATH = '_'.join(TEST_PATH.split('_')[:-1]) + f'_{test_idx}'
+                test_idx += 1 
+            os.makedirs(TEST_PATH)   
+              
             test_name_idx += 1
             if test_name_idx >= len(test_names):
                 test_name_idx = 0
@@ -128,14 +139,13 @@ while True:
 
                 # Save the EEG classifier and the EEG raw data
                 if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'pretraining.csv'))
-                    app.eeg_device.save_classifier(SAVE_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
-
+                    app.eeg_device.save_classifier(TRAINING_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
+                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'training.csv'))
             else:
 
                 try:
                     # Load the EEG classifier from the file
-                    scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(SAVE_BASE_PATH)
+                    scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(TRAINING_PATH)
                 except:
                     logging.error("No classifier found. Please, train the classifier first.")
                     break
@@ -147,13 +157,13 @@ while True:
                 print('\nLDA')
                 accuracy_lda, f1_lda = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
                 if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'lda_validation.csv'))
+                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_lda.csv'))
 
                 app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
                 print('\nSVM')
                 accuracy_svm, f1_svm = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
                 if SAVE_SESSION:
-                    app.eeg_device.save_session(os.path.join(SAVE_PATH, 'svm_validation.csv'))
+                    app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_svm.csv'))
 
             # Set the classifier to be used in the application
             dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
@@ -169,7 +179,7 @@ while True:
             else:
                 break
         else:
-            scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(SAVE_BASE_PATH)
+            scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(TRAINING_PATH)
             app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
 
         # Start the application in a separate thread
@@ -184,11 +194,11 @@ while True:
         break   
 
 if app is not None:
-    if SAVE_SESSION:
-        app.eeg_device.save_session(os.path.join(SAVE_PATH, f'session.csv'))
-        app.save_hystory(os.path.join(SAVE_PATH))
     app.close()
     thread_app.join()
+    if SAVE_SESSION:
+        app.eeg_device.save_session(os.path.join(TEST_PATH, f'session.csv'))
+        app.save_hystory(os.path.join(TEST_PATH))
 
 
 
