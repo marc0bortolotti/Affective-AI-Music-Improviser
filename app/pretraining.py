@@ -52,7 +52,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
         for session_type in session_types:
 
             # Baseline (max 20 seconds)
-            baseline_time = min(rec_time/2, 20)
+            baseline_time = min(rec_time/2, 30)
             logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
             eeg_device.insert_marker('WN')
             play = white_noise.play()
