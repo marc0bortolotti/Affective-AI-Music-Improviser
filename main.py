@@ -27,19 +27,19 @@ WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
 TRAINING_SESSIONS = 1
-TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
+TRAINING_TIME = 60 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 40 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = False
+SKIP_TRAINING = True
 SAVE_SESSION = True
 PROJECT_PATH = os.path.dirname(__file__)
 MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 
 # TEST AND TRAINING PATHS
-user_name = 'user_0'
+user_name = 'user_2'
 test_idx = 0
-test_name_idx = 0
+test_name_idx = 5
 test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG', 'UTENTE_NO_EEG', 'UTENTE_EEG']
 TRAINING_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/training')
 TEST_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/test_{test_names[test_name_idx]}_{test_idx}')
