@@ -43,6 +43,7 @@ test_name_idx = 5
 test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG', 'UTENTE_NO_EEG', 'UTENTE_EEG']
 TRAINING_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/training')
 TEST_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/test_{test_names[test_name_idx]}_{test_idx}')
+METRICS_PATH = os.path.join(TRAINING_PATH, 'EEG_classifier_metrics.txt')
 
 # Setup the application
 win = QtWidgets.QApplication([])
@@ -135,12 +136,20 @@ while True:
             if dialog.exec_() == 0:
 
                 # train the EEG classification model
-                scaler, svm_model, lda_model, baseline = pretraining(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
+                scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm = pretraining(app.eeg_device, 
+                                                                                                                 app.WINDOW_SIZE, 
+                                                                                                                 WINDOW_OVERLAP, 
+                                                                                                                 steps=TRAINING_SESSIONS, 
+                                                                                                                 rec_time=TRAINING_TIME)
 
                 # Save the EEG classifier and the EEG raw data
                 if SAVE_SESSION:
                     app.eeg_device.save_classifier(TRAINING_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
                     app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'training.csv'))
+                    with open(METRICS_PATH, 'w') as f:
+                        f.write('TRAINING\n')
+                        f.write(f'LDA-Accuracy: {accuracy_lda}\nLDA-F1 Score: {f1_lda}\nSVM-Accuracy: {accuracy_svm}\nSVM-F1 Score: {f1_svm}')
+                    
             else:
 
                 try:
@@ -158,12 +167,17 @@ while True:
                 accuracy_lda, f1_lda = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
                 if SAVE_SESSION:
                     app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_lda.csv'))
+                    with open(METRICS_PATH, 'a') as f:
+                        f.write('VALIDATION\n')
+                        f.write(f'LDA-Accuracy: {accuracy_lda}\nLDA-F1 Score: {f1_lda}')
 
                 app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
                 print('\nSVM')
                 accuracy_svm, f1_svm = validation(app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
                 if SAVE_SESSION:
                     app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_svm.csv'))
+                    with open(METRICS_PATH, 'a') as f:
+                        f.write(f'SVM-Accuracy: {accuracy_svm}\nSVM-F1 Score: {f1_svm}')
 
             # Set the classifier to be used in the application
             dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])

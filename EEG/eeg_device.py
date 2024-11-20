@@ -231,7 +231,7 @@ class EEG_Device:
         f1_svm = f1_score(y_test, y_svm_pred, average='macro')
         logging.info(f'SVM\tAccuracy: {accuracy_svm:.2f} F1 Score: {f1_svm:.2f}')
 
-        return scaler, svm_model, lda_model, baseline
+        return scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm
 
     def save_session(self, path):
         logging.info(f'Saving EEG session to {path}') 
