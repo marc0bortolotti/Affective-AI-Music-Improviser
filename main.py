@@ -9,7 +9,7 @@ import threading
 import brainflow
 from PyQt5 import QtWidgets
 from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
-import time
+
 
 # Set log levels
 mne.set_log_level(verbose='WARNING', return_old_level=False, add_frames=None)
@@ -37,7 +37,7 @@ PROJECT_PATH = os.path.dirname(__file__)
 MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 
 # TEST AND TRAINING PATHS
-user_name = 'user_2'
+user_name = 'user_3'
 test_idx = 0
 test_name_idx = 5
 test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG', 'UTENTE_NO_EEG', 'UTENTE_EEG']
@@ -168,7 +168,7 @@ while True:
                 if SAVE_SESSION:
                     app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_lda.csv'))
                     with open(METRICS_PATH, 'a') as f:
-                        f.write('VALIDATION\n')
+                        f.write('\n\nVALIDATION\n')
                         f.write(f'LDA-Accuracy: {accuracy_lda}\nLDA-F1 Score: {f1_lda}')
 
                 app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
@@ -177,7 +177,7 @@ while True:
                 if SAVE_SESSION:
                     app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'validation_svm.csv'))
                     with open(METRICS_PATH, 'a') as f:
-                        f.write(f'SVM-Accuracy: {accuracy_svm}\nSVM-F1 Score: {f1_svm}')
+                        f.write(f'\nSVM-Accuracy: {accuracy_svm}\nSVM-F1 Score: {f1_svm}')
 
             # Set the classifier to be used in the application
             dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])

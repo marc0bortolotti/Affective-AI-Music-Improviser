@@ -121,8 +121,8 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
     eeg_samples_classes = [eeg_samples_relax, eeg_samples_excited]
 
     #------------CLASSIFICATION----------------
-    scaler, svm_model, lda_model, baseline = eeg_device.fit_classifier(eeg_samples_baseline, eeg_samples_classes)
+    scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm = eeg_device.fit_classifier(eeg_samples_baseline, eeg_samples_classes)
     logging.info("Pretraining: Training Finished")
-    return scaler, svm_model, lda_model, baseline
+    return scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm
 
 
