@@ -44,7 +44,7 @@ MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 RUNS_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}')
 TRAINING_PATH = os.path.join(RUNS_PATH, 'training')
 TEST_PATH = os.path.join(RUNS_PATH, f'test_{test_names[test_name_idx]}_{test_idx}')
-METRICS_PATH = os.path.join(TRAINING_PATH, 'EEG_classifier_metrics.txt')
+METRICS_PATH = os.path.join(RUNS_PATH, 'EEG_classifier_metrics.txt')
 
 # Setup the application
 win = QtWidgets.QApplication([])
