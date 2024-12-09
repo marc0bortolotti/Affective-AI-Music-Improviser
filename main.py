@@ -33,16 +33,17 @@ VALIDATION_TIME = 40 # must be larger than 2*WINDOW_DURATION (>8sec)
 # APPLICATION PARAMETERS
 SKIP_TRAINING = True
 SAVE_SESSION = True
-PROJECT_PATH = os.path.dirname(__file__)
-MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 
 # TEST AND TRAINING PATHS
-user_name = 'user_3'
+user_name = 'user_5'
 test_idx = 0
-test_name_idx = 5
-test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG', 'UTENTE_NO_EEG', 'UTENTE_EEG']
-TRAINING_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/training')
-TEST_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}/test_{test_names[test_name_idx]}_{test_idx}')
+test_name_idx = 2
+test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG']
+PROJECT_PATH = os.path.dirname(__file__)
+MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
+RUNS_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}')
+TRAINING_PATH = os.path.join(RUNS_PATH, 'training')
+TEST_PATH = os.path.join(RUNS_PATH, f'test_{test_names[test_name_idx]}_{test_idx}')
 METRICS_PATH = os.path.join(TRAINING_PATH, 'EEG_classifier_metrics.txt')
 
 # Setup the application
@@ -74,10 +75,6 @@ while True:
                 TEST_PATH = '_'.join(TEST_PATH.split('_')[:-1]) + f'_{test_idx}'
                 test_idx += 1 
             os.makedirs(TEST_PATH)   
-              
-            test_name_idx += 1
-            if test_name_idx >= len(test_names):
-                test_name_idx = 0
 
         generation_type = 'rhythm' if 'rhythm' in setup_parameters['MODEL'] else 'melody'
         input_track_type = 'melody' if generation_type == 'rhythm' else 'rhythm'
