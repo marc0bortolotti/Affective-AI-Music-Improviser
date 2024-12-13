@@ -3,8 +3,8 @@ import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG, MOVE_CURSOR_TO_ITEM_END_MSG, MOVE_CURSOR_TO_NEXT_MEASURE_MSG
 from EEG.eeg_device import EEG_Device
-from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
-from generative_model.architectures.transformer import generate_square_subsequent_mask
+from GENERATIVE_MODEL.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
+from GENERATIVE_MODEL.architectures.transformer import generate_square_subsequent_mask
 import torch
 import numpy as np
 import time
@@ -272,6 +272,11 @@ class AI_AffectiveMusicImproviser():
         predicted_bar = None
         first_iter = True
 
+        count = 0
+        elapsed_time_list = []
+        elapsed_time = 0
+        mean_elapsed_time = 0
+
         while True:
 
             SYNCH_EVENT.wait()
@@ -295,6 +300,8 @@ class AI_AffectiveMusicImproviser():
 
             # if the buffer is full (4 bars), make the prediction
             if len(input_tokens_buffer) == 3*self.BAR_LENGTH:
+
+                count += 1
 
                 input_data = input_tokens_buffer.copy()
 
@@ -415,11 +422,22 @@ class AI_AffectiveMusicImproviser():
                 # remove the first bar from the tokens buffer
                 input_tokens_buffer = input_tokens_buffer[self.BAR_LENGTH:]
 
+                # calculate the elapsed time
+                elapsed_time = time.time() - start_time
+                elapsed_time_list.append(elapsed_time)
+
+                if count % 100 == 0:
+                    mean_elapsed_time = np.mean(elapsed_time_list)
+                    count = 0
+                    elapsed_time_list = []
+
             if self.parse_message:
+                logging.info(f"Count: {count}")
                 logging.info(f"Confidence: {confidence}")
                 logging.info(f"Temperature: {temperature}")
                 logging.info(f'Emotion: {emotion_token}')
-                logging.info(f"Elapsed time: {time.time() - start_time}\n")
+                logging.info(f"Elapsed time: {elapsed_time}")
+                logging.info(f"Average elapsed time: {mean_elapsed_time}\n")
                 # logging.info(f"Generated sequence: {predicted_bar}")
 
             if not self.STATUS['RUNNING']:

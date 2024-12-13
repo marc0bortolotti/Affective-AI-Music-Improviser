@@ -3,8 +3,7 @@ import rtmidi
 import logging
 import mido
 import threading
-import os
-from gui.dialog_window import SIMULATE_INSTRUMENT
+from GUI.dialog_window import SIMULATE_INSTRUMENT
 
 class MIDI_Input:
     '''
