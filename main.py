@@ -1,14 +1,15 @@
 import logging
 import mne
 import os
-from app.application import AI_AffectiveMusicImproviser
-from app.pretraining import pretraining
-from app.validation import validation
-from generative_model.tokenization import BCI_TOKENS
+from APP.application import AI_AffectiveMusicImproviser
+from APP.pretraining import pretraining
+from APP.validation import validation
+from EEG.classifier import save_eeg_classifier, load_eeg_classifier
+from GENERATIVE_MODEL.tokenization import BCI_TOKENS
 import threading
 import brainflow
 from PyQt5 import QtWidgets
-from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
+from GUI.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
 
 
 # Set log levels
@@ -27,23 +28,24 @@ WINDOW_DURATION = 4 # seconds
 
 # TRAINING AND VALIDATION PARAMETERS
 TRAINING_SESSIONS = 1
-TRAINING_TIME = 60 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 40 # must be larger than 2*WINDOW_DURATION (>8sec)
+TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # APPLICATION PARAMETERS
-SKIP_TRAINING = True
+SKIP_TRAINING = False
 SAVE_SESSION = True
 
 # TEST AND TRAINING PATHS
 user_name = 'user_5'
 test_idx = 0
-test_name_idx = 2
-test_names = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG']
+test_name_list = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG']
+test_name = test_name_list[0]
+
 PROJECT_PATH = os.path.dirname(__file__)
 MODELS_PATH = os.path.join(PROJECT_PATH, 'generative_model/pretrained_models')
 RUNS_PATH = os.path.join(PROJECT_PATH, f'runs/{user_name}')
 TRAINING_PATH = os.path.join(RUNS_PATH, 'training')
-TEST_PATH = os.path.join(RUNS_PATH, f'test_{test_names[test_name_idx]}_{test_idx}')
+TEST_PATH = os.path.join(RUNS_PATH, f'test_{test_name}_{test_idx}')
 METRICS_PATH = os.path.join(RUNS_PATH, 'EEG_classifier_metrics.txt')
 
 # Setup the application
@@ -141,7 +143,7 @@ while True:
 
                 # Save the EEG classifier and the EEG raw data
                 if SAVE_SESSION:
-                    app.eeg_device.save_classifier(TRAINING_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
+                    save_eeg_classifier(TRAINING_PATH, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
                     app.eeg_device.save_session(os.path.join(TRAINING_PATH, 'training.csv'))
                     with open(METRICS_PATH, 'w') as f:
                         f.write('TRAINING\n')
@@ -151,7 +153,7 @@ while True:
 
                 try:
                     # Load the EEG classifier from the file
-                    scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(TRAINING_PATH)
+                    scaler, lda_model, svm_model, baseline = load_eeg_classifier(TRAINING_PATH)
                 except:
                     logging.error("No classifier found. Please, train the classifier first.")
                     break

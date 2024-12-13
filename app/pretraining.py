@@ -2,6 +2,7 @@ import time
 import numpy as np
 import logging
 from EEG.processing import generate_samples, convert_to_mne
+from EEG.classifier import fit_eeg_classifier
 import simpleaudio
 import os
 import asrpy
@@ -11,7 +12,7 @@ relax_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/The_Scie
 excited_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/Blitzkrieg_Bop.wav')
 white_noise = simpleaudio.WaveObject.from_wave_file(file_path + '/music/White_Noise.wav')
 
-session_types = ['listening', 'playing']
+session_types = ['Listening', 'Playing']
 
 
 def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60):
@@ -23,8 +24,8 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
     eeg_device.insert_marker('T')
     time.sleep(5)  # wait for signal to stabilize
 
-    # rest for 1 minute
-    logging.info(f"Pretraining: Rest for {rec_time} seconds")
+    # Rest
+    logging.info(f"Pretraining: Resting for {rec_time} seconds")
     eeg_device.insert_marker('RS')
     start = time.time() 
     while True:
@@ -51,9 +52,9 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
 
         for session_type in session_types:
 
-            # Baseline (max 20 seconds)
+            # Baseline
             baseline_time = min(rec_time/2, 30)
-            logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
+            logging.info(f"Pretraining: Pause for {baseline_time} seconds.")
             eeg_device.insert_marker('WN')
             play = white_noise.play()
             start = time.time() 
@@ -66,10 +67,10 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             eeg = eeg_device.get_eeg_data(recording_time=baseline_time)
             eeg_samples_baseline.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
-            # Relax (1 minute)
-            logging.info(f"Pretraining: Play a relaxed rythm for {rec_time} seconds")
+            # Relax
+            logging.info(f"Pretraining: {session_type} relaxed for {rec_time} seconds.")
             eeg_device.insert_marker('PTR')
-            if session_type == 'listening':
+            if session_type == 'Listening':
                 play = relax_music.play()
             start = time.time() 
             while True:
@@ -77,13 +78,13 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
                     time.sleep(0.2)
                 else:
                     break
-            if session_type == 'listening':
+            if session_type == 'Listening':
                 play.stop()
             eeg = eeg_device.get_eeg_data(recording_time=rec_time)
             eeg_samples_relax.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
-            # Baseline (max 20 seconds)
-            logging.info(f"Pretraining: Pause for {baseline_time} seconds. Please, do not move or think about anything. Just relax.")
+            # Baseline
+            logging.info(f"Pretraining: Pause for {baseline_time} seconds.")
             eeg_device.insert_marker('WN')
             play = white_noise.play()
             start = time.time() 
@@ -96,10 +97,10 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             eeg = eeg_device.get_eeg_data(recording_time=baseline_time)
             eeg_samples_baseline.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
-            # Excited (1 minute)
-            logging.info(f"Pretraining: Play an excited rythm for {rec_time} seconds")
+            # Excited 
+            logging.info(f"Pretraining: {session_type} excited for {rec_time} seconds")
             eeg_device.insert_marker('PTE')
-            if session_type == 'listening':
+            if session_type == 'Listening':
                 play = excited_music.play()
             start = time.time() 
             while True:
@@ -107,7 +108,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
                     time.sleep(0.2)
                 else:
                     break
-            if session_type == 'listening':
+            if session_type == 'Listening':
                 play.stop()
             eeg = eeg_device.get_eeg_data(recording_time=rec_time)
             eeg_samples_excited.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
@@ -121,8 +122,14 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
     eeg_samples_classes = [eeg_samples_relax, eeg_samples_excited]
 
     #------------CLASSIFICATION----------------
-    scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm = eeg_device.fit_classifier(eeg_samples_baseline, eeg_samples_classes)
+    scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm = fit_eeg_classifier(eeg_samples_baseline, 
+                                                                                                            eeg_samples_classes, 
+                                                                                                            eeg_device.sample_frequency, 
+                                                                                                            eeg_device.ch_names, 
+                                                                                                            asr=asr)
+                                                                                                        
     logging.info("Pretraining: Training Finished")
+    
     return scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm
 
 

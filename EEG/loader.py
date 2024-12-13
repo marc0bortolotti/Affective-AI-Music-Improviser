@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import os
 
-
 def load_data(path, header, fs, ch_names, skiprows=5):
     if header:
         df = pd.read_csv(path,
