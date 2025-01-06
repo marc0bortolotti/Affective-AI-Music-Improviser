@@ -432,13 +432,14 @@ class AI_AffectiveMusicImproviser():
                     elapsed_time_list = []
 
             if self.parse_message:
-                logging.info(f"Count: {count}")
                 logging.info(f"Confidence: {confidence}")
                 logging.info(f"Temperature: {temperature}")
                 logging.info(f'Emotion: {emotion_token}')
                 logging.info(f"Elapsed time: {elapsed_time}")
-                logging.info(f"Average elapsed time: {mean_elapsed_time}\n")
-                # logging.info(f"Generated sequence: {predicted_bar}")
+                # logging.info(f"Average elapsed time: {mean_elapsed_time}")
+                logging.info("Generated sequence:")
+                print(predicted_bar)
+                print()
 
             if not self.STATUS['RUNNING']:
                 break
