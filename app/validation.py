@@ -1,11 +1,12 @@
 import os
 import time
-import simpleaudio
 import logging
 from EEG.processing import generate_samples
+import pygame
 
+pygame.mixer.init()
 file_path = os.path.dirname(__file__)
-white_noise = simpleaudio.WaveObject.from_wave_file(file_path + '/music/White_Noise.wav')
+white_noise = pygame.mixer.Sound(file_path + '/music/White_Noise.wav')
 
 def validation(eeg_device, window_size, window_overlap, rec_time=60):
     
@@ -22,14 +23,14 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     baseline_time = min(rec_time/2, 30)
     logging.info(f"Validation: Pause for {baseline_time} seconds.")
     eeg_device.insert_marker('WN')
-    play = white_noise.play()
+    white_noise.play()
     start = time.time() 
     while True:
         if time.time() - start < baseline_time:
             time.sleep(0.2)
         else:
             break
-    play.stop()
+    white_noise.stop()
     
     # Relaxed (1 minute)
     logging.info(f"Validation: Playing relaxed for {rec_time} seconds")
@@ -47,14 +48,14 @@ def validation(eeg_device, window_size, window_overlap, rec_time=60):
     baseline_time = min(rec_time/2, 20)
     logging.info(f"Validation: Pause for {baseline_time} seconds.")
     eeg_device.insert_marker('WN')
-    play = white_noise.play()
+    white_noise.play()
     start = time.time() 
     while True:
         if time.time() - start < baseline_time:
             time.sleep(0.2)
         else:
             break
-    play.stop()
+    white_noise.stop()
 
     # Excited (1 minute)
     logging.info(f"Validation: Playing excited for {rec_time} seconds.")

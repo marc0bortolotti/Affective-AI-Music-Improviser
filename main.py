@@ -1,15 +1,15 @@
 import logging
 import mne
 import os
-from APP.application import AI_AffectiveMusicImproviser
-from APP.pretraining import pretraining
-from APP.validation import validation
+from app.application import AI_AffectiveMusicImproviser
+from app.pretraining import pretraining
+from app.validation import validation
 from EEG.classifier import save_eeg_classifier, load_eeg_classifier
-from GENERATIVE_MODEL.tokenization import BCI_TOKENS
+from generative_model.tokenization import BCI_TOKENS
 import threading
 import brainflow
 from PyQt5 import QtWidgets
-from GUI.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
+from gui.dialog_window import SetupDialog, CustomDialog, SIMULATE_INSTRUMENT
 
 
 # Set log levels
@@ -156,7 +156,7 @@ while True:
                     scaler, lda_model, svm_model, baseline = load_eeg_classifier(TRAINING_PATH)
                 except:
                     logging.error("No classifier found. Please, train the classifier first.")
-                    break
+                    exit()
             
             # Validate the EEG classifier with both LDA and SVM
             dialog = CustomDialog('Do you want to VALIDATE classifiers?')
@@ -178,22 +178,27 @@ while True:
                     with open(METRICS_PATH, 'a') as f:
                         f.write(f'\nSVM-Accuracy: {accuracy_svm}\nSVM-F1 Score: {f1_svm}')
 
-            # Set the classifier to be used in the application
-            dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
-            if dialog.exec_() == 0:
-                app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
-            else:
-                app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
-
-            # Start the application
-            start_dialog = CustomDialog('Do you want to START the application?')
-            if start_dialog.exec_() == 0:
-                pass
-            else:
-                break
         else:
-            scaler, lda_model, svm_model, baseline = app.eeg_device.load_classifier(TRAINING_PATH)
+            try:
+                # Load the EEG classifier from the file
+                scaler, lda_model, svm_model, baseline = load_eeg_classifier(TRAINING_PATH)
+            except:
+                logging.error("No classifier found. Please, train the classifier first.")
+                exit()
+
+        # Set the classifier to be used in the application
+        dialog = CustomDialog('Which classifier do you want to use?', buttons=['LDA', 'SVM'])
+        if dialog.exec_() == 0:
             app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
+        else:
+            app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
+
+        # Start the application
+        start_dialog = CustomDialog('Do you want to START the application?')
+        if start_dialog.exec_() == 0:
+            pass
+        else:
+            break
 
         # Start the application in a separate thread
         thread_app = threading.Thread(target=app.run, args=())
