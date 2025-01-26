@@ -62,7 +62,7 @@ pip install -r requirements.txt
 ## Usage
 Run the following command to play the AI-Affective Music Improviser, 
 ```bash
-python main.py
+python3 main.py
 ```
 The command will open a window in which you have to select the corresponding MIDI ports and the EEG device.
 **NOTE:** If you want to run a simulated MIDI instruments, select "Simulate Instrument" as INPUT port.
