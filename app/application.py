@@ -3,8 +3,8 @@ import logging
 from MIDI.midi_communication import MIDI_Input, MIDI_Output
 from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, EMOTION_MSG, MOVE_CURSOR_TO_ITEM_END_MSG, MOVE_CURSOR_TO_NEXT_MEASURE_MSG
 from EEG.eeg_device import EEG_Device
-from GENERATIVE_MODEL.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
-from GENERATIVE_MODEL.architectures.transformer import generate_square_subsequent_mask
+from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
+from generative_model.architectures.transformer import generate_square_subsequent_mask
 import torch
 import numpy as np
 import time

@@ -3,17 +3,17 @@ import numpy as np
 import logging
 from EEG.processing import generate_samples, convert_to_mne
 from EEG.classifier import fit_eeg_classifier
-import simpleaudio
 import os
 import asrpy
+import pygame
 
 file_path = os.path.dirname(__file__)
-relax_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/The_Scientist.wav')
-excited_music = simpleaudio.WaveObject.from_wave_file(file_path + '/music/Blitzkrieg_Bop.wav')
-white_noise = simpleaudio.WaveObject.from_wave_file(file_path + '/music/White_Noise.wav')
+pygame.mixer.init()
+relax_music = pygame.mixer.Sound(file_path + '/music/The_Scientist.wav')
+excited_music = pygame.mixer.Sound(file_path + '/music/Blitzkrieg_Bop.wav')
+white_noise = pygame.mixer.Sound(file_path + '/music/White_Noise.wav')
 
 session_types = ['Listening', 'Playing']
-
 
 def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60):
     
@@ -56,14 +56,14 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             baseline_time = min(rec_time/2, 30)
             logging.info(f"Pretraining: Pause for {baseline_time} seconds.")
             eeg_device.insert_marker('WN')
-            play = white_noise.play()
+            white_noise.play()
             start = time.time() 
             while True:
                 if time.time() - start < baseline_time:
                     time.sleep(0.2)
                 else:
                     break
-            play.stop()
+            white_noise.stop()
             eeg = eeg_device.get_eeg_data(recording_time=baseline_time)
             eeg_samples_baseline.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
@@ -71,7 +71,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             logging.info(f"Pretraining: {session_type} relaxed for {rec_time} seconds.")
             eeg_device.insert_marker('PTR')
             if session_type == 'Listening':
-                play = relax_music.play()
+                relax_music.play()
             start = time.time() 
             while True:
                 if time.time() - start < rec_time:
@@ -79,21 +79,21 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
                 else:
                     break
             if session_type == 'Listening':
-                play.stop()
+                relax_music.stop()
             eeg = eeg_device.get_eeg_data(recording_time=rec_time)
             eeg_samples_relax.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
             # Baseline
             logging.info(f"Pretraining: Pause for {baseline_time} seconds.")
             eeg_device.insert_marker('WN')
-            play = white_noise.play()
+            white_noise.play()
             start = time.time() 
             while True:
                 if time.time() - start < baseline_time:
                     time.sleep(0.2)
                 else:
                     break
-            play.stop()
+            white_noise.stop()
             eeg = eeg_device.get_eeg_data(recording_time=baseline_time)
             eeg_samples_baseline.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 
@@ -101,7 +101,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
             logging.info(f"Pretraining: {session_type} excited for {rec_time} seconds")
             eeg_device.insert_marker('PTE')
             if session_type == 'Listening':
-                play = excited_music.play()
+                excited_music.play()
             start = time.time() 
             while True:
                 if time.time() - start < rec_time:
@@ -109,7 +109,7 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
                 else:
                     break
             if session_type == 'Listening':
-                play.stop()
+                excited_music.stop()
             eeg = eeg_device.get_eeg_data(recording_time=rec_time)
             eeg_samples_excited.append(generate_samples(eeg, WINDOW_SIZE, WINDOW_OVERLAP))
 

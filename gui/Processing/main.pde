@@ -1,6 +1,6 @@
 float confidence = 0.8;   // Confidence variable (0 to 1)
 float temperature = 1.0;  // Temperature value (0 to infinite)
-float emotion = 1.0; // 0 relaxed, excited otherwise
+float emotion = 0.0; // 0 relaxed, excited otherwise
 float newTemperature, newConfidence;
 OSCClientServer oscClientServer;
 Emoticon bouncingEmoticon;
