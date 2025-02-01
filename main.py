@@ -77,13 +77,13 @@ kwargs['model_param_path'] = MODELS_PATH
 app = AI_AffectiveMusicImproviser(kwargs)
 
 # train the EEG classification model
-dialog = input('Do you want to VALIDATE classifiers? y/n: ')
+dialog = input('\nDo you want to TRAIN classifiers? y/n: ')
 
 if dialog == 'y':
     pretraining(TRAINING_PATH, METRICS_PATH, app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
             
     # Validate the EEG classifier with both LDA and SVM
-    dialog = input('Do you want to VALIDATE classifiers? y/n: ')
+    dialog = input('\nDo you want to VALIDATE classifiers? y/n: ')
     if dialog == 'y':
         validation(TRAINING_PATH, METRICS_PATH, app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
 
@@ -91,26 +91,29 @@ try:
     # Load the EEG classifier from the file
     scaler, lda_model, svm_model, baseline = load_eeg_classifier(TRAINING_PATH)
 except:
-    logging.error("No classifier found. Please, train the classifier first.")
+    logging.error("\nNo classifier found. Please, train the classifier first.")
     exit()
 
 # Set the classifier to be used in the application
-dialog = input('Which classifier do you want to use? lda/svm: ')
+dialog = input('\nWhich classifier do you want to use? lda/svm: ')
 if dialog == 'lda':
     app.eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
 else:
     app.eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
 
-# Start the application in a separate thread
-thread_app = threading.Thread(target=app.run, args=())
-thread_app.start()
+dialog = input('\nDo you want to start the application? y/n: ')
 
-time.sleep(2 * 65)
+if dialog != 'y':
+    # Start the application in a separate thread
+    thread_app = threading.Thread(target=app.run, args=())
+    thread_app.start()
 
-app.close()
-thread_app.join()
-app.eeg_device.save_session(os.path.join(TEST_PATH, f'session.csv'))
-app.save_hystory(os.path.join(TEST_PATH))
+    time.sleep(2 * 65)
+
+    app.close()
+    thread_app.join()
+    app.eeg_device.save_session(os.path.join(TEST_PATH, f'session.csv'))
+    app.save_hystory(os.path.join(TEST_PATH))
 
 
 

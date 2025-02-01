@@ -19,11 +19,6 @@ def validation(training_path, metrics_path, eeg_device, window_size, window_over
         logging.error("No classifier found. Please, train the classifier first.")
         exit()
 
-    # start recording eeg
-    eeg_device.start_recording()
-    eeg_device.insert_marker('V')
-    time.sleep(5)  # wait for signal to stabilize
-
 
     for classifier in ['LDA', 'SVM']: 
 
@@ -33,6 +28,11 @@ def validation(training_path, metrics_path, eeg_device, window_size, window_over
             eeg_device.set_classifier(baseline=baseline, classifier=lda_model, scaler=scaler)
         else:
             eeg_device.set_classifier(baseline=baseline, classifier=svm_model, scaler=scaler)
+
+        # start recording eeg
+        eeg_device.start_recording()
+        eeg_device.insert_marker('V')
+        time.sleep(5)  # wait for signal to stabilize
 
         eeg_samples_classes = []
 
