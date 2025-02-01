@@ -2,20 +2,19 @@ import time
 import numpy as np
 import logging
 from EEG.processing import generate_samples, convert_to_mne
-from EEG.classifier import fit_eeg_classifier
+from EEG.classifier import fit_eeg_classifier, save_eeg_classifier
 import os
 import asrpy
 import pygame
 
-file_path = os.path.dirname(__file__)
 pygame.mixer.init()
-relax_music = pygame.mixer.Sound(file_path + '/music/The_Scientist.wav')
-excited_music = pygame.mixer.Sound(file_path + '/music/Blitzkrieg_Bop.wav')
-white_noise = pygame.mixer.Sound(file_path + '/music/White_Noise.wav')
+relax_music = pygame.mixer.Sound('app/music/The_Scientist.wav')
+excited_music = pygame.mixer.Sound('app/music/Blitzkrieg_Bop.wav')
+white_noise = pygame.mixer.Sound('app/music/White_Noise.wav')
 
 session_types = ['Listening', 'Playing']
 
-def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60):
+def pretraining(training_path, metrics_path, eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60):
     
     logging.info("Pretraining: Start Training")
 
@@ -129,7 +128,17 @@ def pretraining(eeg_device, WINDOW_SIZE, WINDOW_OVERLAP, steps = 1, rec_time=60)
                                                                                                             asr=asr)
                                                                                                         
     logging.info("Pretraining: Training Finished")
+
+    # Save the EEG classifier and the EEG raw data
     
-    return scaler, svm_model, lda_model, baseline, accuracy_lda, f1_lda, accuracy_svm, f1_svm
+    save_eeg_classifier(training_path, scaler=scaler, svm_model=svm_model, lda_model=lda_model, baseline=baseline)
+
+    eeg_device.save_session(os.path.join(training_path, 'training.csv'))
+
+
+    with open(metrics_path, 'w') as f:
+        f.write('TRAINING\n')
+        f.write(f'LDA-Accuracy: {accuracy_lda}\nLDA-F1 Score: {f1_lda}\nSVM-Accuracy: {accuracy_svm}\nSVM-F1 Score: {f1_svm}')
+    
 
 

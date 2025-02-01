@@ -1,4 +1,0 @@
-embed_dim: 128
-hidden_dim: 256
-latent_dim: 64
-vocab_size: 25863

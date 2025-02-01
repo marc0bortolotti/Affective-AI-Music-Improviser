@@ -3,3 +3,5 @@
 __pycache__/
 # Ignore the virtual environment
 venv/
+# Ignore the runs directory
+runs/

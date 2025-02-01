@@ -5,6 +5,7 @@ from OSC.osc_connection import Server_OSC, Client_OSC, REC_MSG, CONFIDENCE_MSG, 
 from EEG.eeg_device import EEG_Device
 from generative_model.tokenization import PrettyMidiTokenizer, BCI_TOKENS, IN_OUT_SEPARATOR_TOKEN, SILENCE_TOKEN
 from generative_model.architectures.transformer import generate_square_subsequent_mask
+from app.utils import SIMULATE_INSTRUMENT
 import torch
 import numpy as np
 import time
@@ -15,13 +16,15 @@ import yaml
 import importlib
 import sys
 
-'''---------- CONNECTION PARAMETERS ------------'''
+# CONNECTION PARAMETERS
 LOCAL_HOST = "127.0.0.1"
 OSC_SERVER_PORT = 9000
 OSC_REAPER_PORT = 8000
 OSC_PROCESSING_PORT = 7000
-'''---------------------------------------------'''
 
+# PATHS
+SIMULATION_TRACK_PATH = 'app/music/rhythm_RELAXED.mid'
+INIT_TRACK_PATH = 'app/music/melody_RELAXED.mid'
 
 def load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat):
 
@@ -89,7 +92,7 @@ def thread_function_eeg(name, app):
         # append the emotion to the buffer
         app.append_eeg_classification(BCI_TOKENS[prediction])
 
-        if not app.STATUS['RUNNING']:
+        if app.EXIT:
             logging.info("Thread %s: closing", name)
             break
 
@@ -103,7 +106,7 @@ def thread_function_midi(name, app):
     app.midi_in.open_port() 
     app.midi_out_play.open_port()
     
-    if app.STATUS['SIMULATE_MIDI']:
+    if app.SIMULATE_MIDI:
         app.midi_in.set_simulation_event(SYNCH_EVENT)
         app.midi_in.simulate()
     else:
@@ -117,42 +120,38 @@ def thread_function_osc(name, app):
     logging.info("Thread %s: closing", name)
 
 
-
-
 class AI_AffectiveMusicImproviser():
 
-    def __init__(self,  instrument_in_port_name,
-                        instrument_out_port_name,
-                        generation_out_port_name,
-                        eeg_device_type,
-                        window_duration,
-                        model_param_path,
-                        model_module_path,
-                        model_class_name,
-                        init_track_path=None,
-                        ticks_per_beat=4,
-                        generate_rhythm=True,
-                        n_tokens=4,
-                        fixed_mood=False,
-                        parse_message=False):
+    def __init__(self, kwargs):
+
+        self.instrument_in_port_name = kwargs['instrument_in_port_name']
+        self.instrument_out_port_name = kwargs['instrument_out_port_name']
+        self.generation_out_port_name = kwargs['generation_out_port_name']
+        self.eeg_device_type = kwargs['eeg_device_type']
+        self.model_param_path = kwargs['model_param_path']
+        self.model_module_path = kwargs['model_module_path']
+        self.model_class_name = kwargs['model_class_name']
+        self.ticks_per_beat = kwargs.get('ticks_per_beat', 4)
+        self.window_duration = kwargs.get('window_duration', 4)
+        self.generate_rhythm = kwargs.get('generate_rhythm', True)
+        self.n_tokens = kwargs.get('n_tokens', 4)
+        self.parse_message = kwargs.get('parse_message', False)
         
-        self.STATUS = {'READY': False, 
-                       'RUNNING': False, 
-                       'SIMULATE_MIDI': False,
-                       'USE_EEG': False,
-                       'IS_RECORDING': False}
+        # STATUS
+        self.fixed_mood = kwargs.get('fixed_mood', False)
+        self.EXIT = False
+        self.SIMULATE_MIDI = False
+        self.USE_EEG = False
         
-        self.parse_message = parse_message 
         self.hystory = []
 
-        # GENERATION 
-        self.generate_rhythm = generate_rhythm
-        self.n_tokens = n_tokens
-        self.fixed_mood = fixed_mood
-
         # MIDI
-        self.midi_in = MIDI_Input(instrument_in_port_name, instrument_out_port_name, parse_message=False)
-        self.midi_out_play = MIDI_Output(generation_out_port_name)
+        self.midi_in = MIDI_Input(self.instrument_in_port_name, self.instrument_out_port_name, parse_message=False)
+        self.midi_out_play = MIDI_Output(self.generation_out_port_name)
+        if self.instrument_in_port_name == SIMULATE_INSTRUMENT:
+            self.SIMULATE_MIDI = True
+            self.midi_in.set_midi_simulation(simulation_port = self.instrument_out_port_name,
+                                             simulation_track_path = SIMULATION_TRACK_PATH)
 
         # SYNCHRONIZATION
         BPM = 120
@@ -160,43 +159,43 @@ class AI_AffectiveMusicImproviser():
         self.osc_client = Client_OSC()
 
         # EEG 
-        self.eeg_device = EEG_Device(eeg_device_type)
+        if self.eeg_device_type != 'None':
+            self.USE_EEG = True
+        self.eeg_device = EEG_Device(self.eeg_device_type)
         self.eeg_classification_buffer = []
-        self.WINDOW_DURATION = window_duration
+        self.WINDOW_DURATION = self.window_duration
         self.WINDOW_SIZE = int(self.WINDOW_DURATION * self.eeg_device.sample_frequency)
 
         # AI-MODEL
-        model, device, INPUT_TOK, OUTPUT_TOK = load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat)
-        self.model_class_name = model_class_name
+        model, device, INPUT_TOK, OUTPUT_TOK = load_model(self.model_param_path, 
+                                                          self.model_module_path, 
+                                                          self.model_class_name, 
+                                                          self.ticks_per_beat)
+        
         self.model = model
         self.device = device
         self.INPUT_TOK = INPUT_TOK
         self.OUTPUT_TOK = OUTPUT_TOK 
         self.BAR_LENGTH = INPUT_TOK.BAR_LENGTH
         self.SEQ_LENGTH = OUTPUT_TOK.SEQ_LENGTH
-        self.init_track_path = init_track_path
         self.combine_in_out = False
         for word in self.INPUT_TOK.VOCAB.word2idx.keys():
             if IN_OUT_SEPARATOR_TOKEN in word:
                 self.combine_in_out = True
                 break
-        if init_track_path is not None:
-            self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(self.init_track_path, 
-                                                            max_len = 30 * self.BAR_LENGTH,
-                                                            update_vocab=False,
-                                                            convert_to_integers=not self.combine_in_out) 
-            i = np.random.randint(0, len(self.init_tokens) - 3*self.BAR_LENGTH)
-            self.init_tokens = self.init_tokens[i:i+3*self.BAR_LENGTH]  
-        else:
-            self.init_tokens = np.array([self.OUTPUT_TOK.VOCAB.word2idx[SILENCE_TOKEN]] * 3*self.BAR_LENGTH)
+
+        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(INIT_TRACK_PATH, 
+                                                        max_len = 30 * self.BAR_LENGTH,
+                                                        update_vocab=False,
+                                                        convert_to_integers=not self.combine_in_out) 
+        
+        i = np.random.randint(0, len(self.init_tokens) - 3*self.BAR_LENGTH)
+        self.init_tokens = self.init_tokens[i:i+3*self.BAR_LENGTH]  
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
         self.thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', self))
         self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
-    
-        # set the status of the application
-        self.set_application_status('READY', True)
 
         global SYNCH_EVENT 
         SYNCH_EVENT = threading.Event()
@@ -207,12 +206,6 @@ class AI_AffectiveMusicImproviser():
     def append_eeg_classification(self, classification):
         self.eeg_classification_buffer.append(classification)
 
-    def get_application_status(self):
-        return self.STATUS
-
-    def set_application_status(self, key, value):
-        self.STATUS[key] = value
-
     def get_eeg_device(self):
         return self.eeg_device
     
@@ -220,11 +213,9 @@ class AI_AffectiveMusicImproviser():
         self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, MOVE_CURSOR_TO_ITEM_END_MSG, 1)
         self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, MOVE_CURSOR_TO_NEXT_MEASURE_MSG, 1)
         self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
-        self.set_application_status('IS_RECORDING', True)
 
     def stop_reaper_recording(self):
         self.osc_client.send(LOCAL_HOST, OSC_REAPER_PORT, REC_MSG, 1)
-        self.set_application_status('IS_RECORDING', False)
     
     def save_hystory(self, path):
         if len(self.hystory) > 0:
@@ -248,14 +239,12 @@ class AI_AffectiveMusicImproviser():
 
     def run(self):
 
-        self.STATUS['RUNNING'] = True
-
         self.start_reaper_recording()
 
         # start the threads
         self.thread_midi_input.start()
         self.thread_osc.start()
-        if self.STATUS['USE_EEG']:
+        if self.USE_EEG:
             self.thread_eeg.start()
 
         input_tokens_buffer = np.array([])
@@ -312,7 +301,7 @@ class AI_AffectiveMusicImproviser():
 
                         # Convert the token to the integer representation
                         if not self.INPUT_TOK.VOCAB.is_in_vocab(token_string):
-                            if self.STATUS['USE_EEG']:
+                            if self.USE_EEG:
                                 if self.fixed_mood:
                                     token_string = self.eeg_classification_buffer[0] 
                                 else:
@@ -332,7 +321,7 @@ class AI_AffectiveMusicImproviser():
                 last_output = torch.LongTensor(last_output)
 
                 # add mask to the input data
-                if self.STATUS['USE_EEG']:
+                if self.USE_EEG:
                     if self.fixed_mood:
                         emotion_token = self.eeg_classification_buffer[0]
                     else:
@@ -441,13 +430,13 @@ class AI_AffectiveMusicImproviser():
                 print(predicted_bar)
                 print()
 
-            if not self.STATUS['RUNNING']:
+            if self.EXIT:
                 break
 
     def close(self):
         logging.info('Thread Main: Closing application...')
 
-        self.set_application_status('RUNNING', False)
+        self.EXIT = True
 
         time.sleep(7)   # wait for the threads to close
 
@@ -458,7 +447,7 @@ class AI_AffectiveMusicImproviser():
         self.osc_server.close()  # serve_forever() must be closed outside the thread
         self.thread_osc.join()
 
-        if self.STATUS['USE_EEG']:
+        if self.USE_EEG:
             self.thread_eeg.join()
 
         self.stop_reaper_recording()
