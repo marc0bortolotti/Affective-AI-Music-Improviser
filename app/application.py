@@ -17,10 +17,9 @@ import importlib
 import sys
 
 # CONNECTION PARAMETERS
-LOCAL_HOST = "127.0.0.1"
-OSC_SERVER_PORT = 9000
 OSC_REAPER_PORT = 8000
 OSC_PROCESSING_PORT = 7000
+LOCAL_HOST = "127.0.0.1"
 
 # PATHS
 SIMULATION_TRACK_PATH = 'app/music/rhythm_RELAXED.mid'
@@ -88,7 +87,7 @@ def thread_function_eeg(name, app):
         # get the predictied emotion
         prediction = app.eeg_device.get_prediction(eeg) 
         # send the emotion to the processing application
-        app.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, EMOTION_MSG, float(prediction))
+        app.osc_client.send(LOCAL_HOST, app.OSC_PROCESSING_PORT, EMOTION_MSG, float(prediction))
         # append the emotion to the buffer
         app.append_eeg_classification(BCI_TOKENS[prediction])
 
@@ -113,10 +112,12 @@ def thread_function_midi(name, app):
         app.midi_in.run()
     logging.info("Thread %s: closing", name)
 
-def thread_function_osc(name, app):
+def thread_function_osc(name, osc_server):
+    global SYNCH_EVENT 
+    SYNCH_EVENT = threading.Event()
     logging.info("Thread %s: starting", name)
-    app.osc_server.set_event(SYNCH_EVENT)
-    app.osc_server.run()
+    osc_server.set_event(SYNCH_EVENT)
+    osc_server.run()
     logging.info("Thread %s: closing", name)
 
 
@@ -131,11 +132,15 @@ class AI_AffectiveMusicImproviser():
         self.model_param_path = kwargs['model_param_path']
         self.model_module_path = kwargs['model_module_path']
         self.model_class_name = kwargs['model_class_name']
+        self.osc_client = kwargs['osc_client']
+        self.osc_server = kwargs['osc_server']
         self.ticks_per_beat = kwargs.get('ticks_per_beat', 4)
         self.window_duration = kwargs.get('window_duration', 4)
         self.generate_rhythm = kwargs.get('generate_rhythm', True)
         self.n_tokens = kwargs.get('n_tokens', 4)
         self.parse_message = kwargs.get('parse_message', False)
+        self.BPM = kwargs.get('BPM', 120)
+        self.OSC_PROCESSING_PORT = kwargs.get('OSC_PROCESSING_PORT', 7000)
         
         # STATUS
         self.fixed_mood = kwargs.get('fixed_mood', False)
@@ -153,11 +158,6 @@ class AI_AffectiveMusicImproviser():
             self.midi_in.set_midi_simulation(simulation_port = self.instrument_out_port_name,
                                              simulation_track_path = SIMULATION_TRACK_PATH)
 
-        # SYNCHRONIZATION
-        BPM = 120
-        self.osc_server = Server_OSC(LOCAL_HOST, OSC_SERVER_PORT, BPM, parse_message=False)
-        self.osc_client = Client_OSC()
-
         # EEG 
         if self.eeg_device_type != 'None':
             self.USE_EEG = True
@@ -171,7 +171,6 @@ class AI_AffectiveMusicImproviser():
                                                           self.model_module_path, 
                                                           self.model_class_name, 
                                                           self.ticks_per_beat)
-        
         self.model = model
         self.device = device
         self.INPUT_TOK = INPUT_TOK
@@ -194,11 +193,7 @@ class AI_AffectiveMusicImproviser():
 
         # THREADS
         self.thread_midi_input = threading.Thread(target=thread_function_midi, args=('MIDI', self))
-        self.thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', self))
         self.thread_eeg = threading.Thread(target=thread_function_eeg, args=('EEG', self))
-
-        global SYNCH_EVENT 
-        SYNCH_EVENT = threading.Event()
 
     def get_last_eeg_classification(self):
         return self.eeg_classification_buffer[-1]
@@ -239,11 +234,12 @@ class AI_AffectiveMusicImproviser():
 
     def run(self):
 
+        logging.info('Thread App: started')
+
         self.start_reaper_recording()
 
         # start the threads
         self.thread_midi_input.start()
-        self.thread_osc.start()
         if self.USE_EEG:
             self.thread_eeg.start()
 
@@ -403,7 +399,7 @@ class AI_AffectiveMusicImproviser():
                 confidence = torch.mean(predicted_proba).item() 
 
                 # send the confidence to the processing application 
-                self.osc_client.send(LOCAL_HOST, OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
+                self.osc_client.send(LOCAL_HOST, self.OSC_PROCESSING_PORT, CONFIDENCE_MSG, float(confidence))
 
                 # Convert the predicted sequence to MIDI.
                 generated_track = self.OUTPUT_TOK.tokens_to_midi(predicted_bar, ticks_filter=0, emotion_token=emotion_token)
@@ -443,9 +439,6 @@ class AI_AffectiveMusicImproviser():
         # close the threads
         self.midi_in.close()
         self.thread_midi_input.join()
-
-        self.osc_server.close()  # serve_forever() must be closed outside the thread
-        self.thread_osc.join()
 
         if self.USE_EEG:
             self.thread_eeg.join()
