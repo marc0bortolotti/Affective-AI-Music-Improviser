@@ -18,10 +18,10 @@ def retrieve_eeg_devices():
 
 def retrieve_midi_ports():
     available_input_ports = []   
+    available_input_ports.append(SIMULATE_INSTRUMENT)
     midi_in = rtmidi.MidiIn() 
     for port in midi_in.get_ports():
         available_input_ports.append(port)
-    available_input_ports.append(SIMULATE_INSTRUMENT)
 
     available_output_ports = []
     midi_out = rtmidi.MidiOut()

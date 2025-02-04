@@ -23,7 +23,8 @@ LOCAL_HOST = "127.0.0.1"
 
 # PATHS
 SIMULATION_TRACK_PATH = 'app/music/rhythm_RELAXED.mid'
-INIT_TRACK_PATH = 'app/music/melody_RELAXED.mid'
+INIT_TRACK_PATH_R = 'app/music/melody_RELAXED.mid'
+INIT_TRACK_PATH_C = 'app/music/melody_CONCENTRATED.mid'
 
 def load_model(model_param_path, model_module_path, model_class_name, ticks_per_beat):
 
@@ -138,11 +139,10 @@ class AI_AffectiveMusicImproviser():
         self.window_duration = kwargs.get('window_duration', 4)
         self.generate_rhythm = kwargs.get('generate_rhythm', True)
         self.n_tokens = kwargs.get('n_tokens', 4)
-        self.parse_message = kwargs.get('parse_message', False)
+        self.parse_message = kwargs.get('parse_message', True)
         self.BPM = kwargs.get('BPM', 120)
         self.OSC_PROCESSING_PORT = kwargs.get('OSC_PROCESSING_PORT', 7000)
-        
-        # STATUS
+        self.initial_mood = kwargs.get('initial_mood', BCI_TOKENS[0])
         self.fixed_mood = kwargs.get('fixed_mood', False)
         self.EXIT = False
         self.SIMULATE_MIDI = False
@@ -183,7 +183,8 @@ class AI_AffectiveMusicImproviser():
                 self.combine_in_out = True
                 break
 
-        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(INIT_TRACK_PATH, 
+        init_track = INIT_TRACK_PATH_R if self.initial_mood == BCI_TOKENS[0] else INIT_TRACK_PATH_C
+        self.init_tokens = self.OUTPUT_TOK.midi_to_tokens(init_track, 
                                                         max_len = 30 * self.BAR_LENGTH,
                                                         update_vocab=False,
                                                         convert_to_integers=not self.combine_in_out) 

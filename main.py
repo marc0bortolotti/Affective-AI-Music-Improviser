@@ -8,15 +8,21 @@ from EEG.classifier import load_eeg_classifier
 from app.utils import retrieve_eeg_devices, retrieve_midi_ports, retrieve_models
 from OSC.osc_connection import Client_OSC, Server_OSC, EEG_DEVICES_MSG, MIDI_IN_PORTS_MSG, MIDI_OUT_PORTS_MSG, MODELS_MSG, TX_FINISHED_MSG
 import threading
+from generative_model.tokenization import BCI_TOKENS
 import brainflow
 import time 
 
-# TEST AND TRAINING PATHS
+# TEST PARAMETERS
 USE_GUI = False
+SKIP_TRAINING = True
+SIMULATE_INSTRUMENT = False
 user_name = 'user_8'
-test_idx = 0
-test_name_list = ['BCI_RELAXED', 'BCI_EXCITED', 'UTENTE_EEG', 'UTENTE_NO_EEG']
-test_name = test_name_list[0]
+test_name =  '4_UTENTE_NO_EEG' # 'BCI_RELAXED' 'BCI_EXCITED' 'UTENTE_EEG' 'UTENTE_NO_EEG'
+
+# PATHS
+model_name = 'MT_melody_separateTokens_NO_EEG_0' if 'NO' in test_name else 'MT_melody_separateTokens_0'
+MODEL_PATH = f'generative_model/pretrained_models/{model_name}'
+
 
 # Set log levels
 mne.set_log_level(verbose='WARNING', return_old_level=False, add_frames=None)
@@ -40,11 +46,8 @@ BPM = 120
 
 # TRAINING AND VALIDATION PARAMETERS
 TRAINING_SESSIONS = 1
-TRAINING_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
-VALIDATION_TIME = 10 # must be larger than 2*WINDOW_DURATION (>8sec)
-
-# PATHS
-MODEL_PATH = 'generative_model/pretrained_models/MT_melody_separateTokens_0'
+TRAINING_TIME = 60 # must be larger than 2*WINDOW_DURATION (>8sec)
+VALIDATION_TIME = 40 # must be larger than 2*WINDOW_DURATION (>8sec)
 
 # Retrieve the EEG devices and MIDI ports
 eeg_device_list = retrieve_eeg_devices()
@@ -55,7 +58,7 @@ model_list = retrieve_models('generative_model/pretrained_models')
 osc_server = Server_OSC(LOCAL_HOST, OSC_SERVER_PORT, BPM, parse_message=False)
 thread_osc = threading.Thread(target=thread_function_osc, args=('OSC', osc_server))
 thread_osc.start()
-osc_client = Client_OSC(parse_message=True)
+osc_client = Client_OSC(parse_message=False)
 
 if USE_GUI:
     logging.info("Waiting for the Processing application to be ready...")
@@ -82,11 +85,19 @@ if USE_GUI:
     while not osc_server.parameters_setted:
         time.sleep(1)
 
-instrument_in_port_name = osc_server.instrument_midi_in_port if osc_server.instrument_midi_in_port is not None else 'Simulate Instrument'
-instrument_out_port_name = osc_server.instrument_midi_out_port if osc_server.instrument_midi_out_port is not None else midi_out_port_list[1]
-generation_out_port_name = osc_server.generated_midi_out_port if osc_server.generated_midi_out_port is not None else midi_out_port_list[2]
-generation_type = osc_server.generation_type if osc_server.generation_type is not None else 'melody'
-user_name = osc_server.user_name if osc_server.user_name is not None else user_name
+    instrument_in_port_name = osc_server.instrument_midi_in_port 
+    instrument_out_port_name = osc_server.instrument_midi_out_port 
+    generation_out_port_name = osc_server.generated_midi_out_port
+    generation_type = osc_server.generation_type 
+    user_name = osc_server.user_name 
+    eeg_device_type = osc_server.eeg_device 
+
+else:
+    instrument_in_port_name = midi_in_port_list[0] if SIMULATE_INSTRUMENT else midi_in_port_list[-1]
+    instrument_out_port_name = midi_out_port_list[1]
+    generation_out_port_name = midi_out_port_list[2]
+    generation_type = 'melody'
+    eeg_device_type = eeg_device_list[0][1] if 'NO' in test_name else eeg_device_list[3][1] 
 
 kwargs = {}
 kwargs['generation_type'] = generation_type
@@ -94,11 +105,12 @@ kwargs['fixed_mood'] = True if 'BCI' in test_name else False
 kwargs['instrument_in_port_name'] = instrument_in_port_name
 kwargs['instrument_out_port_name'] = instrument_out_port_name
 kwargs['generation_out_port_name'] = generation_out_port_name
-kwargs['eeg_device_type'] = eeg_device_list[0][1]
+kwargs['eeg_device_type'] = eeg_device_type
 kwargs['model_module_path'] = 'generative_model/architectures/musicTransformer.py'
 kwargs['model_class_name'] = 'MusicTransformer' 
 kwargs['osc_client'] = osc_client
 kwargs['osc_server'] = osc_server
+kwargs['initial_mood'] = BCI_TOKENS[0] if 'RELAXED' in test_name else BCI_TOKENS[1]
 kwargs['model_param_path'] = MODEL_PATH
 kwargs['window_duration'] = WINDOW_DURATION
 kwargs['window_overlap'] = WINDOW_OVERLAP
@@ -111,8 +123,10 @@ logging.info(f"Fixed Mood: {kwargs['fixed_mood']}")
 logging.info(f"Instrument In Port: {kwargs['instrument_in_port_name']}")
 logging.info(f"Instrument Out Port: {kwargs['instrument_out_port_name']}")
 logging.info(f"Generation Out Port: {kwargs['generation_out_port_name']}")
+logging.info(f"Model Path: {kwargs['model_param_path']}")
 
 RUN_PATH = f'runs/{user_name}'
+test_idx = 0
 TEST_PATH = os.path.join(RUN_PATH, f'test_{test_name}_{test_idx}')
 TRAINING_PATH = os.path.join(RUN_PATH, 'training')
 METRICS_PATH = os.path.join(RUN_PATH, 'EEG_classifier_metrics.txt')
@@ -129,22 +143,28 @@ os.makedirs(TEST_PATH)
 # Initialize the application
 app = AI_AffectiveMusicImproviser(kwargs)
 
-# train the EEG classification model
-dialog = input('\nDo you want to TRAIN classifiers? y/n: ')
+start_mood = 1 if 'EXCITED' in test_name else 0
+app.append_eeg_classification(BCI_TOKENS[start_mood])
 
-if dialog == 'y':
+if not SKIP_TRAINING:
+    # train the EEG classification model
+    dialog = input('\nDo you want to TRAIN classifiers? y/n: ')
 
-    pretraining(TRAINING_PATH, METRICS_PATH, app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
-            
-    dialog = input('\nDo you want to VALIDATE classifiers? y/n: ')
     if dialog == 'y':
-        validation(TRAINING_PATH, METRICS_PATH, app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=TRAINING_TIME)
+
+        pretraining(TRAINING_PATH, METRICS_PATH, app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, steps=TRAINING_SESSIONS, rec_time=TRAINING_TIME)
+                
+        dialog = input('\nDo you want to VALIDATE classifiers? y/n: ')
+        if dialog == 'y':
+            validation(TRAINING_PATH, METRICS_PATH, app.eeg_device, app.WINDOW_SIZE, WINDOW_OVERLAP, rec_time=VALIDATION_TIME)
 
 try:
     # Load the EEG classifier from the file
     scaler, lda_model, svm_model, baseline = load_eeg_classifier(TRAINING_PATH)
 except:
     logging.error("\nNo classifier found. Please, train the classifier first.")
+    osc_server.close()  # serve_forever() must be closed outside the thread
+    thread_osc.join()
     exit()
 
 # Set the classifier to be used in the application
@@ -162,7 +182,7 @@ if dialog == 'y':
     thread_app = threading.Thread(target=app.run, args=())
     thread_app.start()
 
-    time.sleep(20)
+    time.sleep(2*61)
 
     app.close()
     thread_app.join()

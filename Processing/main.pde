@@ -9,6 +9,7 @@ CustomSlider temperatureSlider, confidenceSlider;
 ControlP5 cp5_temperature, cp5_confidence;  
 boolean confidenceSliderOn = true;
 boolean temperatureSliderOn = true;
+boolean menuOn = false;
 
 void setup() {  
   
@@ -33,14 +34,19 @@ void setup() {
     confidenceSlider.setVisible(false);
   }
   
-  println("Waiting for main.py to be executed..");
-  while (!displayMenu) {
-    oscClientServer.sendOSCMessage(PROCESSING_READY_MSG, 0.0);
-    delay(1000);
+  if (menuOn) {
+    println("Waiting for main.py to be executed..");
+    while (!displayMenu) {
+      oscClientServer.sendOSCMessage(PROCESSING_READY_MSG, 0.0);
+      delay(1000);
+    }
+    
+    startMenu = new StartMenu();
   }
-  
-  startMenu = new StartMenu();
-  
+
+  else{
+    isNameEntered = true;
+  }
 }
 
 void draw() {  
@@ -72,7 +78,6 @@ void draw() {
       confidenceSlider.updateValueLabel(confidence);  
     }
   } else {
-    // Display the second page
     startMenu.display();
   }
 }
